@@ -14,6 +14,8 @@ knowledge base so multiple people can work together from the same, verified set 
 > code and no copyrighted game assets** — you supply your own legally-obtained copy of
 > NHL 2K10. The launcher edits *your* local files.
 
+**NOTE:** The launcher is in a very early stage - there may be work that is unstable / not hooked up / straight up won't work.
+
 ---
 
 ## What the Mod Launcher can do
