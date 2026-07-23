@@ -1,0 +1,356 @@
+{
+  "_README": [
+    "Field definitions for the NHL 2k10 Roster.ROS TEAM record (chunk 0x8489FAF3, stride 412).",
+    "RENAME a field by editing its 'name' here, then hit 'Reload defs' in the Team Fields editor.",
+    "Names must be unique. 'note' is free text shown as the column tooltip \u2014 record what you learned.",
+    "type: u8 | u16 | u32 | i8 | i16 | i32 | f32 | rgb (3 bytes -> #RRGGBB) | hex (raw bytes).",
+    "off is relative to the START of a team record. Only bytes that VARY across the 30 teams are",
+    "listed (the other 207 are always-zero or identical everywhere, so nothing to edit)."
+  ],
+  "record_stride": 412,
+  "fields": [
+    {
+      "off": "0x000",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_0",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x00B",
+      "size": 4,
+      "type": "u32",
+      "name": "unidentified_1",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x011",
+      "size": 1,
+      "type": "u8",
+      "name": "unidentified_2",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x013",
+      "size": 1,
+      "type": "u8",
+      "name": "unidentified_3",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x015",
+      "size": 6,
+      "type": "hex",
+      "name": "unidentified_4",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x01C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_5",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x020",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_6",
+      "note": "2 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x024",
+      "size": 14,
+      "type": "hex",
+      "name": "unidentified_7",
+      "note": "24 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x033",
+      "size": 7,
+      "type": "hex",
+      "name": "unidentified_8",
+      "note": "25 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x03B",
+      "size": 48,
+      "type": "hex",
+      "name": "unidentified_9",
+      "note": "28 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x06C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_10",
+      "note": "25 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x070",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_11",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x074",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_12",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x078",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_13",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x07C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_14",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x080",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_15",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x084",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_16",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x088",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_17",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x08C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_18",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x090",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_19",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x094",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_20",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x098",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_21",
+      "note": "28 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x09C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_22",
+      "note": "28 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0A0",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_23",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0A4",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_24",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0A8",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_25",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0AC",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_26",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0B0",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_27",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0B4",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_28",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0B8",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_29",
+      "note": "26 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x0BC",
+      "size": 11,
+      "type": "hex",
+      "name": "unidentified_30",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x10D",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_31",
+      "note": "29 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x111",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_32",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x115",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_33",
+      "note": "28 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x119",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_34",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x11D",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_35",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x12B",
+      "size": 1,
+      "type": "u8",
+      "name": "record_index",
+      "note": "this record's own index 0..59 (team block 0..29, LED block 30..59)"
+    },
+    {
+      "off": "0x12C",
+      "size": 1,
+      "type": "u8",
+      "name": "team_id",
+      "note": "0..29, NHL_CODES order (0=ANA..29=WSH); wraps in the LED block"
+    },
+    {
+      "off": "0x131",
+      "size": 2,
+      "type": "u16",
+      "name": "unidentified_36",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x13C",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_37",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x14B",
+      "size": 1,
+      "type": "u8",
+      "name": "unidentified_38",
+      "note": "3 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x14C",
+      "size": 3,
+      "type": "rgb",
+      "name": "primary_color",
+      "note": "team primary  \u2014 scoreclock / team-select"
+    },
+    {
+      "off": "0x14F",
+      "size": 3,
+      "type": "rgb",
+      "name": "secondary_color",
+      "note": "team secondary \u2014 scoreclock / team-select"
+    },
+    {
+      "off": "0x154",
+      "size": 1,
+      "type": "u8",
+      "name": "unidentified_39",
+      "note": "30 distinct across the 30 teams; SAME in the arena-LED twin record (likely team identity, not a colour)"
+    },
+    {
+      "off": "0x157",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_40",
+      "note": "18 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x15B",
+      "size": 3,
+      "type": "hex",
+      "name": "unidentified_41",
+      "note": "18 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x170",
+      "size": 1,
+      "type": "u8",
+      "name": "unidentified_42",
+      "note": "30 distinct across the 30 teams; SAME in the arena-LED twin record (likely team identity, not a colour)"
+    },
+    {
+      "off": "0x172",
+      "size": 5,
+      "type": "hex",
+      "name": "unidentified_43",
+      "note": "30 distinct across the 30 teams; differs in the LED twin"
+    },
+    {
+      "off": "0x17C",
+      "size": 7,
+      "type": "hex",
+      "name": "unidentified_44",
+      "note": "18 distinct across the 30 teams; differs in the LED twin"
+    }
+  ]
+}

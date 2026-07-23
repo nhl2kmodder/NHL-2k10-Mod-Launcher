@@ -1,0 +1,1180 @@
+team,category,iff,archive,offset,size,resolved,label,crc32
+misc,atlases,disc_49877f67.iff,0A,0x11689800,0x1A6CEB,1,Atlas (52 tiles) - 512x512,0x49877F67
+misc,atlases,disc_794a3eec.iff,0A,0x228F2800,0xD2E408,1,Atlas (61 tiles) - 256x256,0x794A3EEC
+misc,atlases,disc_8167dd16.iff,0A,0x2510B000,0x9850E7,1,Atlas (18 tiles) - 512x512,0x8167DD16
+misc,atlases,disc_8aa56b76.iff,0A,0x1E534800,0xD40022,1,Atlas (64 tiles) - 1024x512,0x8AA56B76
+misc,atlases,disc_b54d0d90.iff,0A,0x14470800,0xD9F697,1,Atlas (65 tiles) - 1024x512,0xB54D0D90
+misc,atlases,disc_b7c542c6.iff,0A,0x1D7F4000,0xD4001B,1,Atlas (64 tiles) - 1024x512,0xB7C542C6
+misc,atlases,disc_d51983b6.iff,0A,0x3334D800,0xEBFB6E,1,Atlas (66 tiles) - 256x256,0xD51983B6
+misc,atlases,disc_e879aa06.iff,0A,0x32519000,0xE343AB,1,Atlas (67 tiles) - 256x256,0xE879AA06
+misc,atlases,disc_f0653816.iff,0A,0x1CAB3800,0xD40032,1,Atlas (64 tiles) - 1024x512,0xF0653816
+misc,banners,disc_02b3bb40.iff,0A,0x35DA1000,0x68165,1,Banner / scoreboard - 1024x4096,0x02B3BB40
+misc,banners,disc_02b74ca8.iff,0A,0x358FA000,0x596FB,1,Banner / scoreboard - 1024x4096,0x02B74CA8
+misc,banners,disc_08d27e04.iff,0A,0x37DAF000,0x3B261,1,Banner / scoreboard - 1024x512,0x08D27E04
+misc,banners,disc_20159c65.iff,0A,0x36C90800,0x5F31C,1,Banner / scoreboard - 1024x4096,0x20159C65
+misc,banners,disc_23a94193.iff,0A,0x36807800,0x40FB9,1,Banner / scoreboard - 1024x4096,0x23A94193
+misc,banners,disc_23d117d9.iff,0A,0x366B7800,0x407C7,1,Banner / scoreboard - 1024x4096,0x23D117D9
+misc,banners,disc_2daec5a4.iff,0A,0x37798000,0x3B261,1,Banner / scoreboard - 1024x512,0x2DAEC5A4
+misc,banners,disc_35b257b4.iff,0A,0x37D73800,0x3B261,1,Banner / scoreboard - 1024x512,0x35B257B4
+misc,banners,disc_38efd0aa.iff,0A,0x3757E000,0x3B261,1,Banner / scoreboard - 1024x512,0x38EFD0AA
+misc,banners,disc_47e6a679.iff,0A,0x379C8000,0x3B261,1,Banner / scoreboard - 1024x512,0x47E6A679
+misc,banners,disc_504660e0.iff,0A,0x35953800,0x58670,1,Banner / scoreboard - 1024x4096,0x504660E0
+misc,banners,disc_576e96c4.iff,0A,0x3780F000,0x3B261,1,Banner / scoreboard - 1024x512,0x576E96C4
+misc,banners,disc_5f5db76c.iff,0A,0x366F8000,0x407C7,1,Banner / scoreboard - 1024x4096,0x5F5DB76C
+misc,banners,disc_664ead49.iff,0A,0x37BEA000,0x3B261,1,Banner / scoreboard - 1024x512,0x664EAD49
+misc,banners,disc_6a0ebf74.iff,0A,0x377D3800,0x3B261,1,Banner / scoreboard - 1024x512,0x6A0EBF74
+misc,banners,disc_6d470fb4.iff,0A,0x36CF0000,0x603A8,1,Banner / scoreboard - 1024x4096,0x6D470FB4
+misc,banners,disc_7ed66973.iff,0A,0x35848000,0x596FB,1,Banner / scoreboard - 1024x4096,0x7ED66973
+misc,banners,disc_9931b91f.iff,0A,0x37C5A800,0x3B261,1,Banner / scoreboard - 1024x512,0x9931B91F
+misc,banners,disc_9fb8adde.iff,0A,0x359AC000,0x596FB,1,Banner / scoreboard - 1024x4096,0x9FB8ADDE
+misc,banners,disc_bbb0d00a.iff,0A,0x36BD2800,0x5E4DB,1,Banner / scoreboard - 1024x4096,0xBBB0D00A
+misc,banners,disc_bc7dfe7f.iff,0A,0x357EF800,0x58670,1,Banner / scoreboard - 1024x4096,0xBC7DFE7F
+misc,banners,disc_bceb3f5e.iff,0A,0x35015000,0x6AE4E,1,Banner / scoreboard - 1024x4096,0xBCEB3F5E
+misc,banners,disc_c0b07bfb.iff,0A,0x34FAB000,0x69DF3,1,Banner / scoreboard - 1024x4096,0xC0B07BFB
+misc,banners,disc_cbe32c8f.iff,0A,0x358A1800,0x58670,1,Banner / scoreboard - 1024x4096,0xCBE32C8F
+misc,banners,disc_d7c3e45a.iff,0A,0x36848800,0x40FB9,1,Banner / scoreboard - 1024x4096,0xD7C3E45A
+misc,banners,disc_e72d3909.iff,0A,0x35D38800,0x68165,1,Banner / scoreboard - 1024x4096,0xE72D3909
+misc,banners,disc_f048eec2.iff,0A,0x36C31000,0x5F565,1,Banner / scoreboard - 1024x4096,0xF048EEC2
+misc,banners,disc_f4e8e3d6.iff,0A,0x37922800,0x3B261,1,Banner / scoreboard - 1024x512,0xF4E8E3D6
+misc,flags_decals,disc_0469b1e7.iff,0B,0x18B5A000,0x9EFC,1,Flag / decal - 512x512,0x0469B1E7
+misc,flags_decals,disc_050a35d7.iff,0B,0x18D74800,0xE853,1,Flag / decal - 512x512,0x050A35D7
+misc,flags_decals,disc_08097dc0.iff,0B,0x18D1E000,0xEEE3,1,Flag / decal - 512x512,0x08097DC0
+misc,flags_decals,disc_0b6a058e.iff,0B,0x18E2E000,0x15156,1,Flag / decal - 512x512,0x0B6A058E
+misc,flags_decals,disc_10c535b4.iff,0B,0x18BD9000,0xA457,1,Flag / decal - 512x512,0x10C535B4
+misc,flags_decals,disc_11db865f.iff,0B,0x18EC0800,0xC31A,1,Flag / decal - 512x512,0x11DB865F
+misc,flags_decals,disc_11fd4b4c.iff,0B,0x19053000,0xA285,1,Flag / decal - 512x512,0x11FD4B4C
+misc,flags_decals,disc_12712194.iff,0B,0x18D6B800,0x8BF2,1,Flag / decal - 512x512,0x12712194
+misc,flags_decals,disc_1276af60.iff,0B,0x1908A000,0x1007C,1,Flag / decal - 512x512,0x1276AF60
+misc,flags_decals,disc_12d57bb0.iff,0B,0x18B64000,0xC790,1,Flag / decal - 512x512,0x12D57BB0
+misc,flags_decals,disc_1684f1a9.iff,0B,0x18C75000,0x133FB,1,Flag / decal - 512x512,0x1684F1A9
+misc,flags_decals,disc_1a8e5cc8.iff,0B,0x18B8A000,0xB7EC,1,Flag / decal - 512x512,0x1A8E5CC8
+misc,flags_decals,disc_1acd4833.iff,0B,0x18DA9000,0x946D,1,Flag / decal - 512x512,0x1ACD4833
+misc,flags_decals,disc_1e1472bb.iff,0B,0x19135000,0xD03F,1,Flag / decal - 512x512,0x1E1472BB
+misc,flags_decals,disc_1f726983.iff,0B,0x18D12000,0xBF9E,1,Flag / decal - 512x512,0x1F726983
+misc,flags_decals,disc_257793a4.iff,0B,0x1909A800,0x16E30,1,Flag / decal - 512x512,0x257793A4
+misc,flags_decals,disc_26a4c030.iff,0B,0x18ADF000,0x85E4,1,Flag / decal - 512x512,0x26A4C030
+misc,flags_decals,disc_2885e0f4.iff,0B,0x18C06800,0x107FD,1,Flag / decal - 512x512,0x2885E0F4
+misc,flags_decals,disc_2f09cd6c.iff,0B,0x18C94000,0xC8BB,1,Flag / decal - 512x512,0x2F09CD6C
+misc,flags_decals,disc_30dd8aca.iff,0B,0x18B95800,0xBFFE,1,Flag / decal - 512x512,0x30DD8ACA
+misc,flags_decals,disc_3872d92f.iff,0B,0x18C88800,0xB7B0,1,Flag / decal - 512x512,0x3872D92F
+misc,flags_decals,disc_3df92157.iff,0B,0x18FFF000,0xDC23,1,Flag / decal - 512x512,0x3DF92157
+misc,flags_decals,disc_3fb36b21.iff,0B,0x18AC8800,0x8E90,1,Flag / decal - 512x512,0x3FB36B21
+misc,flags_decals,disc_494490bb.iff,0B,0x18DC0800,0xEF9C,1,Flag / decal - 512x512,0x494490BB
+misc,flags_decals,disc_4b68a0a5.iff,0B,0x18C41000,0xE025,1,Flag / decal - 512x512,0x4B68A0A5
+misc,flags_decals,disc_4d57c77c.iff,0B,0x18FF1000,0xDD99,1,Flag / decal - 512x512,0x4D57C77C
+misc,flags_decals,disc_4f9d7098.iff,0B,0x18D2D000,0xE42B,1,Flag / decal - 512x512,0x4F9D7098
+misc,flags_decals,disc_57b7d0a8.iff,0B,0x18D9D800,0xB4EC,1,Flag / decal - 512x512,0x57B7D0A8
+misc,flags_decals,disc_58e664db.iff,0B,0x18D3B800,0xE069,1,Flag / decal - 512x512,0x58E664DB
+misc,flags_decals,disc_5be377b7.iff,0B,0x1902A800,0xDABD,1,Flag / decal - 512x512,0x5BE377B7
+misc,flags_decals,disc_5c13b4e6.iff,0B,0x18C4F800,0xC938,1,Flag / decal - 512x512,0x5C13B4E6
+misc,flags_decals,disc_6045f598.iff,0B,0x18C27000,0x10B3B,1,Flag / decal - 512x512,0x6045F598
+misc,flags_decals,disc_60f36c53.iff,0B,0x18F7E800,0x9A4C,1,Flag / decal - 512x512,0x60F36C53
+misc,flags_decals,disc_616b581e.iff,0B,0x18D4A000,0xF3C7,1,Flag / decal - 512x512,0x616B581E
+misc,flags_decals,disc_659e8823.iff,0B,0x18C5C800,0x1010F,1,Flag / decal - 512x512,0x659E8823
+misc,flags_decals,disc_676bd06f.iff,0B,0x18DFE800,0x1012F,1,Flag / decal - 512x512,0x676BD06F
+misc,flags_decals,disc_6c09f85b.iff,0B,0x18AE7800,0xFEB3,1,Flag / decal - 512x512,0x6C09F85B
+misc,flags_decals,disc_72e59c60.iff,0B,0x18C6D000,0x7BAC,1,Flag / decal - 512x512,0x72E59C60
+misc,flags_decals,disc_76104c5d.iff,0B,0x18D59800,0x11DEB,1,Flag / decal - 512x512,0x76104C5D
+misc,flags_decals,disc_7b9978c2.iff,0B,0x18F3C800,0xCCEF,1,Flag / decal - 512x512,0x7B9978C2
+misc,flags_decals,disc_838abd33.iff,0B,0x190BA800,0x8931,1,Flag / decal - 512x512,0x838ABD33
+misc,flags_decals,disc_89155c24.iff,0B,0x18E86000,0x12065,1,Flag / decal - 512x512,0x89155C24
+misc,flags_decals,disc_8c0070ee.iff,0B,0x18FCA000,0xE6F7,1,Flag / decal - 512x512,0x8C0070EE
+misc,flags_decals,disc_8fdb8524.iff,0B,0x190F5800,0x136CB,1,Flag / decal - 512x512,0x8FDB8524
+misc,flags_decals,disc_95c5b252.iff,0B,0x18BCB800,0xD6AB,1,Flag / decal - 512x512,0x95C5B252
+misc,flags_decals,disc_9d27f75e.iff,0B,0x18CD1000,0xC37C,1,Flag / decal - 512x512,0x9D27F75E
+misc,flags_decals,disc_a209fd29.iff,0B,0x18F98000,0x1066B,1,Flag / decal - 512x512,0xA209FD29
+misc,flags_decals,disc_a4aacb9b.iff,0B,0x18CBA000,0xCDEF,1,Flag / decal - 512x512,0xA4AACB9B
+misc,flags_decals,disc_b3d1dfd8.iff,0B,0x18CC7000,0x9F71,1,Flag / decal - 512x512,0xB3D1DFD8
+all_teams,logo,disc_b6b4e9c8.iff,0B,0x3F476800,0x662C33,1,Team Logos - Menus/Team Select (120 tiles; auto-syncs all sizes),0xB6B4E9C8
+misc,flags_decals,disc_c0cba652.iff,0B,0x18D06800,0xB28C,1,Flag / decal - 512x512,0xC0CBA652
+misc,flags_decals,disc_c4f3f2cc.iff,0B,0x18E98800,0xB157,1,Flag / decal - 512x512,0xC4F3F2CC
+misc,flags_decals,disc_c80eabae.iff,0B,0x18BF5800,0x10F15,1,Flag / decal - 512x512,0xC80EABAE
+misc,flags_decals,disc_c88f9972.iff,0B,0x18F16800,0x9298,1,Flag / decal - 512x512,0xC88F9972
+misc,flags_decals,disc_cbaf88f5.iff,0B,0x18F2E800,0xDF6E,1,Flag / decal - 512x512,0xCBAF88F5
+misc,flags_decals,disc_cbf60c7f.iff,0B,0x18F58800,0xF316,1,Flag / decal - 512x512,0xCBF60C7F
+misc,flags_decals,disc_d2b2a7f8.iff,0B,0x18B43800,0xA3D6,1,Flag / decal - 512x512,0xD2B2A7F8
+misc,flags_decals,disc_d7b0b211.iff,0B,0x18CF8000,0xE121,1,Flag / decal - 512x512,0xD7B0B211
+misc,flags_decals,disc_dd84edb3.iff,0B,0x19109000,0x10EB2,1,Flag / decal - 512x512,0xDD84EDB3
+misc,flags_decals,disc_e563d0d3.iff,0B,0x18F74800,0x9A4C,1,Flag / decal - 512x512,0xE563D0D3
+misc,flags_decals,disc_e6a107a2.iff,0B,0x18BB0800,0xD25C,1,Flag / decal - 512x512,0xE6A107A2
+misc,flags_decals,disc_e7673646.iff,0B,0x18B06000,0xD81D,1,Flag / decal - 512x512,0xE7673646
+misc,flags_decals,disc_e7cb16fe.iff,0B,0x18CAF800,0xA065,1,Flag / decal - 512x512,0xE7CB16FE
+misc,flags_decals,disc_ea2887ee.iff,0B,0x18FD8800,0xA731,1,Flag / decal - 512x512,0xEA2887EE
+misc,flags_decals,disc_ed7da481.iff,0B,0x18ED8800,0xCD7E,1,Flag / decal - 512x512,0xED7DA481
+misc,flags_decals,disc_ee3d8ed4.iff,0B,0x18CED000,0xAA31,1,Flag / decal - 512x512,0xEE3D8ED4
+misc,flags_decals,disc_f0b002bd.iff,0B,0x18CA1000,0xE0B2,1,Flag / decal - 512x512,0xF0B002BD
+misc,flags_decals,disc_f620d1c3.iff,0B,0x18F07000,0xF05A,1,Flag / decal - 512x512,0xF620D1C3
+misc,flags_decals,disc_f9469a97.iff,0B,0x18CDD800,0xF335,1,Flag / decal - 512x512,0xF9469A97
+misc,flags_decals,disc_ff1a0964.iff,0B,0x18FB1800,0x9BCE,1,Flag / decal - 512x512,0xFF1A0964
+misc,flags_decals,disc_ffc70ef3.iff,0B,0x18C38000,0x89EC,1,Flag / decal - 512x512,0xFFC70EF3
+goalie,goalie_gear,blocker_g00.iff,0B,0x1A341000,0x98D4A,1,blocker_g00.iff,0x7C77C224
+goalie,goalie_gear,blocker_g00_logos_l.iff,0B,0x1A3DA000,0x52C2,1,blocker_g00_logos_l.iff,0xC82E1DE5
+goalie,goalie_gear,blocker_g00_logos_r.iff,0B,0x1A3DF800,0x5284,1,blocker_g00_logos_r.iff,0x17FE3406
+goalie,goalie_gear,blocker_g13.iff,0B,0x1AB98800,0x96EBF,1,blocker_g13.iff,0xF08B6B51
+goalie,goalie_gear,blocker_g13_logos_l.iff,0B,0x1AC2F800,0x9075,1,blocker_g13_logos_l.iff,0xE8EB905D
+goalie,goalie_gear,blocker_g13_logos_r.iff,0B,0x1AC39000,0x8AB6,1,blocker_g13_logos_r.iff,0x373BB9BE
+goalie,goalie_gear,blocker_g14.iff,0B,0x1AC42000,0x9EA72,1,blocker_g14.iff,0x42ABB741
+goalie,goalie_gear,blocker_g14_logos_l.iff,0B,0x1ACE1000,0x6F81,1,blocker_g14_logos_l.iff,0x95989605
+goalie,goalie_gear,blocker_g14_logos_r.iff,0B,0x1ACE8000,0x7109,1,blocker_g14_logos_r.iff,0x4A48BFE6
+goalie,goalie_gear,blocker_g15.iff,0B,0x1ACEF800,0xA45AF,1,blocker_g15.iff,0x7FCB9EF1
+goalie,goalie_gear,blocker_g15_logos_l.iff,0B,0x1AD94000,0x4F5B,1,blocker_g15_logos_l.iff,0x480E4F80
+goalie,goalie_gear,blocker_g15_logos_r.iff,0B,0x1AD99000,0x4F38,1,blocker_g15_logos_r.iff,0x97DE6663
+goalie,goalie_gear,blocker_g16.iff,0B,0x1AD9E000,0x956EE,1,blocker_g16.iff,0x386BE421
+goalie,goalie_gear,blocker_g16_logos_l.iff,0B,0x1AE33800,0x50C9,1,blocker_g16_logos_l.iff,0xF5C4234E
+goalie,goalie_gear,blocker_g16_logos_r.iff,0B,0x1AE39000,0x4C7E,1,blocker_g16_logos_r.iff,0x2A140AAD
+goalie,goalie_gear,blocker_g17.iff,0B,0x1AE3E000,0xA6B6F,1,blocker_g17.iff,0x050BCD91
+goalie,goalie_gear,blocker_g17_logos_l.iff,0B,0x1AEE5000,0x57D6,1,blocker_g17_logos_l.iff,0x2852FACB
+goalie,goalie_gear,blocker_g17_logos_r.iff,0B,0x1AEEA800,0x58B0,1,blocker_g17_logos_r.iff,0xF782D328
+goalie,goalie_gear,catcher_g00.iff,0B,0x1AEF0800,0x79662,1,catcher_g00.iff,0xB85A16EF
+goalie,goalie_gear,catcher_g00_logos_l.iff,0B,0x1AF6A000,0x835E,1,catcher_g00_logos_l.iff,0x17C93921
+goalie,goalie_gear,catcher_g00_logos_r.iff,0B,0x1AF72800,0x825B,1,catcher_g00_logos_r.iff,0xC81910C2
+goalie,goalie_gear,catcher_g13.iff,0B,0x1B777000,0x95B58,1,catcher_g13.iff,0x34A6BF9A
+goalie,goalie_gear,catcher_g13_logos_l.iff,0B,0x1B80D000,0x6E78,1,catcher_g13_logos_l.iff,0x370CB499
+goalie,goalie_gear,catcher_g13_logos_r.iff,0B,0x1B814000,0x723B,1,catcher_g13_logos_r.iff,0xE8DC9D7A
+goalie,goalie_gear,catcher_g14.iff,0B,0x1B81B800,0x74409,1,catcher_g14.iff,0x8686638A
+goalie,goalie_gear,catcher_g14_logos_l.iff,0B,0x1B890000,0x77F7,1,catcher_g14_logos_l.iff,0x4A7FB2C1
+goalie,goalie_gear,catcher_g14_logos_r.iff,0B,0x1B897800,0x7854,1,catcher_g14_logos_r.iff,0x95AF9B22
+goalie,goalie_gear,catcher_g15.iff,0B,0x1B89F800,0x9F63B,1,catcher_g15.iff,0xBBE64A3A
+goalie,goalie_gear,catcher_g15_logos_l.iff,0B,0x1B93F000,0x9786,1,catcher_g15_logos_l.iff,0x97E96B44
+goalie,goalie_gear,catcher_g15_logos_r.iff,0B,0x1B948800,0x998A,1,catcher_g15_logos_r.iff,0x483942A7
+goalie,goalie_gear,catcher_g16.iff,0B,0x1B952800,0xA43BD,1,catcher_g16.iff,0xFC4630EA
+goalie,goalie_gear,catcher_g16_logos_l.iff,0B,0x1B9F7000,0x8B6A,1,catcher_g16_logos_l.iff,0x2A23078A
+goalie,goalie_gear,catcher_g16_logos_r.iff,0B,0x1BA00000,0x8D83,1,catcher_g16_logos_r.iff,0xF5F32E69
+goalie,goalie_gear,catcher_g17.iff,0B,0x1BA09000,0x9D641,1,catcher_g17.iff,0xC126195A
+goalie,goalie_gear,catcher_g17_logos_l.iff,0B,0x1BAA6800,0x88BA,1,catcher_g17_logos_l.iff,0xF7B5DE0F
+goalie,goalie_gear,catcher_g17_logos_r.iff,0B,0x1BAAF800,0x8A1F,1,catcher_g17_logos_r.iff,0x2865F7EC
+goalie,goalie_gear,catcher_g18.iff,0B,0x1BAB8800,0xA0C43,1,catcher_g18.iff,0x43768E8B
+goalie,goalie_gear,catcher_g18_logos_l.iff,0B,0x1BB59800,0x3F09,1,catcher_g18_logos_l.iff,0xD0C50B3A
+goalie,goalie_gear,catcher_g18_logos_r.iff,0B,0x1BB5D800,0x411C,1,catcher_g18_logos_r.iff,0x0F1522D9
+goalie,goalie_gear,catcher_g19.iff,0B,0x1BB62000,0x8A1B5,1,catcher_g19.iff,0x7E16A73B
+goalie,goalie_gear,catcher_g19_logos_l.iff,0B,0x1BBEC800,0x5C86,1,catcher_g19_logos_l.iff,0x0D53D2BF
+goalie,goalie_gear,catcher_g19_logos_r.iff,0B,0x1BBF2800,0x5D15,1,catcher_g19_logos_r.iff,0xD283FB5C
+goalie,goalie_gear,pad_g00.iff,0B,0x195FB000,0xA44D2,1,pad_g00.iff,0x4FF4258F
+goalie,goalie_gear,pad_g00_logos.iff,0B,0x1969F800,0x3DD0,1,pad_g00_logos.iff,0x48643867
+goalie,goalie_gear,pad_g13.iff,0B,0x19E3F000,0xAEDBF,1,pad_g13.iff,0xC3088CFA
+goalie,goalie_gear,pad_g13_logos.iff,0B,0x19EEE000,0x52B2,1,pad_g13_logos.iff,0x4A231209
+goalie,goalie_gear,pad_g14.iff,0B,0x19EF3800,0x97553,1,pad_g14.iff,0x712850EA
+goalie,goalie_gear,pad_g14_logos.iff,0B,0x19F8B000,0x6BF6,1,pad_g14_logos.iff,0x6318078A
+goalie,goalie_gear,pad_g15.iff,0B,0x19F92000,0x9DBCA,1,pad_g15.iff,0x4C48795A
+goalie,goalie_gear,pad_g15_logos.iff,0B,0x1A030000,0x6908,1,pad_g15_logos.iff,0xA296D84A
+goalie,goalie_gear,pad_g16.iff,0B,0x1A037000,0x9C2F4,1,pad_g16.iff,0x0BE8038A
+goalie,goalie_gear,pad_g16_logos.iff,0B,0x1A0D3800,0x6BF6,1,pad_g16_logos.iff,0x3B74BE4B
+goalie,goalie_gear,pad_g17.iff,0B,0x1A0DA800,0x9368F,1,pad_g17.iff,0x36882A3A
+goalie,goalie_gear,pad_g17_logos.iff,0B,0x1A16E000,0x5ED6,1,pad_g17_logos.iff,0xFAFA618B
+goalie,goalie_gear,pad_g18.iff,0B,0x1A174000,0x9E58C,1,pad_g18.iff,0xB4D8BDEB
+goalie,goalie_gear,pad_g18_logos.iff,0B,0x1A212800,0x6908,1,pad_g18_logos.iff,0x6902954D
+goalie,goalie_gear,pad_g19.iff,0B,0x1A219800,0x12067C,1,pad_g19.iff,0x89B8945B
+goalie,goalie_gear,pad_g19_logos.iff,0B,0x1A33A000,0x6DB5,1,pad_g19_logos.iff,0xA88C4A8D
+goalie,goalie_masks,helmet_g01_pattern_00.iff,0B,0x19142800,0x204,1,helmet_g01_pattern_00.iff,0x4B9F3A3E
+goalie,goalie_masks,helmet_g02_pattern_00.iff,0B,0x19358800,0x204,1,helmet_g02_pattern_00.iff,0x62578ECC
+goalie,goalie_masks,helmet_g03_pattern_00.iff,0B,0x19390000,0x204,1,helmet_g03_pattern_00.iff,0xCC3F1F5D
+goalie,goalie_masks,helmet_g04_pattern_00.iff,0B,0x193C7800,0x204,1,helmet_g04_pattern_00.iff,0x31C6E728
+goalie,goalie_masks,helmet_g05_pattern_00.iff,0B,0x195DD000,0x204,1,helmet_g05_pattern_00.iff,0x9FAE76B9
+goalie,goalie_masks,helmet_g06_pattern_00.iff,0B,0x195EC000,0x204,1,helmet_g06_pattern_00.iff,0xB666C24B
+misc,logos_extra,logo_2k.iff,0B,0x18ABF800,0x8E90,1,logo_2k.iff,0x271CECA2
+misc,logos_extra,logo_aut.iff,0B,0x18B14000,0x10DD9,1,logo_aut.iff,0x8FD10CB4
+misc,logos_extra,logo_bel.iff,0B,0x18B25000,0x116F3,1,logo_bel.iff,0xED7FC8F1
+misc,logos_extra,logo_can.iff,0B,0x18B70800,0xE1DA,1,logo_can.iff,0xAA59D233
+misc,logos_extra,logo_cze.iff,0B,0x18D83800,0xF22B,1,logo_cze.iff,0xB498117A
+misc,logos_extra,logo_dmk.iff,0B,0x18DCF800,0xFB25,1,logo_dmk.iff,0xD0DCA3B6
+misc,logos_extra,logo_eca.iff,0B,0x18DDF800,0x10160,1,logo_eca.iff,0x0611D1D3
+misc,logos_extra,logo_fin.iff,0B,0x18E0F000,0x102D5,1,logo_fin.iff,0x14327FF9
+misc,logos_extra,logo_fra.iff,0B,0x18E43800,0x105FF,1,logo_fra.iff,0xFF731A70
+misc,logos_extra,logo_ger.iff,0B,0x18E54000,0xCB5A,1,logo_ger.iff,0x6097CEB5
+misc,logos_extra,logo_kaz.iff,0B,0x18E61000,0x134C3,1,logo_kaz.iff,0x0CD6AD16
+misc,logos_extra,logo_lat.iff,0B,0x18EA4000,0xF78F,1,logo_lat.iff,0x76412DF9
+misc,logos_extra,logo_nhl.iff,0B,0x18EE5800,0x13464,1,logo_nhl.iff,0x9641B15B
+misc,logos_extra,logo_rus.iff,0B,0x1900D000,0x10313,1,logo_rus.iff,0x6BC756F7
+misc,logos_extra,logo_slo.iff,0B,0x19038800,0xFA65,1,logo_slo.iff,0x4C797493
+misc,logos_extra,logo_sui.iff,0B,0x1905D800,0xDFC9,1,logo_sui.iff,0xE7E0D260
+misc,logos_extra,logo_swe.iff,0B,0x1906B800,0xEE09,1,logo_swe.iff,0x6FD89E6A
+misc,logos_extra,logo_ukr.iff,0B,0x190C3800,0xE71E,1,logo_ukr.iff,0xAADC2222
+misc,logos_extra,logo_usa.iff,0B,0x190D2000,0x13244,1,logo_usa.iff,0x62194F86
+misc,logos_extra,logo_wca.iff,0B,0x1911A000,0xFD1F,1,logo_wca.iff,0xF6505C34
+misc,logos_extra,logos_large.iff,0A,0x100D800,0x1528,1,logos_large.iff,0x89150E9C
+misc,logos_extra,logos_medium.iff,0A,0x100C000,0x152A,1,logos_medium.iff,0x9CA13F0B
+misc,logos_extra,logos_small.iff,0A,0x100A800,0x1528,1,logos_small.iff,0x9C228292
+players,player_portraits,player_head_id_0007.iff,0B,0x1C2BA800,0xFD769,1,player_head_id_0007.iff,0x91CC9181
+players,player_portraits,player_head_id_0010.iff,0B,0x1C3B8000,0xF98A1,1,player_head_id_0010.iff,0xE8B09E34
+players,player_portraits,player_head_id_0011.iff,0B,0x1C4B2000,0xF95E6,1,player_head_id_0011.iff,0xD5D0B784
+players,player_portraits,player_head_id_0017.iff,0B,0x1C5AB800,0xFA01D,1,player_head_id_0017.iff,0x5A904224
+players,player_portraits,player_head_id_0019.iff,0B,0x1C6A6000,0xFF934,1,player_head_id_0019.iff,0xE5A0FC45
+players,player_portraits,player_head_id_0020.iff,0B,0x1C7A6000,0xF7BD1,1,player_head_id_0020.iff,0x6E24EC9A
+players,player_portraits,player_head_id_0022.iff,0B,0x1C89E000,0xF8D72,1,player_head_id_0022.iff,0x14E4BFFA
+players,player_portraits,player_head_id_0026.iff,0B,0x1C997000,0xFC8C3,1,player_head_id_0026.iff,0xE164193A
+players,player_portraits,player_head_id_0058.iff,0B,0x1CA94000,0xDE401,1,player_head_id_0058.iff,0x435197E3
+players,player_portraits,player_head_id_0062.iff,0B,0x1CB72800,0xF28BF,1,player_head_id_0062.iff,0x8F75FDEC
+players,player_portraits,player_head_id_0065.iff,0B,0x1CC65800,0xE1196,1,player_head_id_0065.iff,0x3D5521FC
+players,player_portraits,player_head_id_0066.iff,0B,0x1CD47000,0xE5152,1,player_head_id_0066.iff,0x7AF55B2C
+players,player_portraits,player_head_id_0078.iff,0B,0x1CE2C800,0xDE006,1,player_head_id_0078.iff,0x0E9936E8
+players,player_portraits,player_head_id_0085.iff,0B,0x1CF0B000,0xECE37,1,player_head_id_0085.iff,0x075F408C
+players,player_portraits,player_head_id_0086.iff,0B,0x1CFF8000,0xE2809,1,player_head_id_0086.iff,0x40FF3A5C
+players,player_portraits,player_head_id_0088.iff,0B,0x1D0DB000,0xEDA46,1,player_head_id_0088.iff,0xFFCF843D
+players,player_portraits,player_head_id_0091.iff,0B,0x1D1C9000,0xE0C5F,1,player_head_id_0091.iff,0x398335E9
+players,player_portraits,player_head_id_0092.iff,0B,0x1D2AA000,0xEC137,1,player_head_id_0092.iff,0x7E234F39
+players,player_portraits,player_head_id_0094.iff,0B,0x1D396800,0xFB73D,1,player_head_id_0094.iff,0xF163BA99
+players,player_portraits,player_head_id_0096.iff,0B,0x1D492000,0xE96F1,1,player_head_id_0096.iff,0x8BA3E9F9
+players,player_portraits,player_head_id_0104.iff,0B,0x1D57B800,0xF0DE0,1,player_head_id_0104.iff,0x701BE0E5
+players,player_portraits,player_head_id_0116.iff,0B,0x1D66C800,0xECCBB,1,player_head_id_0116.iff,0xC1876020
+players,player_portraits,player_head_id_0118.iff,0B,0x1D759800,0xF7623,1,player_head_id_0118.iff,0x7EB7DE41
+players,player_portraits,player_head_id_0124.iff,0B,0x1D851000,0xEA363,1,player_head_id_0124.iff,0x3DD341EE
+players,player_portraits,player_head_id_0128.iff,0B,0x1D93B800,0xF787E,1,player_head_id_0128.iff,0xF823ACEF
+players,player_portraits,player_head_id_0138.iff,0B,0x1DA33800,0xECC0B,1,player_head_id_0138.iff,0x337F7F4A
+players,player_portraits,player_head_id_0141.iff,0B,0x1DB20800,0xE9075,1,player_head_id_0141.iff,0x236A2D83
+players,player_portraits,player_head_id_0145.iff,0B,0x1DC0A000,0xFA11F,1,player_head_id_0145.iff,0xD6EA8B43
+players,player_portraits,player_head_id_0146.iff,0B,0x1DD04800,0xE98CD,1,player_head_id_0146.iff,0x914AF193
+players,player_portraits,player_head_id_0147.iff,0B,0x1DDEE800,0x102B5E,1,player_head_id_0147.iff,0xAC2AD823
+players,player_portraits,player_head_id_0148.iff,0B,0x1DEF1800,0xE230B,1,player_head_id_0148.iff,0x2E7A4FF2
+players,player_portraits,player_head_id_0185.iff,0B,0x1DFD4000,0xFC4C9,1,player_head_id_0185.iff,0xA1284B38
+players,player_portraits,player_head_id_0194.iff,0B,0x1E0D0800,0xF1E4F,1,player_head_id_0194.iff,0x5714B12D
+players,player_portraits,player_head_id_0195.iff,0B,0x1E1C2800,0xF718E,1,player_head_id_0195.iff,0x6A74989D
+players,player_portraits,player_head_id_0206.iff,0B,0x1E2BA000,0xEF59E,1,player_head_id_0206.iff,0x3B33A918
+players,player_portraits,player_head_id_0209.iff,0B,0x1E3A9800,0xFA439,1,player_head_id_0209.iff,0xB9633EC9
+players,player_portraits,player_head_id_0213.iff,0B,0x1E4A4000,0xF4CFD,1,player_head_id_0213.iff,0x388FF5CD
+players,player_portraits,player_head_id_0223.iff,0B,0x1E599000,0xF7660,1,player_head_id_0223.iff,0xBE1B8763
+players,player_portraits,player_head_id_0237.iff,0B,0x1E690800,0xEA9C4,1,player_head_id_0237.iff,0x80C7F206
+players,player_portraits,player_head_id_0243.iff,0B,0x1E77B800,0xEE92A,1,player_head_id_0243.iff,0x6842647E
+players,player_portraits,player_head_id_0249.iff,0B,0x1E86A800,0xF5BF7,1,player_head_id_0249.iff,0x22F27CDF
+players,player_portraits,player_head_id_0254.iff,0B,0x1E960800,0xE697A,1,player_head_id_0254.iff,0x113E6BCB
+players,player_portraits,player_head_id_0256.iff,0B,0x1EA47800,0xF55F2,1,player_head_id_0256.iff,0x6BFE38AB
+players,player_portraits,player_head_id_0260.iff,0B,0x1EB3D000,0xE0FE3,1,player_head_id_0260.iff,0x622ABFA5
+players,player_portraits,player_head_id_0262.iff,0B,0x1EC1E000,0xEA2D1,1,player_head_id_0262.iff,0x18EAECC5
+players,player_portraits,player_head_id_0268.iff,0B,0x1ED08800,0xFDE21,1,player_head_id_0268.iff,0x525AF464
+players,player_portraits,player_head_id_0273.iff,0B,0x1EE06800,0xF559E,1,player_head_id_0273.iff,0xEED616D0
+players,player_portraits,player_head_id_0282.iff,0B,0x1EEFC000,0xFD5EB,1,player_head_id_0282.iff,0x22E08DB5
+players,player_portraits,player_head_id_0283.iff,0B,0x1EFF9800,0xF2373,1,player_head_id_0283.iff,0x1F80A405
+players,player_portraits,player_head_id_0294.iff,0B,0x1F0EC000,0xF9011,1,player_head_id_0294.iff,0x66FCABB0
+players,player_portraits,player_head_id_0297.iff,0B,0x1F1E5800,0xF5D4C,1,player_head_id_0297.iff,0x215CD160
+players,player_portraits,player_head_id_0309.iff,0B,0x1F2DB800,0xF47E3,1,player_head_id_0309.iff,0x1F14357D
+players,player_portraits,player_head_id_0311.iff,0B,0x1F3D0000,0xE94D1,1,player_head_id_0311.iff,0xE438AD19
+players,player_portraits,player_head_id_0314.iff,0B,0x1F4B9800,0xF1685,1,player_head_id_0314.iff,0x2CD82269
+players,player_portraits,player_head_id_0319.iff,0B,0x1F5AB000,0xFD3F5,1,player_head_id_0319.iff,0xD448E6D8
+players,player_portraits,player_head_id_0320.iff,0B,0x1F6A8800,0xE3471,1,player_head_id_0320.iff,0x5FCCF607
+players,player_portraits,player_head_id_0325.iff,0B,0x1F78C000,0xF757C,1,player_head_id_0325.iff,0x972C7977
+players,player_portraits,player_head_id_0331.iff,0B,0x1F883800,0xE6660,1,player_head_id_0331.iff,0xA9F00C12
+players,player_portraits,player_head_id_0352.iff,0B,0x1F96A000,0xF6DF2,1,player_head_id_0352.iff,0x380995DF
+players,player_portraits,player_head_id_0354.iff,0B,0x1FA61000,0xEEB0B,1,player_head_id_0354.iff,0xB749607F
+players,player_portraits,player_head_id_0356.iff,0B,0x1FB50000,0xF4BFE,1,player_head_id_0356.iff,0xCD89331F
+players,player_portraits,player_head_id_0367.iff,0B,0x1FC45000,0xF772A,1,player_head_id_0367.iff,0x767D6801
+players,player_portraits,player_head_id_0381.iff,0B,0x1FD3C800,0xF6446,1,player_head_id_0381.iff,0xC337FCD1
+players,player_portraits,player_head_id_0382.iff,0B,0x1FE33000,0xFEC99,1,player_head_id_0382.iff,0x84978601
+players,player_portraits,player_head_id_0388.iff,0B,0x1FF32000,0x10292B,1,player_head_id_0388.iff,0xCE279EA0
+players,player_portraits,player_head_id_0391.iff,0B,0x20035000,0xF4FD3,1,player_head_id_0391.iff,0x086B2F74
+players,player_portraits,player_head_id_0392.iff,0B,0x2012A000,0xF67E6,1,player_head_id_0392.iff,0x4FCB55A4
+players,player_portraits,player_head_id_0398.iff,0B,0x20220800,0xF3EE2,1,player_head_id_0398.iff,0x057B4D05
+players,player_portraits,player_head_id_0408.iff,0B,0x20314800,0xF4A90,1,player_head_id_0408.iff,0xE7D32243
+players,player_portraits,player_head_id_0415.iff,0B,0x20409800,0xF86CD,1,player_head_id_0415.iff,0xD41F3557
+players,player_portraits,player_head_id_0427.iff,0B,0x20502000,0xF5192,1,player_head_id_0427.iff,0x284B1499
+players,player_portraits,player_head_id_0430.iff,0B,0x205F7800,0xFDF79,1,player_head_id_0430.iff,0x51371B2C
+players,player_portraits,player_head_id_0439.iff,0B,0x206F5800,0xFC4E8,1,player_head_id_0439.iff,0x5C27795D
+players,player_portraits,player_head_id_0440.iff,0B,0x207F2000,0xF1E7D,1,player_head_id_0440.iff,0x4C322B94
+players,player_portraits,player_head_id_0447.iff,0B,0x208E4000,0xF6F49,1,player_head_id_0447.iff,0xFE12F784
+players,player_portraits,player_head_id_0448.iff,0B,0x209DB000,0xF4801,1,player_head_id_0448.iff,0x7C426055
+players,player_portraits,player_head_id_0465.iff,0B,0x20AD0000,0xFB427,1,player_head_id_0465.iff,0xC91A05EF
+players,player_portraits,player_head_id_0467.iff,0B,0x20BCB800,0xF09E5,1,player_head_id_0467.iff,0xB3DA568F
+players,player_portraits,player_head_id_0468.iff,0B,0x20CBC800,0xF2FEA,1,player_head_id_0468.iff,0x318AC15E
+players,player_portraits,player_head_id_0473.iff,0B,0x20DAF800,0xE8FFF,1,player_head_id_0473.iff,0x8D0623EA
+players,player_portraits,player_head_id_0480.iff,0B,0x20E98800,0xFBED8,1,player_head_id_0480.iff,0x3BF0EBEF
+players,player_portraits,player_head_id_0488.iff,0B,0x20F94800,0xF10E8,1,player_head_id_0488.iff,0x0B80A02E
+players,player_portraits,player_head_id_0489.iff,0B,0x21086000,0xF5781,1,player_head_id_0489.iff,0x36E0899E
+players,player_portraits,player_head_id_0490.iff,0B,0x2117B800,0xF55D1,1,player_head_id_0490.iff,0xF0AC384A
+players,player_portraits,player_head_id_0496.iff,0B,0x21271000,0xF843E,1,player_head_id_0496.iff,0x7FECCDEA
+players,player_portraits,player_head_id_0507.iff,0B,0x21369800,0xF3094,1,player_head_id_0507.iff,0xC3F4BE26
+players,player_portraits,player_head_id_0513.iff,0B,0x2145D000,0xF2BE7,1,player_head_id_0513.iff,0xFD28CB43
+players,player_portraits,player_head_id_0530.iff,0B,0x21550000,0xF9096,1,player_head_id_0530.iff,0xF7401098
+players,player_portraits,player_head_id_0532.iff,0B,0x21649800,0xF5B38,1,player_head_id_0532.iff,0x8D8043F8
+players,player_portraits,player_head_id_0548.iff,0B,0x2173F800,0xFE111,1,player_head_id_0548.iff,0xDA356BE1
+players,player_portraits,player_head_id_0553.iff,0B,0x2183E000,0xF511A,1,player_head_id_0553.iff,0x66B98955
+players,player_portraits,player_head_id_0579.iff,0B,0x21933800,0xF3914,1,player_head_id_0579.iff,0x61C130FF
+players,player_portraits,player_head_id_0580.iff,0B,0x21A27800,0xF2542,1,player_head_id_0580.iff,0x9D87E05B
+players,player_portraits,player_head_id_0586.iff,0B,0x21B1A000,0xFDADC,1,player_head_id_0586.iff,0x12C715FB
+players,player_portraits,player_head_id_0590.iff,0B,0x21C18000,0xFCC82,1,player_head_id_0590.iff,0x56DB33FE
+players,player_portraits,player_head_id_0591.iff,0B,0x21D15000,0xFBC53,1,player_head_id_0591.iff,0x6BBB1A4E
+players,player_portraits,player_head_id_0592.iff,0B,0x21E11000,0xF74F7,1,player_head_id_0592.iff,0x2C1B609E
+players,player_portraits,player_head_id_0607.iff,0B,0x21F08800,0xF6C91,1,player_head_id_0607.iff,0xF21CA4BB
+players,player_portraits,player_head_id_0608.iff,0B,0x21FFF800,0xF77CA,1,player_head_id_0608.iff,0x704C336A
+players,player_portraits,player_head_id_0610.iff,0B,0x220F7000,0xF6F01,1,player_head_id_0610.iff,0x8B60AB0E
+players,player_portraits,player_head_id_0618.iff,0B,0x221EE000,0xFD7C4,1,player_head_id_0618.iff,0xBB10E0CF
+players,player_portraits,player_head_id_0627.iff,0B,0x222EB800,0xF4DBE,1,player_head_id_0627.iff,0xBFD405B0
+players,player_portraits,player_head_id_0635.iff,0B,0x223E0800,0xFCFCA,1,player_head_id_0635.iff,0x0E488575
+players,player_portraits,player_head_id_0641.iff,0B,0x224DD800,0xF63DB,1,player_head_id_0641.iff,0xE6CD130D
+players,player_portraits,player_head_id_0645.iff,0B,0x225D4000,0xF7546,1,player_head_id_0645.iff,0x134DB5CD
+players,player_portraits,player_head_id_0648.iff,0B,0x226CB800,0xF2487,1,player_head_id_0648.iff,0xEBDD717C
+players,player_portraits,player_head_id_0658.iff,0B,0x227BE000,0xF8963,1,player_head_id_0658.iff,0x2081A2D9
+players,player_portraits,player_head_id_0670.iff,0B,0x228B7000,0xF4775,1,player_head_id_0670.iff,0x5D394813
+players,player_portraits,player_head_id_0678.iff,0B,0x229AB800,0xF2BA7,1,player_head_id_0678.iff,0x6D4903D2
+players,player_portraits,player_head_id_0681.iff,0B,0x22A9E800,0xFCB0E,1,player_head_id_0681.iff,0x910FD376
+players,player_portraits,player_head_id_0682.iff,0B,0x22B9B800,0xFD055,1,player_head_id_0682.iff,0xD6AFA9A6
+players,player_portraits,player_head_id_0689.iff,0B,0x22C99000,0x102090,1,player_head_id_0689.iff,0xA17F98B7
+players,player_portraits,player_head_id_0690.iff,0B,0x22D9B800,0xF7DED,1,player_head_id_0690.iff,0x67332963
+players,player_portraits,player_head_id_0698.iff,0B,0x22E93800,0xFDD52,1,player_head_id_0698.iff,0x574362A2
+players,player_portraits,player_head_id_0708.iff,0B,0x22F91800,0xFA7BE,1,player_head_id_0708.iff,0xD63B38DE
+players,player_portraits,player_head_id_0709.iff,0B,0x2308C000,0xF2CE7,1,player_head_id_0709.iff,0xEB5B116E
+players,player_portraits,player_head_id_0711.iff,0B,0x2317F000,0xED06E,1,player_head_id_0711.iff,0x1077890A
+players,player_portraits,player_head_id_0713.iff,0B,0x2326C800,0xFE859,1,player_head_id_0713.iff,0x6AB7DA6A
+players,player_portraits,player_head_id_0717.iff,0B,0x2336B800,0xFC548,1,player_head_id_0717.iff,0x9F377CAA
+players,player_portraits,player_head_id_0719.iff,0B,0x23468000,0xF895A,1,player_head_id_0719.iff,0x2007C2CB
+players,player_portraits,player_head_id_0726.iff,0B,0x23561000,0xFAD30,1,player_head_id_0726.iff,0x24C327B4
+players,player_portraits,player_head_id_0727.iff,0B,0x2365C000,0xFB025,1,player_head_id_0727.iff,0x19A30E04
+players,player_portraits,player_head_id_0733.iff,0B,0x23757800,0xF5F55,1,player_head_id_0733.iff,0x277F7B61
+players,player_portraits,player_head_id_0735.iff,0B,0x2384D800,0xF733A,1,player_head_id_0735.iff,0xA83F8EC1
+players,player_portraits,player_head_id_0742.iff,0B,0x23945000,0xFB3BF,1,player_head_id_0742.iff,0x071A6269
+players,player_portraits,player_head_id_0746.iff,0B,0x23A40800,0xFC467,1,player_head_id_0746.iff,0xF29AC4A9
+players,player_portraits,player_head_id_0748.iff,0B,0x23B3D000,0xDB0F0,1,player_head_id_0748.iff,0x4DAA7AC8
+players,player_portraits,player_head_id_0749.iff,0B,0x23C18800,0xEE13D,1,player_head_id_0749.iff,0x70CA5378
+players,player_portraits,player_head_id_0750.iff,0B,0x23D07000,0xF8CB2,1,player_head_id_0750.iff,0xB686E2AC
+players,player_portraits,player_head_id_0759.iff,0B,0x23E00000,0xF29D4,1,player_head_id_0759.iff,0xBB9680DD
+players,player_portraits,player_head_id_0762.iff,0B,0x23EF3000,0xF80F2,1,player_head_id_0762.iff,0x4AD2C362
+players,player_portraits,player_head_id_0765.iff,0B,0x23FEB800,0x101B36,1,player_head_id_0765.iff,0xF8F21F72
+players,player_portraits,player_head_id_0767.iff,0B,0x240ED800,0xF6051,1,player_head_id_0767.iff,0x82324C12
+players,player_portraits,player_head_id_0770.iff,0B,0x241E4000,0x106476,1,player_head_id_0770.iff,0xFB4E43A7
+players,player_portraits,player_head_id_0771.iff,0B,0x242EA800,0x105421,1,player_head_id_0771.iff,0xC62E6A17
+players,player_portraits,player_head_id_0773.iff,0B,0x243F0000,0xF57C2,1,player_head_id_0773.iff,0xBCEE3977
+players,player_portraits,player_head_id_0775.iff,0B,0x244E5800,0xFB71A,1,player_head_id_0775.iff,0x33AECCD7
+players,player_portraits,player_head_id_0799.iff,0B,0x245E1000,0xF2387,1,player_head_id_0799.iff,0xCC5440A6
+players,player_portraits,player_head_id_0807.iff,0B,0x246D3800,0xFAB0F,1,player_head_id_0807.iff,0xA223DFE6
+players,player_portraits,player_head_id_0811.iff,0B,0x247CE800,0xF87F0,1,player_head_id_0811.iff,0xE63FF9E3
+players,player_portraits,player_head_id_0812.iff,0B,0x248C7000,0xF251C,1,player_head_id_0812.iff,0xA19F8333
+players,player_portraits,player_head_id_0813.iff,0B,0x249B9800,0xF8E2F,1,player_head_id_0813.iff,0x9CFFAA83
+players,player_portraits,player_head_id_0822.iff,0B,0x24AB2800,0xF2330,1,player_head_id_0822.iff,0x270BF19D
+players,player_portraits,player_head_id_0829.iff,0B,0x24BA5000,0xF708D,1,player_head_id_0829.iff,0x50DBC08C
+players,player_portraits,player_head_id_0832.iff,0B,0x24C9C800,0xF0AA2,1,player_head_id_0832.iff,0xEC572238
+players,player_portraits,player_head_id_0833.iff,0B,0x24D8D800,0x103610,1,player_head_id_0833.iff,0xD1370B88
+players,player_portraits,player_head_id_0847.iff,0B,0x24E91000,0xF9895,1,player_head_id_0847.iff,0x39B29DF0
+players,player_portraits,player_head_id_0853.iff,0B,0x24F8B000,0xF0775,1,player_head_id_0853.iff,0x076EE895
+players,player_portraits,player_head_id_0861.iff,0B,0x2507B800,0xF344D,1,player_head_id_0861.iff,0xFB3AC95B
+players,player_portraits,player_head_id_0867.iff,0B,0x2516F000,0x104881,1,player_head_id_0867.iff,0x747A3CFB
+players,player_portraits,player_head_id_0872.iff,0B,0x25274000,0xF4566,1,player_head_id_0872.iff,0x77C6602E
+players,player_portraits,player_head_id_0874.iff,0B,0x25368800,0xE55D3,1,player_head_id_0874.iff,0xF886958E
+players,player_portraits,player_head_id_0884.iff,0B,0x2544E000,0xF6AB3,1,player_head_id_0884.iff,0x09D0275B
+players,player_portraits,player_head_id_0887.iff,0B,0x25545000,0xFE466,1,player_head_id_0887.iff,0x4E705D8B
+players,player_portraits,player_head_id_0898.iff,0B,0x25643800,0xFB4AA,1,player_head_id_0898.iff,0x077C19FF
+players,player_portraits,player_head_id_0908.iff,0B,0x2573F000,0xF5711,1,player_head_id_0908.iff,0x86044383
+players,player_portraits,player_head_id_0911.iff,0B,0x25834800,0xFACFE,1,player_head_id_0911.iff,0x4048F257
+players,player_portraits,player_head_id_0930.iff,0B,0x2592F800,0xF82BD,1,player_head_id_0930.iff,0x30E07AEC
+players,player_portraits,player_head_id_0938.iff,0B,0x25A28000,0xF215D,1,player_head_id_0938.iff,0x0090312D
+players,player_portraits,player_head_id_0941.iff,0B,0x25B1A800,0xF3CC5,1,player_head_id_0941.iff,0x108563E4
+players,player_portraits,player_head_id_0945.iff,0B,0x25C0E800,0xF98D3,1,player_head_id_0945.iff,0xE505C524
+players,player_portraits,player_head_id_0951.iff,0B,0x25D08800,0xF5806,1,player_head_id_0951.iff,0xDBD9B041
+players,player_portraits,player_head_id_0970.iff,0B,0x25DFE800,0xF9E44,1,player_head_id_0970.iff,0xAB7138FA
+players,player_portraits,player_head_id_0976.iff,0B,0x25EF8800,0xFAA2D,1,player_head_id_0976.iff,0x2431CD5A
+players,player_portraits,player_head_id_0977.iff,0B,0x25FF3800,0xEE37F,1,player_head_id_0977.iff,0x1951E4EA
+2k,uniform_base,uniform_base_2k_away.iff,0A,0x3A64E000,0x16E0F1,1,uniform_base_2k_away.iff,0x1A093D40
+2k,uniform_base,uniform_base_2k_home.iff,0A,0x3A7BC800,0x16E478,1,uniform_base_2k_home.iff,0x83A54E3A
+aut,uniform_base,uniform_base_aut_away.iff,0A,0x3BBD2800,0x16AC9E,1,uniform_base_aut_away.iff,0xBFCD38AE
+aut,uniform_base,uniform_base_aut_home.iff,0A,0x3BD3D800,0x169ED6,1,uniform_base_aut_home.iff,0x26614BD4
+bel,uniform_base,uniform_base_bel_away.iff,0A,0x3BEA7800,0x1694D1,1,uniform_base_bel_away.iff,0x52DCEF89
+bel,uniform_base,uniform_base_bel_home.iff,0A,0x3C011000,0x16DF9F,1,uniform_base_bel_home.iff,0xCB709CF3
+can,uniform_base,uniform_base_can_away.iff,0A,0x3D6B7800,0x165AF4,1,uniform_base_can_away.iff,0x7D550059
+can,uniform_base,uniform_base_can_home.iff,0A,0x3D81D800,0x165A8C,1,uniform_base_can_home.iff,0xE4F97323
+cze,uniform_base,uniform_base_cze_away.iff,0A,0x44B1E000,0x16A8EA,1,uniform_base_cze_away.iff,0x0862B821
+cze,uniform_base,uniform_base_cze_home.iff,0A,0x44C89000,0x16B248,1,uniform_base_cze_home.iff,0x91CECB5B
+dmk,uniform_base,uniform_base_dmk_away.iff,0A,0x46122800,0x1675EC,1,uniform_base_dmk_away.iff,0xE5FEB055
+dmk,uniform_base,uniform_base_dmk_home.iff,0A,0x4628A000,0x167946,1,uniform_base_dmk_home.iff,0x7C52C32F
+eca,uniform_base,uniform_base_eca_alt.iff,0A,0x463F2000,0x173A25,1,uniform_base_eca_alt.iff,0x93F4FEA5
+fin,uniform_base,uniform_base_fin_away.iff,0A,0x46C7B000,0x16E1F6,1,uniform_base_fin_away.iff,0x5F35960C
+fin,uniform_base,uniform_base_fin_home.iff,0A,0x46DE9800,0x16BC07,1,uniform_base_fin_home.iff,0xC699E576
+fra,uniform_base,uniform_base_fra_away.iff,0A,0x47686000,0x166937,1,uniform_base_fra_away.iff,0x23E98E0E
+fra,uniform_base,uniform_base_fra_home.iff,0A,0x477ED000,0x16630D,1,uniform_base_fra_home.iff,0xBA45FD74
+ger,uniform_base,uniform_base_ger_away.iff,0A,0x47953800,0x1701B7,1,uniform_base_ger_away.iff,0xF31829C2
+ger,uniform_base,uniform_base_ger_home.iff,0A,0x47AC4000,0x171626,1,uniform_base_ger_home.iff,0x6AB45AB8
+kaz,uniform_base,uniform_base_kaz_away.iff,0A,0x47C35800,0x16FD48,1,uniform_base_kaz_away.iff,0x551C5735
+kaz,uniform_base,uniform_base_kaz_home.iff,0A,0x47DA5800,0x16FFCE,1,uniform_base_kaz_home.iff,0xCCB0244F
+lat,uniform_base,uniform_base_lat_away.iff,0A,0x48B8A000,0x16C1AC,1,uniform_base_lat_away.iff,0x3F4D8E09
+lat,uniform_base,uniform_base_lat_home.iff,0A,0x48CF6800,0x16B20F,1,uniform_base_lat_home.iff,0xA6E1FD73
+rus,uniform_base,uniform_base_rus_away.iff,0A,0x4EDBB800,0x16E98B,1,uniform_base_rus_away.iff,0x26971CDB
+rus,uniform_base,uniform_base_rus_home.iff,0A,0x4EF2A800,0x16F69D,1,uniform_base_rus_home.iff,0xBF3B6FA1
+slo,uniform_base,uniform_base_slo_away.iff,0A,0x4F7A1800,0x17254F,1,uniform_base_slo_away.iff,0x551BCB9C
+slo,uniform_base,uniform_base_slo_home.iff,0A,0x4F914000,0x1727D5,1,uniform_base_slo_home.iff,0xCCB7B8E6
+sui,uniform_base,uniform_base_sui_away.iff,0A,0x501C7000,0x163D90,1,uniform_base_sui_away.iff,0x8DBE4195
+sui,uniform_base,uniform_base_sui_home.iff,0A,0x5032B000,0x165159,1,uniform_base_sui_home.iff,0x141232EF
+swe,uniform_base,uniform_base_swe_away.iff,0A,0x50490800,0x168FF0,1,uniform_base_swe_away.iff,0xCFEE18DA
+swe,uniform_base,uniform_base_swe_home.iff,0A,0x505F9800,0x16891E,1,uniform_base_swe_home.iff,0x56426BA0
+ukr,uniform_base,uniform_base_ukr_away.iff,0A,0x51B08000,0x1661A2,1,uniform_base_ukr_away.iff,0x414D71A7
+ukr,uniform_base,uniform_base_ukr_home.iff,0A,0x51C6E800,0x165FE3,1,uniform_base_ukr_home.iff,0xD8E102DD
+usa,uniform_base,uniform_base_usa_away.iff,0A,0x51DD4800,0x161EC5,1,uniform_base_usa_away.iff,0x99E16EC2
+usa,uniform_base,uniform_base_usa_home.iff,0A,0x51F36800,0x16270C,1,uniform_base_usa_home.iff,0x004D1DB8
+wca,uniform_base,uniform_base_wca_alt.iff,0A,0x52CF3000,0x17402A,1,uniform_base_wca_alt.iff,0x656E83AF
+uniforms,uniform_base_extra,disc_0365711b.iff,0A,0x413DB000,0x12C981,1,Uniform base/scenery - 1024x1024,0x0365711B
+uniforms,uniform_base_extra,disc_03dc92f6.iff,0A,0x40FBC000,0x178505,1,Uniform base/scenery - 1024x1024,0x03DC92F6
+uniforms,uniform_base_extra,disc_043ef887.iff,0A,0x3C44E000,0x1698E4,1,Uniform base/scenery - 1024x1024,0x043EF887
+uniforms,uniform_base_extra,disc_05121f37.iff,0A,0x3FB26000,0x174713,1,Uniform base/scenery - 1024x1024,0x05121F37
+uniforms,uniform_base_extra,disc_056571f4.iff,0A,0x400AC800,0x131465,1,Uniform base/scenery - 1024x1024,0x056571F4
+uniforms,uniform_base_extra,disc_05884779.iff,0A,0x488AE000,0x16D974,1,Uniform base/scenery - 1024x1024,0x05884779
+uniforms,uniform_base_extra,disc_0710ab4c.iff,0A,0x3E8AD800,0x171A74,1,Uniform base/scenery - 1024x1024,0x0710AB4C
+uniforms,uniform_base_extra,disc_07c6e317.iff,0A,0x41508000,0x12C981,1,Uniform base/scenery - 1024x1024,0x07C6E317
+uniforms,uniform_base_extra,disc_0831ea1e.iff,0A,0x4C0F0800,0x13145E,1,Uniform base/scenery - 1024x1024,0x0831EA1E
+uniforms,uniform_base_extra,disc_0a13dedc.iff,0A,0x5265F000,0x166800,1,Uniform base/scenery - 1024x1024,0x0A13DEDC
+uniforms,uniform_base_extra,disc_0a487012.iff,0A,0x4A346800,0x167D6C,1,Uniform base/scenery - 1024x1024,0x0A487012
+uniforms,uniform_base_extra,disc_0fe1198b.iff,0A,0x4E70B800,0x131461,1,Uniform base/scenery - 1024x1024,0x0FE1198B
+uniforms,uniform_base_extra,disc_106bc7bf.iff,0A,0x4384E000,0x12C981,1,Uniform base/scenery - 1024x1024,0x106BC7BF
+uniforms,uniform_base_extra,disc_12ad691f.iff,0A,0x4B001000,0x178C24,1,Uniform base/scenery - 1024x1024,0x12AD691F
+uniforms,uniform_base_extra,disc_12ee6a6b.iff,0A,0x3CFE5000,0x131471,1,Uniform base/scenery - 1024x1024,0x12EE6A6B
+uniforms,uniform_base_extra,disc_135672f6.iff,0A,0x4575D000,0x162A04,1,Uniform base/scenery - 1024x1024,0x135672F6
+uniforms,uniform_base_extra,disc_13b6bc9a.iff,0A,0x469A4000,0x16C757,1,Uniform base/scenery - 1024x1024,0x13B6BC9A
+uniforms,uniform_base_extra,disc_13d16f5c.iff,0A,0x3ADA9800,0x17B4E5,1,Uniform base/scenery - 1024x1024,0x13D16F5C
+uniforms,uniform_base_extra,disc_14c855b3.iff,0A,0x43BD5000,0x12C981,1,Uniform base/scenery - 1024x1024,0x14C855B3
+uniforms,uniform_base_extra,disc_1739e5df.iff,0A,0x50A5A000,0x1846FF,1,Uniform base/scenery - 1024x1024,0x1739E5DF
+uniforms,uniform_base_extra,disc_1797ffca.iff,0A,0x3EFF3800,0x16FE7B,1,Uniform base/scenery - 1024x1024,0x1797FFCA
+uniforms,uniform_base_extra,disc_1ac9fe00.iff,0A,0x41D43000,0x12C981,1,Uniform base/scenery - 1024x1024,0x1AC9FE00
+uniforms,uniform_base_extra,disc_1c7ef381.iff,0A,0x401DE000,0x1671DC,1,Uniform base/scenery - 1024x1024,0x1C7EF381
+uniforms,uniform_base_extra,disc_1e856e26.iff,0A,0x3B056800,0x131472,1,Uniform base/scenery - 1024x1024,0x1E856E26
+uniforms,uniform_base_extra,disc_1eea8e24.iff,0A,0x3B8E7800,0x171734,1,Uniform base/scenery - 1024x1024,0x1EEA8E24
+uniforms,uniform_base_extra,disc_20642e96.iff,0A,0x496E8000,0x167C03,1,Uniform base/scenery - 1024x1024,0x20642E96
+uniforms,uniform_base_extra,disc_228e9d48.iff,0A,0x4E598000,0x1737B4,1,Uniform base/scenery - 1024x1024,0x228E9D48
+uniforms,uniform_base_extra,disc_2332d989.iff,0A,0x427D8000,0x12C981,1,Uniform base/scenery - 1024x1024,0x2332D989
+uniforms,uniform_base_extra,disc_24beb817.iff,0A,0x450BF800,0x16C30C,1,Uniform base/scenery - 1024x1024,0x24BEB817
+uniforms,uniform_base_extra,disc_262a40ad.iff,0A,0x4836A000,0x173E9F,1,Uniform base/scenery - 1024x1024,0x262A40AD
+uniforms,uniform_base_extra,disc_27914b85.iff,0A,0x42B5F000,0x12C981,1,Uniform base/scenery - 1024x1024,0x27914B85
+uniforms,uniform_base_extra,disc_29f1595f.iff,0A,0x53148800,0x16F1B7,1,Uniform base/scenery - 1024x1024,0x29F1595F
+uniforms,uniform_base_extra,disc_2b19512d.iff,0A,0x3F418800,0x13146A,1,Uniform base/scenery - 1024x1024,0x2B19512D
+uniforms,uniform_base_extra,disc_2b53325b.iff,0A,0x4DCB2800,0x160213,1,Uniform base/scenery - 1024x1024,0x2B53325B
+uniforms,uniform_base_extra,disc_2be33ceb.iff,0A,0x4466A000,0x12C981,1,Uniform base/scenery - 1024x1024,0x2BE33CEB
+uniforms,uniform_base_extra,disc_2c874e8b.iff,0A,0x516E0800,0x162FB8,1,Uniform base/scenery - 1024x1024,0x2C874E8B
+uniforms,uniform_base_extra,disc_2cadc91f.iff,0A,0x4E3EE000,0x1A9B9E,1,Uniform base/scenery - 1024x1024,0x2CADC91F
+uniforms,uniform_base_extra,disc_2d45928d.iff,0A,0x408F4800,0x169BF1,1,Uniform base/scenery - 1024x1024,0x2D45928D
+uniforms,uniform_base_extra,disc_2e440c70.iff,0A,0x3F54A000,0x182CCB,1,Uniform base/scenery - 1024x1024,0x2E440C70
+uniforms,uniform_base_extra,disc_2f40aee7.iff,0A,0x449F1000,0x12C981,1,Uniform base/scenery - 1024x1024,0x2F40AEE7
+uniforms,uniform_base_extra,disc_303c6f2d.iff,0A,0x42451000,0x12C981,1,Uniform base/scenery - 1024x1024,0x303C6F2D
+uniforms,uniform_base_extra,disc_3064e021.iff,0A,0x3DDBB800,0x15E083,1,Uniform base/scenery - 1024x1024,0x3064E021
+uniforms,uniform_base_extra,disc_324fb3f0.iff,0A,0x43D02000,0x12C981,1,Uniform base/scenery - 1024x1024,0x324FB3F0
+uniforms,uniform_base_extra,disc_349ffd21.iff,0A,0x4257E000,0x12C981,1,Uniform base/scenery - 1024x1024,0x349FFD21
+uniforms,uniform_base_extra,disc_36ec21fc.iff,0A,0x44089000,0x12C981,1,Uniform base/scenery - 1024x1024,0x36EC21FC
+uniforms,uniform_base_extra,disc_36f7f45f.iff,0A,0x3E088000,0x131466,1,Uniform base/scenery - 1024x1024,0x36F7F45F
+uniforms,uniform_base_extra,disc_380439e8.iff,0A,0x4DA4F800,0x131467,1,Uniform base/scenery - 1024x1024,0x380439E8
+uniforms,uniform_base_extra,disc_3a9e5692.iff,0A,0x42EE6000,0x12C981,1,Uniform base/scenery - 1024x1024,0x3A9E5692
+uniforms,uniform_base_extra,disc_3bf04cd5.iff,0A,0x404AB800,0x1662F3,1,Uniform base/scenery - 1024x1024,0x3BF04CD5
+uniforms,uniform_base_extra,disc_3c829199.iff,0A,0x40E76800,0x14552D,1,Uniform base/scenery - 1024x1024,0x3C829199
+uniforms,uniform_base_extra,disc_3da4bb13.iff,0A,0x3CB80000,0x17325F,1,Uniform base/scenery - 1024x1024,0x3DA4BB13
+uniforms,uniform_base_extra,disc_3dcec845.iff,0A,0x524DD000,0x181E2D,1,Uniform base/scenery - 1024x1024,0x3DCEC845
+uniforms,uniform_base_extra,disc_3e3dc49e.iff,0A,0x4326D000,0x12C981,1,Uniform base/scenery - 1024x1024,0x3E3DC49E
+uniforms,uniform_base_extra,disc_3f90b46c.iff,0A,0x3AAA7000,0x17F083,1,Uniform base/scenery - 1024x1024,0x3F90B46C
+uniforms,uniform_base_extra,disc_424e5fb4.iff,0A,0x49C8D000,0x1747B7,1,Uniform base/scenery - 1024x1024,0x424E5FB4
+uniforms,uniform_base_extra,disc_425ce145.iff,0A,0x434C7000,0x12C981,1,Uniform base/scenery - 1024x1024,0x425CE145
+uniforms,uniform_base_extra,disc_4386e36f.iff,0A,0x3E2EB000,0x16E137,1,Uniform base/scenery - 1024x1024,0x4386E36F
+uniforms,uniform_base_extra,disc_4576fcdc.iff,0A,0x4562B800,0x131461,1,Uniform base/scenery - 1024x1024,0x4576FCDC
+uniforms,uniform_base_extra,disc_46ae26b8.iff,0A,0x4722E800,0x1728E7,1,Uniform base/scenery - 1024x1024,0x46AE26B8
+uniforms,uniform_base_extra,disc_46ff7349.iff,0A,0x435F4000,0x12C981,1,Uniform base/scenery - 1024x1024,0x46FF7349
+uniforms,uniform_base_extra,disc_471268be.iff,0A,0x51001800,0x12DB0E,1,Uniform base/scenery - 1024x1024,0x471268BE
+uniforms,uniform_base_extra,disc_4a3d0a97.iff,0A,0x4CF0B800,0x16FDC3,1,Uniform base/scenery - 1024x1024,0x4A3D0A97
+uniforms,uniform_base_extra,disc_4a8d0427.iff,0A,0x442E3000,0x12C981,1,Uniform base/scenery - 1024x1024,0x4A8D0427
+uniforms,uniform_base_extra,disc_4e2e962b.iff,0A,0x44410000,0x12C981,1,Uniform base/scenery - 1024x1024,0x4E2E962B
+uniforms,uniform_base_extra,disc_4ef6d260.iff,0A,0x4AD9E000,0x131474,1,Uniform base/scenery - 1024x1024,0x4EF6D260
+uniforms,uniform_base_extra,disc_553fc6df.iff,0A,0x4864B000,0x131472,1,Uniform base/scenery - 1024x1024,0x553FC6DF
+uniforms,uniform_base_extra,disc_556d46b5.iff,0A,0x45B89800,0x167B14,1,Uniform base/scenery - 1024x1024,0x556D46B5
+uniforms,uniform_base_extra,disc_588b8184.iff,0A,0x4BE56800,0x168646,1,Uniform base/scenery - 1024x1024,0x588B8184
+uniforms,uniform_base_extra,disc_5ce40f67.iff,0A,0x4BB80800,0x166F35,1,Uniform base/scenery - 1024x1024,0x5CE40F67
+uniforms,uniform_base_extra,disc_5cee3ba5.iff,0A,0x3D248000,0x1829C4,1,Uniform base/scenery - 1024x1024,0x5CEE3BA5
+uniforms,uniform_base_extra,disc_5f53fc52.iff,0A,0x42C8C000,0x12C981,1,Uniform base/scenery - 1024x1024,0x5F53FC52
+uniforms,uniform_base_extra,disc_620b49d7.iff,0A,0x41E70000,0x12C981,1,Uniform base/scenery - 1024x1024,0x620B49D7
+uniforms,uniform_base_extra,disc_66a8dbdb.iff,0A,0x421F7000,0x12C981,1,Uniform base/scenery - 1024x1024,0x66A8DBDB
+uniforms,uniform_base_extra,disc_6ac8a946.iff,0A,0x4D626000,0x15F5DF,1,Uniform base/scenery - 1024x1024,0x6AC8A946
+uniforms,uniform_base_extra,disc_6b835ad5.iff,0A,0x4C94B000,0x1713F7,1,Uniform base/scenery - 1024x1024,0x6B835AD5
+uniforms,uniform_base_extra,disc_6c1b90b2.iff,0A,0x3D54F000,0x168553,1,Uniform base/scenery - 1024x1024,0x6C1B90B2
+uniforms,uniform_base_extra,disc_6d139c56.iff,0A,0x4A8F2800,0x19D671,1,Uniform base/scenery - 1024x1024,0x6D139C56
+uniforms,uniform_base_extra,disc_71018605.iff,0A,0x4B5C8000,0x16E799,1,Uniform base/scenery - 1024x1024,0x71018605
+uniforms,uniform_base_extra,disc_75d552bf.iff,0A,0x528F7000,0x1314EB,1,Uniform base/scenery - 1024x1024,0x75D552BF
+uniforms,uniform_base_extra,disc_79660778.iff,0A,0x4913B000,0x174B6B,1,Uniform base/scenery - 1024x1024,0x79660778
+uniforms,uniform_base_extra,disc_7ba7c6cc.iff,0A,0x41762000,0x12C981,1,Uniform base/scenery - 1024x1024,0x7BA7C6CC
+uniforms,uniform_base_extra,disc_7da0556b.iff,0A,0x50D60000,0x1733F2,1,Uniform base/scenery - 1024x1024,0x7DA0556B
+uniforms,uniform_base_extra,disc_7e1dadea.iff,0A,0x4A215000,0x131462,1,Uniform base/scenery - 1024x1024,0x7E1DADEA
+uniforms,uniform_base_extra,disc_7f0454c0.iff,0A,0x41AE9000,0x12C981,1,Uniform base/scenery - 1024x1024,0x7F0454C0
+uniforms,uniform_base_extra,disc_7f6d95d9.iff,0A,0x4FEDA800,0x1767AA,1,Uniform base/scenery - 1024x1024,0x7F6D95D9
+uniforms,uniform_base_extra,disc_7ff6e903.iff,0A,0x4F364800,0x169F82,1,Uniform base/scenery - 1024x1024,0x7FF6E903
+uniforms,uniform_base_extra,disc_83658d7a.iff,0A,0x41C16000,0x12C981,1,Uniform base/scenery - 1024x1024,0x83658D7A
+uniforms,uniform_base_extra,disc_85d280fb.iff,0A,0x3FE12800,0x16832A,1,Uniform base/scenery - 1024x1024,0x85D280FB
+uniforms,uniform_base_extra,disc_87291d5c.iff,0A,0x3AF25000,0x131472,1,Uniform base/scenery - 1024x1024,0x87291D5C
+uniforms,uniform_base_extra,disc_8746fd5e.iff,0A,0x3B76E000,0x1797E3,1,Uniform base/scenery - 1024x1024,0x8746FD5E
+uniforms,uniform_base_extra,disc_89c7b4c5.iff,0A,0x4397B000,0x12C981,1,Uniform base/scenery - 1024x1024,0x89C7B4C5
+uniforms,uniform_base_extra,disc_8a1acfe0.iff,0A,0x4683A000,0x169DB2,1,Uniform base/scenery - 1024x1024,0x8A1ACFE0
+uniforms,uniform_base_extra,disc_8a7d1c26.iff,0A,0x3B188000,0x17BE2B,1,Uniform base/scenery - 1024x1024,0x8A7D1C26
+uniforms,uniform_base_extra,disc_8afa018c.iff,0A,0x45397000,0x162C36,1,Uniform base/scenery - 1024x1024,0x8AFA018C
+uniforms,uniform_base_extra,disc_8b011a65.iff,0A,0x4AC28000,0x175D47,1,Uniform base/scenery - 1024x1024,0x8B011A65
+uniforms,uniform_base_extra,disc_8b421911.iff,0A,0x3D116800,0x131471,1,Uniform base/scenery - 1024x1024,0x8B421911
+uniforms,uniform_base_extra,disc_8bd74525.iff,0A,0x4EC56000,0x16519F,1,Uniform base/scenery - 1024x1024,0x8BD74525
+uniforms,uniform_base_extra,disc_8d6426c9.iff,0A,0x43AA8000,0x12C981,1,Uniform base/scenery - 1024x1024,0x8D6426C9
+uniforms,uniform_base_extra,disc_8e3b8cb0.iff,0A,0x3EE7F800,0x173E76,1,Uniform base/scenery - 1024x1024,0x8E3B8CB0
+uniforms,uniform_base_extra,disc_8e9596a5.iff,0A,0x50BDE800,0x1813ED,1,Uniform base/scenery - 1024x1024,0x8E9596A5
+uniforms,uniform_base_extra,disc_919d9964.iff,0A,0x4BFBF000,0x13145E,1,Uniform base/scenery - 1024x1024,0x919D9964
+uniforms,uniform_base_extra,disc_93bfada6.iff,0A,0x52A28800,0x16501B,1,Uniform base/scenery - 1024x1024,0x93BFADA6
+uniforms,uniform_base_extra,disc_93e40368.iff,0A,0x49F7B800,0x167F03,1,Uniform base/scenery - 1024x1024,0x93E40368
+uniforms,uniform_base_extra,disc_964d6af1.iff,0A,0x4E83D000,0x131461,1,Uniform base/scenery - 1024x1024,0x964D6AF1
+uniforms,uniform_base_extra,disc_9a70e18c.iff,0A,0x40BCC800,0x1787E9,1,Uniform base/scenery - 1024x1024,0x9A70E18C
+uniforms,uniform_base_extra,disc_9ac90261.iff,0A,0x412AE000,0x12C981,1,Uniform base/scenery - 1024x1024,0x9AC90261
+uniforms,uniform_base_extra,disc_9c243403.iff,0A,0x484DE000,0x16CF5C,1,Uniform base/scenery - 1024x1024,0x9C243403
+uniforms,uniform_base_extra,disc_9cbe6c4d.iff,0A,0x3FC9A800,0x1779F4,1,Uniform base/scenery - 1024x1024,0x9CBE6C4D
+uniforms,uniform_base_extra,disc_9cc9028e.iff,0A,0x3FF7B000,0x131465,1,Uniform base/scenery - 1024x1024,0x9CC9028E
+uniforms,uniform_base_extra,disc_9d928bfd.iff,0A,0x3C5B8000,0x16926C,1,Uniform base/scenery - 1024x1024,0x9D928BFD
+uniforms,uniform_base_extra,disc_9e6a906d.iff,0A,0x41635000,0x12C981,1,Uniform base/scenery - 1024x1024,0x9E6A906D
+uniforms,uniform_base_extra,disc_9ebcd836.iff,0A,0x3E73C800,0x170F57,1,Uniform base/scenery - 1024x1024,0x9EBCD836
+uniforms,uniform_base_extra,disc_a1a84a92.iff,0A,0x4DB81000,0x131467,1,Uniform base/scenery - 1024x1024,0xA1A84A92
+uniforms,uniform_base_extra,disc_a33225e8.iff,0A,0x43013000,0x12C981,1,Uniform base/scenery - 1024x1024,0xA33225E8
+uniforms,uniform_base_extra,disc_a408c869.iff,0A,0x3CCF3800,0x170262,1,Uniform base/scenery - 1024x1024,0xA408C869
+uniforms,uniform_base_extra,disc_a462bb3f.iff,0A,0x52365000,0x177F33,1,Uniform base/scenery - 1024x1024,0xA462BB3F
+uniforms,uniform_base_extra,disc_a52ee2e3.iff,0A,0x40D45000,0x131477,1,Uniform base/scenery - 1024x1024,0xA52EE2E3
+uniforms,uniform_base_extra,disc_a63cc716.iff,0A,0x3AC26800,0x182A19,1,Uniform base/scenery - 1024x1024,0xA63CC716
+uniforms,uniform_base_extra,disc_a791b7e4.iff,0A,0x43140000,0x12C981,1,Uniform base/scenery - 1024x1024,0xA791B7E4
+uniforms,uniform_base_extra,disc_a9901c57.iff,0A,0x42324000,0x12C981,1,Uniform base/scenery - 1024x1024,0xA9901C57
+uniforms,uniform_base_extra,disc_a9c8935b.iff,0A,0x3DC5E800,0x15CE66,1,Uniform base/scenery - 1024x1024,0xA9C8935B
+uniforms,uniform_base_extra,disc_abe3c08a.iff,0A,0x43E2F000,0x12C981,1,Uniform base/scenery - 1024x1024,0xABE3C08A
+uniforms,uniform_base_extra,disc_ad338e5b.iff,0A,0x426AB000,0x12C981,1,Uniform base/scenery - 1024x1024,0xAD338E5B
+uniforms,uniform_base_extra,disc_af405286.iff,0A,0x43F5C000,0x12C981,1,Uniform base/scenery - 1024x1024,0xAF405286
+uniforms,uniform_base_extra,disc_af5b8725.iff,0A,0x3E1B9800,0x131466,1,Uniform base/scenery - 1024x1024,0xAF5B8725
+uniforms,uniform_base_extra,disc_b05d2a25.iff,0A,0x52FD8800,0x16FD30,1,Uniform base/scenery - 1024x1024,0xB05D2A25
+uniforms,uniform_base_extra,disc_b24f4f91.iff,0A,0x44797000,0x12C981,1,Uniform base/scenery - 1024x1024,0xB24F4F91
+uniforms,uniform_base_extra,disc_b2b52257.iff,0A,0x3F2E7000,0x13146A,1,Uniform base/scenery - 1024x1024,0xB2B52257
+uniforms,uniform_base_extra,disc_b2ff4121.iff,0A,0x4D8EC800,0x1628FF,1,Uniform base/scenery - 1024x1024,0xB2FF4121
+uniforms,uniform_base_extra,disc_b4e9e1f7.iff,0A,0x40A5E800,0x16DA16,1,Uniform base/scenery - 1024x1024,0xB4E9E1F7
+uniforms,uniform_base_extra,disc_b501ba65.iff,0A,0x4E250000,0x19DEA0,1,Uniform base/scenery - 1024x1024,0xB501BA65
+uniforms,uniform_base_extra,disc_b52b3df1.iff,0A,0x51843800,0x16308B,1,Uniform base/scenery - 1024x1024,0xB52B3DF1
+uniforms,uniform_base_extra,disc_b6ecdd9d.iff,0A,0x448C4000,0x12C981,1,Uniform base/scenery - 1024x1024,0xB6ECDD9D
+uniforms,uniform_base_extra,disc_b7e87f0a.iff,0A,0x3F163800,0x18368B,1,Uniform base/scenery - 1024x1024,0xB7E87F0A
+uniforms,uniform_base_extra,disc_b9c85dec.iff,0A,0x49850000,0x169BF1,1,Uniform base/scenery - 1024x1024,0xB9C85DEC
+uniforms,uniform_base_extra,disc_ba9eaaf3.iff,0A,0x42905000,0x12C981,1,Uniform base/scenery - 1024x1024,0xBA9EAAF3
+uniforms,uniform_base_extra,disc_bb22ee32.iff,0A,0x4E96E800,0x173D70,1,Uniform base/scenery - 1024x1024,0xBB22EE32
+uniforms,uniform_base_extra,disc_bd12cb6d.iff,0A,0x4522C000,0x16AEC7,1,Uniform base/scenery - 1024x1024,0xBD12CB6D
+uniforms,uniform_base_extra,disc_be3d38ff.iff,0A,0x42A32000,0x12C981,1,Uniform base/scenery - 1024x1024,0xBE3D38FF
+uniforms,uniform_base_extra,disc_bf8633d7.iff,0A,0x481F5000,0x174F07,1,Uniform base/scenery - 1024x1024,0xBF8633D7
+uniforms,uniform_base_extra,disc_c127f2fe.iff,0A,0x4C222000,0x164D9E,1,Uniform base/scenery - 1024x1024,0xC127F2FE
+uniforms,uniform_base_extra,disc_c54248df.iff,0A,0x3CE64000,0x1809F7,1,Uniform base/scenery - 1024x1024,0xC54248DF
+uniforms,uniform_base_extra,disc_c5487c1d.iff,0A,0x4BCE7800,0x16EC5E,1,Uniform base/scenery - 1024x1024,0xC5487C1D
+uniforms,uniform_base_extra,disc_c6ff8f28.iff,0A,0x42DB9000,0x12C981,1,Uniform base/scenery - 1024x1024,0xC6FF8F28
+uniforms,uniform_base_extra,disc_cc93b5a5.iff,0A,0x4877C800,0x131472,1,Uniform base/scenery - 1024x1024,0xCC93B5A5
+uniforms,uniform_base_extra,disc_ccc135cf.iff,0A,0x45CF1800,0x162D8F,1,Uniform base/scenery - 1024x1024,0xCCC135CF
+uniforms,uniform_base_extra,disc_d321775d.iff,0A,0x441B6000,0x12C981,1,Uniform base/scenery - 1024x1024,0xD321775D
+uniforms,uniform_base_extra,disc_d39179ed.iff,0A,0x4D07B800,0x16C440,1,Uniform base/scenery - 1024x1024,0xD39179ED
+uniforms,uniform_base_extra,disc_d75aa11a.iff,0A,0x4AECF800,0x131474,1,Uniform base/scenery - 1024x1024,0xD75AA11A
+uniforms,uniform_base_extra,disc_d782e551.iff,0A,0x4453D000,0x12C981,1,Uniform base/scenery - 1024x1024,0xD782E551
+uniforms,uniform_base_extra,disc_da2a9015.iff,0A,0x3DF1A000,0x16D910,1,Uniform base/scenery - 1024x1024,0xDA2A9015
+uniforms,uniform_base_extra,disc_dbe22cce.iff,0A,0x49E01800,0x17990D,1,Uniform base/scenery - 1024x1024,0xDBE22CCE
+uniforms,uniform_base_extra,disc_dbf0923f.iff,0A,0x4339A000,0x12C981,1,Uniform base/scenery - 1024x1024,0xDBF0923F
+uniforms,uniform_base_extra,disc_dcda8fa6.iff,0A,0x454FA000,0x131461,1,Uniform base/scenery - 1024x1024,0xDCDA8FA6
+uniforms,uniform_base_extra,disc_debe1bc4.iff,0A,0x50ED3800,0x12DB0E,1,Uniform base/scenery - 1024x1024,0xDEBE1BC4
+uniforms,uniform_base_extra,disc_df0255c2.iff,0A,0x473A1800,0x17299B,1,Uniform base/scenery - 1024x1024,0xDF0255C2
+uniforms,uniform_base_extra,disc_df530033.iff,0A,0x43721000,0x12C981,1,Uniform base/scenery - 1024x1024,0xDF530033
+uniforms,uniform_base_extra,disc_e0ca7402.iff,0A,0x492B0000,0x167A2F,1,Uniform base/scenery - 1024x1024,0xE0CA7402
+uniforms,uniform_base_extra,disc_e20bb5b6.iff,0A,0x4188F000,0x12C981,1,Uniform base/scenery - 1024x1024,0xE20BB5B6
+uniforms,uniform_base_extra,disc_e40c2611.iff,0A,0x5112F800,0x17325A,1,Uniform base/scenery - 1024x1024,0xE40C2611
+uniforms,uniform_base_extra,disc_e65a9a79.iff,0A,0x4F4CE800,0x169101,1,Uniform base/scenery - 1024x1024,0xE65A9A79
+uniforms,uniform_base_extra,disc_e6a827ba.iff,0A,0x419BC000,0x12C981,1,Uniform base/scenery - 1024x1024,0xE6A827BA
+uniforms,uniform_base_extra,disc_e6c1e6a3.iff,0A,0x4FD64800,0x175999,1,Uniform base/scenery - 1024x1024,0xE6C1E6A3
+uniforms,uniform_base_extra,disc_e7b1de90.iff,0A,0x4A0E3800,0x131462,1,Uniform base/scenery - 1024x1024,0xE7B1DE90
+uniforms,uniform_base_extra,disc_e8adf57f.iff,0A,0x4B736800,0x16DFF7,1,Uniform base/scenery - 1024x1024,0xE8ADF57F
+uniforms,uniform_base_extra,disc_eb4f8a9b.iff,0A,0x45FB7800,0x16AD54,1,Uniform base/scenery - 1024x1024,0xEB4F8A9B
+uniforms,uniform_base_extra,disc_ec7921c5.iff,0A,0x527C5800,0x1314EB,1,Uniform base/scenery - 1024x1024,0xEC7921C5
+uniforms,uniform_base_extra,disc_f22f29af.iff,0A,0x4C7D8800,0x17238F,1,Uniform base/scenery - 1024x1024,0xF22F29AF
+uniforms,uniform_base_extra,disc_f364da3c.iff,0A,0x4D785800,0x166BDC,1,Uniform base/scenery - 1024x1024,0xF364DA3C
+uniforms,uniform_base_extra,disc_f4bfef2c.iff,0A,0x4AA90000,0x197E6C,1,Uniform base/scenery - 1024x1024,0xF4BFEF2C
+uniforms,uniform_base_extra,disc_fba73aad.iff,0A,0x41F9D000,0x12C981,1,Uniform base/scenery - 1024x1024,0xFBA73AAD
+uniforms,uniform_base_extra,disc_ff04a8a1.iff,0A,0x420CA000,0x12C981,1,Uniform base/scenery - 1024x1024,0xFF04A8A1
+ott,Creation Zone Logo,disc_0050d8c1.iff,0B,0xF1B3000,0x209CFC,1,Ottawa Senators - Creation Logo,0x0050D8C1
+fla,Team-Select Jersey Decal,disc_00a7318a.iff,0B,0xDAC000,0x100CE9,1,Florida Jersey Decal (Home or Away),0x00A7318A
+uniforms,uniform_components,disc_01f819f1.iff,0A,0x5CCF3000,0x1DB3D6,1,Uniform component - 2048x512 DXN,0x01F819F1
+uniforms,uniform_components,disc_0330a0f5.iff,0A,0x55F49800,0x1BECBD,1,Uniform component - 2048x512 DXN,0x0330A0F5
+sjs,Creation Zone Logo,disc_03660e4c.iff,0A,0x69006000,0xB0188,1,"Custom Jersey Decal (recolorable, no logo)",0x03660E4C
+uniforms,uniform_components,disc_038bc52c.iff,0A,0x5F438000,0x1EA5C7,1,Uniform component - 2048x512 DXN,0x038BC52C
+sjs,uniform,disc_052b3bbc.iff,0B,0x59AD000,0xEA042,1,Team-Select Jersey Decals - SJS_ALT,0x052B3BBC
+uniforms,uniform_components,disc_055b8bfd.iff,0A,0x5CECE800,0x1D36A3,1,Uniform component - 2048x512 DXN,0x055B8BFD
+custom,uniform_customizable,disc_0574394d.iff,0B,0xE8800,0xD5466,1,Customizable-team jersey template (RGB tint),0x0574394D
+sjs,uniform,disc_066d4837.iff,0A,0x6815D800,0x9C944,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x066D4837
+buf,Team-Select Jersey Decal,disc_06a5420c.iff,0A,0x67233800,0xF22CC,1,Carolina Jersey Decal (Home or Away),0x06A5420C
+uniforms,uniform_components,disc_07285720.iff,0A,0x5F9F8000,0x1EAEC5,1,Uniform component - 2048x512 DXN,0x07285720
+uniforms,Team-Select Jersey Decal,disc_072f5294.iff,0B,0x756E000,0xBA708,1,Ukraine Jersey Decal (Home or Away),0x072F5294
+uniforms,Creation Zone Logo,disc_07c59c40.iff,0A,0x690B6800,0xA80AF,1,"Custom Jersey Decal (recolorable, no logo)",0x07C59C40
+njd,Team-Select Jersey Decal,disc_08374673.iff,0B,0x2778000,0xEA8DE,1,New Jersey Jersey Decal (Home or Away),0x08374673
+custom,uniform_customizable,disc_0892fe7c.iff,0B,0x3E1B000,0xD341C,1,Customizable-team jersey template (RGB tint),0x0892FE7C
+det,Team-Select Jersey Decal,disc_095248c0.iff,0B,0x2687000,0xF0B65,1,Montreal Jersey Decal (Home or Away),0x095248C0
+atl,Team-Select Jersey Decal,disc_097f9ca3.iff,0A,0x6B09A800,0xC0EEF,1,Dallas Jersey Decal (Home or Away),0x097F9CA3
+uniforms,uniform_components,disc_0b5a204e.iff,0A,0x5DDB2800,0x1E2F59,1,Uniform component - 2048x512 DXN,0x0B5A204E
+car,Team-Select Jersey Decal,disc_0c580541.iff,0A,0x658A0000,0xF0952,1,Atlanta Jersey Decal (Home or Away),0x0C580541
+uniforms,uniform_components,disc_0cc4f4b8.iff,0A,0x38CA5800,0x1BCEBB,1,Uniform component - 2048x512 DXN,0x0CC4F4B8
+custom,uniform_customizable,disc_0cf7445d.iff,0A,0x664C0800,0xE1A56,1,Customizable-team jersey template (RGB tint),0x0CF7445D
+mtl,Creation Zone Logo,disc_0d62ca69.iff,0B,0x19E6800,0xB6A12,1,LA Kings Alt #2 - Creation Logo,0x0D62CA69
+uniforms,uniform_components,disc_0e9a8891.iff,0B,0x174C6800,0x1B1B41,1,Uniform component - 2048x512 DXN,0x0E9A8891
+uniforms,uniform_components,disc_0ef0fbc7.iff,0A,0x5490B800,0x1D01EF,1,Uniform component - 2048x512 DXN,0x0EF0FBC7
+uniforms,uniform_components,disc_0ff9b242.iff,0A,0x5E351000,0x1D7991,1,Uniform component - 2048x512 DXN,0x0FF9B242
+uniforms,Team-Select Jersey Decal,disc_10204893.iff,0B,0x66F8800,0xBE95D,1,Sweden Jersey Decal (Home or Away),0x10204893
+uniforms,Creation Zone Logo,disc_1068b8e8.iff,0A,0x6A444800,0xB148C,1,"Custom Jersey Decal (recolorable, no logo)",0x1068B8E8
+uniforms,uniform_components,disc_12b5856c.iff,0B,0xA5BC000,0x22F76F,1,Uniform component - 2048x512 DXN,0x12B5856C
+uniforms,uniform_components,disc_12f6af55.iff,0A,0x5D275800,0x1E3F7A,1,Uniform component - 2048x512 DXN,0x12F6AF55
+uniforms,Team-Select Jersey Decal,disc_1379e8af.iff,0B,0x5F24000,0xBA5BD,1,Slovakia Jersey Decal (Home or Away),0x1379E8AF
+uniforms,Team-Select Jersey Decal,disc_137e7406.iff,0B,0x151B000,0xD7847,1,Kazakhstan Jersey Decal (Home or Away),0x137E7406
+pit,Team-Select Jersey Decal,disc_139f8b77.iff,0B,0x5017800,0xF0505,1,Pittsburgh Alternate Jersey Decal,0x139F8B77
+sjs,Creation Zone Logo,disc_14256b17.iff,0B,0x1322F800,0x234895,1,San Jose Sharks #2 - Creation Logo,0x14256B17
+uniforms,uniform_components,disc_142a4603.iff,0B,0x17C02800,0x1EA7E7,1,Uniform component - 2048x512 DXN,0x142A4603
+uniforms,uniform,disc_1446b2df.iff,0B,0x6A4A800,0x8C0B8,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x1446B2DF
+stl,Creation Zone Logo,disc_14be17cd.iff,0B,0x13E8B000,0x239901,1,St Louis Blues #2 - Creation Logo,0x14BE17CD
+cgy,Team-Select Jersey Decal,disc_14beccba.iff,0A,0x65BE8800,0xB639A,1,Belarus Jersey Decal (Home or Away),0x14BECCBA
+custom,uniform_customizable,disc_14cb2ae4.iff,0A,0x6A661800,0xB982D,1,Customizable-team jersey template (RGB tint),0x14CB2AE4
+uniforms,uniform,disc_14e8a8ca.iff,0A,0x67999000,0x8FE30,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x14E8A8CA
+uniforms,uniform_components,disc_157e0079.iff,0B,0x8E1A800,0x1BAE09,1,Uniform component - 2048x512 DXN,0x157E0079
+cgy,Team-Select Jersey Decal,disc_15931516.iff,0B,0x39FD800,0xDB2B7,1,NY Rangers Jersey Decal (Home or Away),0x15931516
+uniforms,uniform_components,disc_16553d59.iff,0A,0x5D818000,0x1DA5C3,1,Uniform component - 2048x512 DXN,0x16553D59
+uniforms,uniform_components,disc_1673d77f.iff,0B,0x15A5E800,0x20415F,1,Uniform component - 2048x512 DXN,0x1673D77F
+custom,uniform_customizable,disc_16abded6.iff,0B,0x317F800,0xC11A2,1,Customizable-team jersey template (RGB tint),0x16ABDED6
+uniforms,Creation Zone Logo,disc_16b75940.iff,0B,0xF92800,0xE562B,1,Florida Panthers #2 - Creation Logo,0x16B75940
+cgy,Team-Select Jersey Decal,disc_16f073b8.iff,0A,0x67E09000,0x13186B,1,Calgary Jersey Decal (Home or Away),0x16F073B8
+uniforms,uniform_components,disc_17eaf8c3.iff,0A,0x61478800,0x1BA9B9,1,Uniform component - 2048x512 DXN,0x17EAF8C3
+uniforms,uniform_components,disc_19307bf5.iff,0A,0x6286C000,0x1EFFE8,1,Uniform component - 2048x512 DXN,0x19307BF5
+uniforms,Team-Select Jersey Decal,disc_1957b53f.iff,0B,0xBBE000,0xDBBA3,1,Finland Jersey Decal (Home or Away),0x1957B53F
+phi,Creation Zone Logo,disc_1a24756f.iff,0B,0x4742000,0xD946D,1,Philadelphia Flyers #2 - Creation Logo,0x1A24756F
+uniforms,uniform_components,disc_1a274a37.iff,0A,0x60393000,0x1D1A5F,1,Uniform component - 2048x512 DXN,0x1A274A37
+uniforms,Creation Zone Logo,disc_1aca8157.iff,0A,0x6954A000,0xB249C,1,"Custom Jersey Decal (recolorable, no logo)",0x1ACA8157
+uniforms,uniform_components,disc_1ad20411.iff,0B,0xD9AC800,0x226A4D,1,Uniform component - 2048x512 DXN,0x1AD20411
+uniforms,Creation Zone Logo,disc_1d2bf06a.iff,0A,0x6B4EC000,0xE45BE,1,Minnesota North Stars #2 (Dallas) - Creation Logo,0x1D2BF06A
+uniforms,uniform_components,disc_1e11d259.iff,0A,0x5A4B6000,0x1C1F3D,1,Uniform component - 2048x512 DXN,0x1E11D259
+uniforms,uniform_components,disc_1e84d83b.iff,0A,0x6091E800,0x1E7437,1,Uniform component - 2048x512 DXN,0x1E84D83B
+uniforms,Creation Zone Logo,disc_1f4f6408.iff,0B,0x6D28800,0xE5C8A,1,Tampa Bay #2 - Creation Logo,0x1F4F6408
+uniforms,uniform_components,disc_1fe2b956.iff,0B,0xBC31800,0x1F7832,1,Uniform component - 2048x512 DXN,0x1FE2B956
+uniforms,uniform_components,disc_1ff989cb.iff,0B,0x11781800,0x1CA64E,1,Uniform component - 2048x512 DXN,0x1FF989CB
+bos,Team-Select Jersey Decal,disc_20b44e5b.iff,0A,0x66092800,0x115B41,1,Boston Jersey Decal (Home or Away),0x20B44E5B
+custom,uniform_customizable,disc_2118f9fd.iff,0B,0x37F5800,0xEDD70,1,Customizable-team jersey template (RGB tint),0x2118F9FD
+uniforms,uniform_components,disc_21afb163.iff,0A,0x5EC86000,0x1E7ACC,1,Uniform component - 2048x512 DXN,0x21AFB163
+uniforms,uniform_components,disc_21ee8883.iff,0B,0xFDCB000,0x1F605B,1,Uniform component - 2048x512 DXN,0x21EE8883
+ana,uniform,disc_22fa8619.iff,0B,0x28F000,0xCBE51,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x22FA8619
+uniforms,Creation Zone Logo,disc_2331a6de.iff,0A,0x69B26800,0xAE796,1,"Custom Jersey Decal (recolorable, no logo)",0x2331A6DE
+uniforms,uniform_components,disc_246da50b.iff,0B,0x1528B000,0x1B4B7B,1,Uniform component - 2048x512 DXN,0x246DA50B
+uniforms,uniform_components,disc_2489e860.iff,0A,0x61A8D800,0x235105,1,Uniform component - 2048x512 DXN,0x2489E860
+uniforms,uniform_components,disc_24c3bf1e.iff,0A,0x57A7C800,0x1CE5BE,1,Uniform component - 2048x512 DXN,0x24C3BF1E
+uniforms,uniform_components,disc_250c236f.iff,0A,0x5F247000,0x1F0F61,1,Uniform component - 2048x512 DXN,0x250C236F
+uniforms,uniform,disc_255517ad.iff,0B,0x1870800,0x8B256,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x255517AD
+uniforms,Creation Zone Logo,disc_2640a15c.iff,0B,0x2B0D800,0xC0EBB,1,Colorado Rockies #2 - Creation Logo,0x2640A15C
+uniforms,uniform_components,disc_26ed7c02.iff,0B,0x15851800,0x20C8B2,1,Uniform component - 2048x512 DXN,0x26ED7C02
+uniforms,Creation Zone Logo,disc_279234d2.iff,0A,0x69D29000,0xA56E6,1,"Custom Jersey Decal (recolorable, no logo)",0x279234D2
+uniforms,uniform,disc_27c1ef17.iff,0A,0x6B22B000,0x86663,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x27C1EF17
+uniforms,uniform_components,disc_2855617b.iff,0A,0x562C7800,0x22381B,1,Uniform component - 2048x512 DXN,0x2855617B
+uniforms,Creation Zone Logo,disc_297f7880.iff,0B,0x21A8000,0xF902B,1,Minnesota Wild - Creation Logo,0x297F7880
+uniforms,uniform_components,disc_2b0d88dc.iff,0A,0x5C1B4000,0x1EB6F9,1,Uniform component - 2048x512 DXN,0x2B0D88DC
+uniforms,Creation Zone Logo,disc_2be043bc.iff,0A,0x6ACBA800,0x9D1CE,1,"Custom Jersey Decal (recolorable, no logo)",0x2BE043BC
+dal,Team-Select Jersey Decal,disc_2c5361c4.iff,0A,0x64F80800,0xBD4C6,1,Anaheim Jersey Decal (Home or Away),0x2C5361C4
+tor,Team-Select Jersey Decal,disc_2c536d79.iff,0B,0x73CC000,0xE7664,1,Toronto Jersey Decal (Home or Away),0x2C536D79
+bos,Team-Select Jersey Decal,disc_2cd6798b.iff,0B,0x12D0800,0xB91C1,1,Germany Jersey Decal (Home or Away),0x2CD6798B
+uniforms,Team-Select Jersey Decal,disc_2d1ac496.iff,0A,0x64E7E000,0x10250A,1,2K All-Stars Jersey Decal,0x2D1AC496
+uniforms,uniform_components,disc_2d7da4ac.iff,0A,0x6458D000,0x211122,1,Uniform component - 2048x512 DXN,0x2D7DA4AC
+custom,uniform_customizable,disc_2d885e09.iff,0B,0x7C39800,0xC5E9C,1,Customizable-team jersey template (RGB tint),0x2D885E09
+custom,uniform_customizable,disc_2db92a93.iff,0B,0x6E0E800,0xDEEDA,1,Customizable-team jersey template (RGB tint),0x2DB92A93
+uniforms,uniform,disc_2e3ac58d.iff,0A,0x68A08000,0x88169,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x2E3AC58D
+uniforms,uniform_components,disc_2f09c6dc.iff,0B,0xCB93800,0x1C4FD2,1,Uniform component - 2048x512 DXN,0x2F09C6DC
+uniforms,Creation Zone Logo,disc_2f43d1b0.iff,0A,0x6AEA5800,0xAFDE3,1,"Custom Jersey Decal (recolorable, no logo)",0x2F43D1B0
+custom,uniform_customizable,disc_2f74ea21.iff,0B,0x6228800,0x11AFA8,1,Customizable-team jersey template (RGB tint),0x2F74EA21
+uniforms,uniform,disc_2fd29e1f.iff,0B,0x5282000,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x2FD29E1F
+custom,uniform_customizable,disc_2fef96fb.iff,0B,0x5C80800,0xF9665,1,Customizable-team jersey template (RGB tint),0x2FEF96FB
+uniforms,Creation Zone Logo,disc_303f107a.iff,0A,0x69943800,0xA489F,1,"Custom Jersey Decal (recolorable, no logo)",0x303F107A
+uniforms,Creation Zone Logo,disc_324ccca7.iff,0A,0x6A71B800,0xB3383,1,"Custom Jersey Decal (recolorable, no logo)",0x324CCCA7
+cbj,Team-Select Jersey Decal,disc_3292966b.iff,0A,0x67326000,0xE8868,1,Columbus Jersey Decal (Home or Away),0x3292966B
+uniforms,uniform_components,disc_32a107c7.iff,0A,0x5B2BD000,0x1E75E7,1,Uniform component - 2048x512 DXN,0x32A107C7
+uniforms,uniform,disc_331bb721.iff,0A,0x66E26000,0x890D4,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x331BB721
+uniforms,uniform_components,disc_33580390.iff,0B,0xE989000,0x21669E,1,Uniform component - 2048x512 DXN,0x33580390
+uniforms,Creation Zone Logo,disc_349c8276.iff,0A,0x699E8800,0x9E816,1,"Custom Jersey Decal (recolorable, no logo)",0x349C8276
+uniforms,uniform_components,disc_34c0d263.iff,0B,0x938F000,0x1ED897,1,Uniform component - 2048x512 DXN,0x34C0D263
+fla,Team-Select Jersey Decal,disc_34c6ebc2.iff,0A,0x662BB800,0xE4830,1,Buffalo Jersey Decal (Home or Away),0x34C6EBC2
+uniforms,uniform_components,disc_360295cb.iff,0A,0x5B4A4800,0x1DE421,1,Uniform component - 2048x512 DXN,0x360295CB
+van,uniform,disc_3620cafc.iff,0B,0x78AA000,0xE6C0C,1,Team-Select Jersey Decals - VAN_AWAY,0x3620CAFC
+col,Team-Select Jersey Decal,disc_36260425.iff,0B,0x16E1000,0x103E2B,1,Los Angeles Jersey Decal (Home or Away),0x36260425
+uniforms,uniform_components,disc_36465fe3.iff,0A,0x58FD6800,0x1D3B41,1,Uniform component - 2048x512 DXN,0x36465FE3
+custom,uniform_customizable,disc_36ef5eab.iff,0A,0x6A937000,0xB42C7,1,Customizable-team jersey template (RGB tint),0x36EF5EAB
+uniforms,uniform_components,disc_373db9b1.iff,0A,0x54ADC000,0x1F24A4,1,Uniform component - 2048x512 DXN,0x373DB9B1
+tbl,Team-Select Jersey Decal,disc_39a39c64.iff,0B,0x610000,0x10CF4B,1,Edmonton Away/Alt Jersey Decal,0x39A39C64
+wsh,Team-Select Jersey Decal,disc_3a30e01c.iff,0B,0x35B000,0xFBF42,1,Denmark Jersey Decal (Home or Away),0x3A30E01C
+uniforms,Creation Zone Logo,disc_3a9d29c5.iff,0A,0x69F22800,0xAB2B0,1,"Custom Jersey Decal (recolorable, no logo)",0x3A9D29C5
+chi,Team-Select Jersey Decal,disc_3b0a75ec.iff,0A,0x68054000,0x109415,1,Chicago Jersey Decal (Home or Away),0x3B0A75EC
+uniforms,Team-Select Jersey Decal,disc_3b37236a.iff,0A,0x66B05000,0xB947D,1,Canada Jersey Decal (Home or Away),0x3B37236A
+custom,uniform_customizable,disc_3b9a252d.iff,0B,0x41B4800,0x10389A,1,Customizable-team jersey template (RGB tint),0x3B9A252D
+uniforms,uniform,disc_3cefe36c.iff,0A,0x6503E000,0x8E6BA,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x3CEFE36C
+col,Team-Select Jersey Decal,disc_3d4b7409.iff,0B,0x553000,0xBCBB1,1,Eastern All-Stars Jersey Decal,0x3D4B7409
+uniforms,Creation Zone Logo,disc_3e3ebbc9.iff,0A,0x6A11C000,0xA2599,1,"Custom Jersey Decal (recolorable, no logo)",0x3E3EBBC9
+col,uniform,disc_3e8db993.iff,0A,0x68855000,0xC179D,1,Team-Select Jersey Decals - COL_ALT,0x3E8DB993
+uniforms,uniform,disc_3eb19f45.iff,0B,0x7A1E000,0x8CC63,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x3EB19F45
+uniforms,uniform_components,disc_3ebec4a1.iff,0A,0x6248D800,0x1FBA0A,1,Uniform component - 2048x512 DXN,0x3EBEC4A1
+uniforms,uniform,disc_3edbec13.iff,0A,0x663A0800,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x3EDBEC13
+pho,Creation Zone Logo,disc_4080b04f.iff,0B,0x10907800,0x216042,1,Phoenix Coyotes - Creation Logo,0x4080B04F
+phi,Team-Select Jersey Decal,disc_408c4ae0.iff,0B,0x4596800,0xD2E87,1,Philadelphia Jersey Decal (Home or Away),0x408C4AE0
+uniforms,uniform,disc_413108b4.iff,0B,0x2863000,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x413108B4
+wsh,Creation Zone Logo,disc_4222db4b.iff,0B,0x18569000,0x1C7942,1,Washington Capitals - Creation Logo,0x4222DB4B
+uniforms,Creation Zone Logo,disc_425f9e12.iff,0A,0x6A262800,0xA3BEB,1,"Custom Jersey Decal (recolorable, no logo)",0x425F9E12
+pit,Team-Select Jersey Decal,disc_426249a7.iff,0B,0x5763000,0x104963,1,Pittsburgh Winter Classic Jersey Decal,0x426249A7
+uniforms,Creation Zone Logo,disc_42b416e7.iff,0B,0x3086800,0xF8CDF,1,Nashville Predators #2 - Creation Logo,0x42B416E7
+custom,uniform_customizable,disc_434f0d0e.iff,0A,0x6B338000,0xCF07E,1,Customizable-team jersey template (RGB tint),0x434F0D0E
+custom,uniform_customizable,disc_43afc362.iff,0B,0x82A000,0xEBDBA,1,Customizable-team jersey template (RGB tint),0x43AFC362
+uniforms,Creation Zone Logo,disc_43c810a4.iff,0A,0x653AB000,0xBFC51,1,Anaheim Ducks #2 - Creation Logo,0x43C810A4
+car,uniform,disc_444610c3.iff,0A,0x66BBE800,0xEB11F,1,Team-Select Jersey Decals - CAR_ALT,0x444610C3
+uniforms,uniform_components,disc_45978e64.iff,0A,0x57E19800,0x266E5A,1,Uniform component - 2048x512 DXN,0x45978E64
+uniforms,Team-Select Jersey Decal,disc_462f3e8b.iff,0B,0x7628800,0xC0805,1,USA Jersey Decal (Home or Away),0x462F3E8B
+uniforms,Creation Zone Logo,disc_46d86290.iff,0A,0x652DD000,0xCDDDD,1,Anaheim Ducks Alt #2 - Creation Logo,0x46D86290
+uniforms,Creation Zone Logo,disc_46fc0c1e.iff,0A,0x6A306800,0x9EBB4,1,"Custom Jersey Decal (recolorable, no logo)",0x46FC0C1E
+mtl,Team-Select Jersey Decal,disc_470ce25f.iff,0B,0x694D800,0xFCD35,1,Tampa Bay Jersey Decal (Home or Away),0x470CE25F
+uniforms,uniform_components,disc_4754cc9f.iff,0B,0x164AF800,0x1FED37,1,Uniform component - 2048x512 DXN,0x4754CC9F
+bos,Team-Select Jersey Decal,disc_48bc6439.iff,0B,0x40B2000,0x1025CB,1,Ottawa Jersey Decal (Home or Away),0x48BC6439
+pit,Creation Zone Logo,disc_495d1f5c.iff,0B,0x1215A000,0x23B31A,1,Pittsburgh Penguins - Creation Logo,0x495D1F5C
+uniforms,uniform_components,disc_4a63b010.iff,0A,0x5B861800,0x1E3C45,1,Uniform component - 2048x512 DXN,0x4A63B010
+uniforms,Creation Zone Logo,disc_4a8e7b70.iff,0A,0x6AA95000,0xA95E8,1,"Custom Jersey Decal (recolorable, no logo)",0x4A8E7B70
+custom,uniform_customizable,disc_4ab366dd.iff,0A,0x665A2800,0xDD6D7,1,Customizable-team jersey template (RGB tint),0x4AB366DD
+uniforms,uniform_components,disc_4ae64591.iff,0A,0x5828B000,0x20A5A1,1,Uniform component - 2048x512 DXN,0x4AE64591
+ana,Team-Select Jersey Decal,disc_4b5a1ad8.iff,0A,0x6B68E800,0xB3399,1,Dallas Jersey Decal (Home or Away),0x4B5A1AD8
+uniforms,uniform_components,disc_4bb7ac82.iff,0B,0xAE53000,0x20C28A,1,Uniform component - 2048x512 DXN,0x4BB7AC82
+custom,uniform_customizable,disc_4c678c79.iff,0A,0x68297800,0xFA51A,1,Customizable-team jersey template (RGB tint),0x4C678C79
+tbl,uniform,disc_4cbee36b.iff,0B,0x6876000,0xD742A,1,Team-Select Jersey Decals - TBL_ALT,0x4CBEE36B
+pho,Team-Select Jersey Decal,disc_4d923aa7.iff,0B,0x49D9800,0xF67F5,1,Phoenix Jersey Decal (Home or Away),0x4D923AA7
+uniforms,Team-Select Jersey Decal,disc_4e009b12.iff,0A,0x6AFF8000,0xA2636,1,Czech Republic Jersey Decal (Home or Away),0x4E009B12
+custom,uniform_customizable,disc_4e2de97c.iff,0A,0x6AB3E800,0xBDB9D,1,Customizable-team jersey template (RGB tint),0x4E2DE97C
+edm,uniform,disc_4e6a91cb.iff,0B,0x9EB800,0xF60F5,1,Team-Select Jersey Decals - EDM_HOME,0x4E6A91CB
+uniforms,uniform_components,disc_4ec0221c.iff,0A,0x5BDF9000,0x1CF05A,1,Uniform component - 2048x512 DXN,0x4EC0221C
+custom,uniform_customizable,disc_4ef3f1dc.iff,0A,0x656E5000,0xDD029,1,Customizable-team jersey template (RGB tint),0x4EF3F1DC
+min,uniform,disc_4f13ca54.iff,0B,0x1EF7800,0xB7649,1,Team-Select Jersey Decals - MIN_ALT,0x4F13CA54
+stl,uniform,disc_4f350747.iff,0B,0x5FDE800,0x13088E,1,Team-Select Jersey Decals - STL_ALT,0x4F350747
+uniforms,Creation Zone Logo,disc_506ce6a8.iff,0B,0x3D64000,0xB6D12,1,NY Rangers #2 - Creation Logo,0x506CE6A8
+uniforms,Team-Select Jersey Decal,disc_527011dc.iff,0B,0x657A800,0xBEA6F,1,Switzerland Jersey Decal (Home or Away),0x527011DC
+pit,Team-Select Jersey Decal,disc_53529f78.iff,0B,0x5108000,0xE9E4C,1,Pittsburgh Jersey Decal (Home or Away),0x53529F78
+nyi,Team-Select Jersey Decal,disc_53711c73.iff,0B,0x38E3800,0x119859,1,NY Islanders Jersey Decal (Home or Away),0x53711C73
+custom,uniform_customizable,disc_53c5ed0e.iff,0A,0x68B19000,0xEFF19,1,Customizable-team jersey template (RGB tint),0x53C5ED0E
+uniforms,uniform_components,disc_53cf3f0b.iff,0A,0x5C39F800,0x1D4E8A,1,Uniform component - 2048x512 DXN,0x53CF3F0B
+custom,uniform_customizable,disc_5427877f.iff,0A,0x65FA5000,0xED148,1,Customizable-team jersey template (RGB tint),0x5427877F
+custom,uniform_customizable,disc_55913881.iff,0B,0x18FC000,0xEA08A,1,Customizable-team jersey template (RGB tint),0x55913881
+fla,uniform,disc_55a24985.iff,0B,0xC9A000,0x1119DC,1,Team-Select Jersey Decals - FLA_ALT,0x55A24985
+uniforms,Team-Select Jersey Decal,disc_56018bde.iff,0B,0x7F6D000,0xC1E49,1,Washington Away Jersey Decal,0x56018BDE
+uniforms,uniform_components,disc_5656db3c.iff,0A,0x6B742000,0xD08CE,1,Uniform component - 2048x512 4444,0x5656DB3C
+uniforms,uniform_components,disc_5708e0e3.iff,0A,0x564EB800,0x210DC1,1,Uniform component - 2048x512 DXN,0x5708E0E3
+custom,uniform_customizable,disc_5709d4b4.iff,0A,0x6740F000,0xFDBCE,1,Customizable-team jersey template (RGB tint),0x5709D4B4
+uniforms,uniform_components,disc_576cad07.iff,0A,0x5C930800,0x1E6954,1,Uniform component - 2048x512 DXN,0x576CAD07
+custom,uniform_customizable,disc_57bc153d.iff,0B,0x53FA000,0xCB205,1,Customizable-team jersey template (RGB tint),0x57BC153D
+uniforms,uniform_components,disc_599ce992.iff,0B,0x1076D800,0x199CDC,1,Uniform component - 2048x512 DXN,0x599CE992
+uniforms,uniform_components,disc_59fb2d54.iff,0B,0x10B1E000,0x1D8667,1,Uniform component - 2048x512 DXN,0x59FB2D54
+custom,uniform_customizable,disc_5a0aa124.iff,0B,0x7CFF800,0xC876B,1,Customizable-team jersey template (RGB tint),0x5A0AA124
+custom,uniform_customizable,disc_5a510fea.iff,0B,0x2983000,0xC95F0,1,Customizable-team jersey template (RGB tint),0x5A510FEA
+nyi,Team-Select Jersey Decal,disc_5aa1fdec.iff,0A,0x661A8800,0x112B5E,1,Buffalo Alternate Jersey Decal,0x5AA1FDEC
+custom,uniform_customizable,disc_5d387d42.iff,0A,0x68464000,0xD1B0F,1,Customizable-team jersey template (RGB tint),0x5D387D42
+uniforms,uniform_components,disc_5d7d8525.iff,0A,0x5AA91000,0x1EF095,1,Uniform component - 2048x512 DXN,0x5D7D8525
+lak,Team-Select Jersey Decal,disc_5e1c2fc9.iff,0B,0x33F4000,0xF6F8C,1,Nashville Jersey Decal (Home or Away),0x5E1C2FC9
+uniforms,uniform_components,disc_5e47dc82.iff,0B,0xC800000,0x19500A,1,Uniform component - 2048x512 DXN,0x5E47DC82
+uniforms,Creation Zone Logo,disc_5f508305.iff,0A,0x69DCE800,0xA9A8F,1,"Custom Jersey Decal (recolorable, no logo)",0x5F508305
+uniforms,uniform,disc_5f9b5867.iff,0B,0x3AD9000,0x8F493,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x5F9B5867
+ott,Team-Select Jersey Decal,disc_5ff230f0.iff,0B,0x5A97800,0xEF452,1,San Jose Jersey Decal (Home or Away),0x5FF230F0
+uniforms,Team-Select Jersey Decal,disc_600368e7.iff,0A,0x65991000,0xD02BF,1,Latvia Jersey Decal (Home or Away),0x600368E7
+custom,uniform_customizable,disc_6059355e.iff,0B,0x4CBB800,0xB7F60,1,Customizable-team jersey template (RGB tint),0x6059355E
+edm,Team-Select Jersey Decal,disc_60f53fe8.iff,0B,0x590A800,0xA23D2,1,Russia Jersey Decal (Home or Away),0x60F53FE8
+uniforms,uniform_components,disc_619bf206.iff,0B,0xB82D000,0x20C699,1,Uniform component - 2048x512 DXN,0x619BF206
+uniforms,uniform_components,disc_61c05cc8.iff,0B,0x17DED000,0x1ED0F2,1,Uniform component - 2048x512 DXN,0x61C05CC8
+uniforms,Creation Zone Logo,disc_62083680.iff,0A,0x695FC800,0x9FE24,1,"Custom Jersey Decal (recolorable, no logo)",0x62083680
+uniforms,uniform_components,disc_649a6548.iff,0A,0x595F0000,0x20F5BB,1,Uniform component - 2048x512 DXN,0x649A6548
+uniforms,Creation Zone Logo,disc_64df9d2f.iff,0A,0x68CBE800,0xB52F3,1,Quebec Nordiques #2 - Creation Logo,0x64DF9D2F
+uniforms,Team-Select Jersey Decal,disc_658bad3d.iff,0B,0x1225000,0xAB174,1,France Jersey Decal (Home or Away),0x658BAD3D
+custom,uniform_customizable,disc_66aba48c.iff,0A,0x697ED800,0xB0D02,1,Customizable-team jersey template (RGB tint),0x66ABA48C
+uniforms,uniform_components,disc_680f10e2.iff,0A,0x5A678000,0x2295BD,1,Uniform component - 2048x512 DXN,0x680F10E2
+min,uniform,disc_68c51131.iff,0B,0x22A1800,0x11892A,1,Team-Select Jersey Decals - MIN_HOME,0x68C51131
+uniforms,uniform,disc_69b7fe46.iff,0B,0x4AD0000,0x7AFE7,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x69B7FE46
+uniforms,uniform_components,disc_69cefea2.iff,0B,0xE7B3000,0x1D587F,1,Uniform component - 2048x512 DXN,0x69CEFEA2
+uniforms,uniform_components,disc_6cc32958.iff,0A,0x56F76800,0x22B6B4,1,Uniform component - 2048x512 DXN,0x6CC32958
+uniforms,Team-Select Jersey Decal,disc_6db4d851.iff,0A,0x68E64000,0xF17CF,1,Colorado Jersey Decal (Home or Away),0x6DB4D851
+uniforms,uniform_components,disc_6e1e0d37.iff,0B,0x11D52000,0x203C78,1,Uniform component - 2048x512 DXN,0x6E1E0D37
+uniforms,uniform_components,disc_6e5bc56d.iff,0B,0x9190800,0x1FE312,1,Uniform component - 2048x512 DXN,0x6E5BC56D
+custom,uniform_customizable,disc_6e6ccb56.iff,0B,0x2F67800,0x8F0B9,1,Customizable-team jersey template (RGB tint),0x6E6CCB56
+uniforms,uniform_components,disc_6e978a8e.iff,0A,0x5D9F2800,0x1DFFBB,1,Uniform component - 2048x512 DXN,0x6E978A8E
+custom,uniform_customizable,disc_6eaaf8e9.iff,0A,0x66F97800,0xD9C96,1,Customizable-team jersey template (RGB tint),0x6EAAF8E9
+uniforms,uniform_components,disc_6fb04fb3.iff,0B,0xE213000,0x1D35B7,1,Uniform component - 2048x512 DXN,0x6FB04FB3
+uniforms,uniform_components,disc_6fed7a93.iff,0A,0x53EA7000,0x2294BF,1,Uniform component - 2048x512 DXN,0x6FED7A93
+custom,uniform_customizable,disc_707d516e.iff,0B,0x2599800,0xED765,1,Customizable-team jersey template (RGB tint),0x707D516E
+uniforms,uniform_components,disc_711a1f60.iff,0B,0xB664800,0x1C8103,1,Uniform component - 2048x512 DXN,0x711A1F60
+custom,uniform_customizable,disc_7297e2b0.iff,0B,0x5591000,0xE7989,1,Customizable-team jersey template (RGB tint),0x7297E2B0
+uniforms,uniform_components,disc_73117ed7.iff,0A,0x54CCE800,0x21B4BA,1,Uniform component - 2048x512 DXN,0x73117ED7
+uniforms,Creation Zone Logo,disc_73445d9b.iff,0A,0x67C19000,0xCB601,1,Atlanta Flames #2 (Calgary) - Creation Logo,0x73445D9B
+uniforms,uniform_components,disc_73989799.iff,0A,0x5E704000,0x1DAB47,1,Uniform component - 2048x512 DXN,0x73989799
+uniforms,uniform_components,disc_75390c30.iff,0A,0x39C32800,0x2001EE,1,Uniform component - 2048x512 DXN,0x75390C30
+custom,uniform_customizable,disc_75d70558.iff,0B,0x610F800,0x118F26,1,Customizable-team jersey template (RGB tint),0x75D70558
+uniforms,uniform_components,disc_773b0595.iff,0A,0x5E8DF000,0x1D35A6,1,Uniform component - 2048x512 DXN,0x773B0595
+uniforms,uniform_components,disc_77ad7195.iff,0A,0x591AA800,0x235A78,1,Uniform component - 2048x512 DXN,0x77AD7195
+uniforms,uniform_components,disc_7802ed48.iff,0A,0x3945F000,0x1EA3FD,1,Uniform component - 2048x512 DXN,0x7802ED48
+uniforms,uniform_components,disc_78653e8e.iff,0A,0x634DD000,0x231958,1,Uniform component - 2048x512 DXN,0x78653E8E
+uniforms,uniform_components,disc_7885f0e2.iff,0A,0x61633800,0x2247D3,1,Uniform component - 2048x512 DXN,0x7885F0E2
+col,Team-Select Jersey Decal,disc_792fad3a.iff,0B,0x1E1D800,0xD9D6F,1,Latvia Jersey Decal (Home or Away),0x792FAD3A
+uniforms,uniform_components,disc_797eeb0b.iff,0B,0xC995800,0x1FDCB7,1,Uniform component - 2048x512 DXN,0x797EEB0B
+uniforms,uniform_components,disc_79a8b44b.iff,0B,0x125D3800,0x258D60,1,Uniform component - 2048x512 DXN,0x79A8B44B
+custom,uniform_customizable,disc_79e826a7.iff,0B,0x802F000,0xC30F6,1,Customizable-team jersey template (RGB tint),0x79E826A7
+uniforms,uniform_components,disc_7b4972fb.iff,0A,0x5FDC4000,0x1E0FFE,1,Uniform component - 2048x512 DXN,0x7B4972FB
+custom,uniform_customizable,disc_7b4a4da3.iff,0B,0x4BC6000,0xF5061,1,Customizable-team jersey template (RGB tint),0x7B4A4DA3
+uniforms,Creation Zone Logo,disc_7ba4b99b.iff,0A,0x69207800,0xAC6B2,1,"Custom Jersey Decal (recolorable, no logo)",0x7BA4B99B
+tor,Creation Zone Logo,disc_7c9e3173.iff,0B,0x72E3000,0xE8B08,1,Toronto Maple Leafs #2 - Creation Logo [Home],0x7C9E3173
+custom,uniform_customizable,disc_7e5d7388.iff,0A,0x67A29000,0x1245ED,1,Customizable-team jersey template (RGB tint),0x7E5D7388
+stl,Creation Zone Logo,disc_7f072b97.iff,0A,0x693FC000,0x9B097,1,"Custom Jersey Decal (recolorable, no logo)",0x7F072B97
+uniforms,uniform_components,disc_7f7a7a9a.iff,0A,0x39250000,0x20EF17,1,Uniform component - 2048x512 DXN,0x7F7A7A9A
+uniforms,uniform_components,disc_7feae0f7.iff,0A,0x5FFA5000,0x1F68D9,1,Uniform component - 2048x512 DXN,0x7FEAE0F7
+uniforms,Team-Select Jersey Decal,disc_80fbc645.iff,0B,0xAE2000,0xDBBA3,1,Finland Jersey Decal (Home or Away),0x80FBC645
+uniforms,Creation Zone Logo,disc_8366f22d.iff,0A,0x69497800,0xB249C,1,"Custom Jersey Decal (recolorable, no logo)",0x8366F22D
+uniforms,uniform_components,disc_837e776b.iff,0B,0xD785800,0x226A55,1,Uniform component - 2048x512 DXN,0x837E776B
+uniforms,Creation Zone Logo,disc_83880615.iff,0B,0x4669800,0xD82A5,1,Philadelphia Flyers #1 - Creation Logo,0x83880615
+uniforms,uniform_components,disc_838b394d.iff,0A,0x60565000,0x1D1A5F,1,Uniform component - 2048x512 DXN,0x838B394D
+uniforms,Creation Zone Logo,disc_84878310.iff,0A,0x6B407800,0xE45BE,1,Minnesota North Stars #1 (Dallas) - Creation Logo,0x84878310
+uniforms,uniform_components,disc_864eca2c.iff,0B,0xBA39800,0x1F7832,1,Uniform component - 2048x512 DXN,0x864ECA2C
+uniforms,uniform_components,disc_8655fab1.iff,0B,0x1194C000,0x1CA64E,1,Uniform component - 2048x512 DXN,0x8655FAB1
+uniforms,Creation Zone Logo,disc_86e31772.iff,0B,0x6C42800,0xE5C8A,1,Tampa Bay #1 - Creation Logo,0x86E31772
+uniforms,uniform_components,disc_8728ab41.iff,0A,0x60737000,0x1E7437,1,Uniform component - 2048x512 DXN,0x8728AB41
+uniforms,uniform_components,disc_87bda123.iff,0A,0x5A2F4000,0x1C1F3D,1,Uniform component - 2048x512 DXN,0x87BDA123
+uniforms,Team-Select Jersey Decal,disc_898c3be9.iff,0B,0x67B7800,0xBE6C1,1,Sweden Jersey Decal (Home or Away),0x898C3BE9
+uniforms,Creation Zone Logo,disc_89c4cb92.iff,0A,0x6A4F6000,0xB148C,1,"Custom Jersey Decal (recolorable, no logo)",0x89C4CB92
+uniforms,Team-Select Jersey Decal,disc_8ad2077c.iff,0B,0x1443000,0xD7847,1,Kazakhstan Jersey Decal (Home or Away),0x8AD2077C
+uniforms,Team-Select Jersey Decal,disc_8ad59bd5.iff,0B,0x5E69800,0xBA5BD,1,Slovakia Jersey Decal (Home or Away),0x8AD59BD5
+uniforms,uniform_components,disc_8b19f616.iff,0B,0xA39F800,0x21C55E,1,Uniform component - 2048x512 DXN,0x8B19F616
+uniforms,uniform_components,disc_8b5adc2f.iff,0A,0x5D459800,0x1E3F7A,1,Uniform component - 2048x512 DXN,0x8B5ADC2F
+nyr,uniform,disc_8c3f666c.iff,0B,0x3EEE800,0xDAA24,1,Team-Select Jersey Decals - NYR_HOME,0x8C3F666C
+bos,uniform,disc_8c7aebf3.iff,0A,0x65C9F000,0x10231D,1,Team-Select Jersey Decals - BOS_ALT,0x8C7AEBF3
+uniforms,uniform_components,disc_8cd27303.iff,0B,0x8FD5800,0x1BAC70,1,Uniform component - 2048x512 DXN,0x8CD27303
+uniforms,uniform_components,disc_8d1264b7.iff,0B,0x140C5000,0x23B1E7,1,Uniform component - 2048x512 DXN,0x8D1264B7
+cgy,Team-Select Jersey Decal,disc_8d12bfc0.iff,0A,0x65B31800,0xB69C5,1,Belarus Jersey Decal (Home or Away),0x8D12BFC0
+uniforms,uniform,disc_8d44dbb0.iff,0A,0x67909000,0x8FE30,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x8D44DBB0
+custom,uniform_customizable,disc_8d67599e.iff,0A,0x6A5A7800,0xB982D,1,Customizable-team jersey template (RGB tint),0x8D67599E
+uniforms,uniform_components,disc_8d863579.iff,0B,0x17A18000,0x1EA7E7,1,Uniform component - 2048x512 DXN,0x8D863579
+uniforms,uniform_components,disc_8d89186d.iff,0B,0x12FFA800,0x2348A5,1,Uniform component - 2048x512 DXN,0x8D89186D
+uniforms,uniform,disc_8deac1a5.iff,0B,0x6AD7000,0x8C0B8,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x8DEAC1A5
+uniforms,uniform_components,disc_8e468bb9.iff,0A,0x612BD800,0x1BA9EE,1,Uniform component - 2048x512 DXN,0x8E468BB9
+custom,uniform_customizable,disc_8f07adac.iff,0B,0x3241000,0xBEEAD,1,Customizable-team jersey template (RGB tint),0x8F07ADAC
+uniforms,Creation Zone Logo,disc_8f1b2a3a.iff,0B,0xEAD000,0xE562B,1,Florida Panthers #1 - Creation Logo,0x8F1B2A3A
+njd,Team-Select Jersey Decal,disc_8f5c00c2.iff,0A,0x677DA000,0x12EEA2,1,Calgary Jersey Decal (Home or Away),0x8F5C00C2
+uniforms,uniform_components,disc_8fdfa405.iff,0B,0x15440000,0x204185,1,Uniform component - 2048x512 DXN,0x8FDFA405
+uniforms,uniform_components,disc_8ff94e23.iff,0A,0x5D63D800,0x1DA5C3,1,Uniform component - 2048x512 DXN,0x8FF94E23
+det,Team-Select Jersey Decal,disc_90fe3bba.iff,0B,0x23BA800,0xF1509,1,Montreal Jersey Decal (Home or Away),0x90FE3BBA
+nyr,uniform,disc_913e8d06.iff,0B,0x3BF8000,0xD48AA,1,Team-Select Jersey Decals - NYR_AWAY,0x913E8D06
+njd,Team-Select Jersey Decal,disc_919b3509.iff,0B,0x2C98000,0xEA8DE,1,New Jersey Jersey Decal (Home or Away),0x919B3509
+uniforms,uniform_components,disc_92f65334.iff,0A,0x5DF95800,0x1E3007,1,Uniform component - 2048x512 DXN,0x92F65334
+uniforms,uniform,disc_94ceb913.iff,0B,0x1A9D800,0xB6A12,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x94CEB913
+nyi,uniform,disc_953e4074.iff,0B,0x34EB000,0x103EDB,1,Team-Select Jersey Decals - NYI_ALT,0x953E4074
+custom,uniform_customizable,disc_955b3727.iff,0A,0x6675D800,0xE1A24,1,Customizable-team jersey template (RGB tint),0x955B3727
+nsh,uniform,disc_9567c4fe.iff,0B,0x2D83000,0xDEDC9,1,Team-Select Jersey Decals - NSH_ALT,0x9567C4FE
+uniforms,uniform_components,disc_956887c2.iff,0A,0x38AE8800,0x1BCEBB,1,Uniform component - 2048x512 DXN,0x956887C2
+car,Team-Select Jersey Decal,disc_95f4763b.iff,0A,0x655F4800,0xF07EA,1,Atlanta Jersey Decal (Home or Away),0x95F4763B
+uniforms,uniform_components,disc_9655c138.iff,0A,0x5E179000,0x1D7991,1,Uniform component - 2048x512 DXN,0x9655C138
+chi,Team-Select Jersey Decal,disc_96c6e7a5.iff,0A,0x67F3B000,0x118956,1,Chicago Alternate Jersey Decal,0x96C6E7A5
+uniforms,uniform_components,disc_9736fbeb.iff,0B,0x17678800,0x1B1B41,1,Uniform component - 2048x512 DXN,0x9736FBEB
+uniforms,uniform_components,disc_975c88bd.iff,0A,0x5473B000,0x1D01EF,1,Uniform component - 2048x512 DXN,0x975C88BD
+uniforms,uniform_components,disc_98546a8b.iff,0A,0x5CB17800,0x1DB3D6,1,Uniform component - 2048x512 DXN,0x98546A8B
+fla,Team-Select Jersey Decal,disc_990b42f0.iff,0B,0x1078000,0x100CEB,1,Florida Jersey Decal (Home or Away),0x990B42F0
+uniforms,uniform_components,disc_99fcabbb.iff,0B,0xF3BD000,0x209CD7,1,Uniform component - 2048x512 DXN,0x99FCABBB
+uniforms,uniform_components,disc_9a27b656.iff,0A,0x5F622800,0x1EA5C7,1,Uniform component - 2048x512 DXN,0x9A27B656
+uniforms,uniform_components,disc_9a9cd38f.iff,0A,0x56108800,0x1BEAFE,1,Uniform component - 2048x512 DXN,0x9A9CD38F
+uniforms,Creation Zone Logo,disc_9aca7d36.iff,0A,0x68F55800,0xB0188,1,"Custom Jersey Decal (recolorable, no logo)",0x9ACA7D36
+custom,uniform_customizable,disc_9cd84a37.iff,0B,0x13000,0xD5487,1,Customizable-team jersey template (RGB tint),0x9CD84A37
+uniforms,uniform_components,disc_9cf7f887.iff,0A,0x5D0A2000,0x1D36A3,1,Uniform component - 2048x512 DXN,0x9CF7F887
+uniforms,uniform_components,disc_9e6461dc.iff,0A,0x554F6800,0x23AD0F,1,Uniform component - 2048x512 DXN,0x9E6461DC
+uniforms,Creation Zone Logo,disc_9e69ef3a.iff,0A,0x6915F000,0xA80AF,1,"Custom Jersey Decal (recolorable, no logo)",0x9E69EF3A
+uniforms,Team-Select Jersey Decal,disc_9e8321ee.iff,0B,0x74B3800,0xBA708,1,Ukraine Jersey Decal (Home or Away),0x9E8321EE
+uniforms,uniform_components,disc_9e84245a.iff,0A,0x5F80D000,0x1EAEC5,1,Uniform component - 2048x512 DXN,0x9E84245A
+uniforms,Team-Select Jersey Decal,disc_9f093176.iff,0A,0x66CAA000,0xF22E5,1,Carolina Jersey Decal (Home or Away),0x9F093176
+uniforms,uniform,disc_9fc13b4d.iff,0A,0x681FA800,0x9C944,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0x9FC13B4D
+phi,uniform,disc_a1d2456f.iff,0B,0x44BF000,0xD7753,1,Team-Select Jersey Decals - PHI_ALT,0xA1D2456F
+custom,uniform_customizable,disc_a2365657.iff,0B,0x42B8800,0x103875,1,Customizable-team jersey template (RGB tint),0xA2365657
+uniforms,Team-Select Jersey Decal,disc_a29b5010.iff,0A,0x66A4B800,0xB947D,1,Canada Jersey Decal (Home or Away),0xA29B5010
+chi,Team-Select Jersey Decal,disc_a2a60696.iff,0A,0x68630800,0x10978F,1,Chicago Jersey Decal (Home or Away),0xA2A60696
+uniforms,Creation Zone Logo,disc_a3315abf.iff,0A,0x69FCE000,0xAB2B0,1,"Custom Jersey Decal (recolorable, no logo)",0xA3315ABF
+wsh,Team-Select Jersey Decal,disc_a39c9366.iff,0B,0x457000,0xFBC77,1,Denmark Jersey Decal (Home or Away),0xA39C9366
+uniforms,uniform,disc_a5439016.iff,0A,0x650CC800,0x8E6BA,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xA5439016
+buf,uniform,disc_a5ae9c30.iff,0A,0x66924800,0x126E93,1,Team-Select Jersey Decals - BUF_ALT,0xA5AE9C30
+uniforms,uniform_components,disc_a712b7db.iff,0A,0x62291800,0x1FBA15,1,Uniform component - 2048x512 DXN,0xA712B7DB
+uniforms,uniform,disc_a71dec3f.iff,0B,0x7991000,0x8CC63,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xA71DEC3F
+uniforms,uniform,disc_a7779f69.iff,0A,0x66430800,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xA7779F69
+uniforms,Creation Zone Logo,disc_a792c8b3.iff,0A,0x6A079800,0xA2599,1,"Custom Jersey Decal (recolorable, no logo)",0xA792C8B3
+uniforms,Creation Zone Logo,disc_a9936300.iff,0A,0x6989E800,0xA489F,1,"Custom Jersey Decal (recolorable, no logo)",0xA9936300
+uniforms,uniform,disc_aab7c45b.iff,0A,0x66D9C800,0x89294,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xAAB7C45B
+uniforms,uniform_components,disc_aaf470ea.iff,0B,0xE3E6800,0x21609A,1,Uniform component - 2048x512 DXN,0xAAF470EA
+uniforms,uniform_components,disc_ab0d74bd.iff,0A,0x5B0D5800,0x1E75E7,1,Uniform component - 2048x512 DXN,0xAB0D74BD
+lak,Team-Select Jersey Decal,disc_ab3ee511.iff,0A,0x6760B000,0xE8931,1,Columbus Jersey Decal (Home or Away),0xAB3EE511
+uniforms,Creation Zone Logo,disc_abe0bfdd.iff,0A,0x6A7CF000,0xB3383,1,"Custom Jersey Decal (recolorable, no logo)",0xABE0BFDD
+uniforms,Creation Zone Logo,disc_ad30f10c.iff,0A,0x69A87800,0x9E816,1,"Custom Jersey Decal (recolorable, no logo)",0xAD30F10C
+fla,Team-Select Jersey Decal,disc_ad6a98b8.iff,0A,0x6683F800,0xE48E4,1,Buffalo Jersey Decal (Home or Away),0xAD6A98B8
+uniforms,uniform_components,disc_ad6ca119.iff,0B,0x957D000,0x1ED897,1,Uniform component - 2048x512 DXN,0xAD6CA119
+uniforms,uniform_components,disc_ae91cacb.iff,0A,0x55105800,0x1F401F,1,Uniform component - 2048x512 DXN,0xAE91CACB
+custom,uniform_customizable,disc_af432dd1.iff,0A,0x6A882800,0xB42C7,1,Customizable-team jersey template (RGB tint),0xAF432DD1
+van,Team-Select Jersey Decal,disc_af8a775f.iff,0B,0x1C3F000,0x1042C7,1,Los Angeles Jersey Decal (Home or Away),0xAF8A775F
+uniforms,Team-Select Jersey Decal,disc_af8cb986.iff,0B,0x7DC8000,0xE5BE5,1,Vancouver Home Jersey Decal,0xAF8CB986
+uniforms,uniform_components,disc_afaee6b1.iff,0A,0x5B683000,0x1DE421,1,Uniform component - 2048x512 DXN,0xAFAEE6B1
+uniforms,uniform_components,disc_afea2c99.iff,0A,0x58E02800,0x1D3D09,1,Uniform component - 2048x512 DXN,0xAFEA2C99
+custom,uniform_customizable,disc_b0d30bfa.iff,0B,0x20AA000,0xFDA39,1,Customizable-team jersey template (RGB tint),0xB0D30BFA
+uniforms,uniform_components,disc_b1f91201.iff,0A,0x5690D800,0x22381B,1,Uniform component - 2048x512 DXN,0xB1F91201
+uniforms,Creation Zone Logo,disc_b24c30c6.iff,0A,0x6AD58000,0x9D1CE,1,"Custom Jersey Decal (recolorable, no logo)",0xB24C30C6
+uniforms,uniform_components,disc_b2a1fba6.iff,0A,0x5BFC8800,0x1EB6F9,1,Uniform component - 2048x512 DXN,0xB2A1FBA6
+custom,uniform_customizable,disc_b41559e9.iff,0B,0x6B63800,0xDEF00,1,Customizable-team jersey template (RGB tint),0xB41559E9
+custom,uniform_customizable,disc_b4242d73.iff,0B,0x7B73800,0xC5E9C,1,Customizable-team jersey template (RGB tint),0xB4242D73
+uniforms,Team-Select Jersey Decal,disc_b4b6b7ec.iff,0A,0x64D7B800,0x102511,1,2K All-Stars Jersey Decal,0xB4B6B7EC
+uniforms,uniform_components,disc_b4d1d7d6.iff,0A,0x6437B800,0x211124,1,Uniform component - 2048x512 DXN,0xB4D1D7D6
+atl,Team-Select Jersey Decal,disc_b57a0af1.iff,0B,0x138A000,0xB8B92,1,Germany Jersey Decal (Home or Away),0xB57A0AF1
+wsh,Team-Select Jersey Decal,disc_b5ff12be.iff,0A,0x6546B000,0xBD2C0,1,Anaheim Jersey Decal (Home or Away),0xB5FF12BE
+cbj,Team-Select Jersey Decal,disc_b5ff1e03.iff,0B,0x70C4000,0x10EA97,1,Toronto Jersey Decal (Home or Away),0xB5FF1E03
+uniforms,Creation Zone Logo,disc_b643e581.iff,0B,0x5B87000,0xF9680,1,San Jose Sharks #1 - Creation Logo,0xB643E581
+uniforms,uniform,disc_b67eed65.iff,0B,0x51F2000,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xB67EED65
+uniforms,uniform_components,disc_b6a5b5a6.iff,0B,0xCD58800,0x1C390B,1,Uniform component - 2048x512 DXN,0xB6A5B5A6
+uniforms,Creation Zone Logo,disc_b6d8995b.iff,0B,0x6343800,0x11C88F,1,St Louis Blues #1 - Creation Logo,0xB6D8995B
+uniforms,Creation Zone Logo,disc_b6efa2ca.iff,0A,0x6ADF5800,0xAFDE3,1,"Custom Jersey Decal (recolorable, no logo)",0xB6EFA2CA
+uniforms,uniform,disc_b796b6f7.iff,0A,0x68A90800,0x88169,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xB796B6F7
+uniforms,uniform_components,disc_b803c219.iff,0A,0x5EE6E000,0x1E7ACC,1,Uniform component - 2048x512 DXN,0xB803C219
+uniforms,uniform_components,disc_b842fbf9.iff,0B,0xFBD6000,0x1F4E93,1,Uniform component - 2048x512 DXN,0xB842FBF9
+custom,uniform_customizable,disc_b8b48a87.iff,0B,0x3707800,0xEDD82,1,Customizable-team jersey template (RGB tint),0xB8B48A87
+uniforms,Team-Select Jersey Decal,disc_b9183d21.iff,0A,0x65DA1800,0x115B53,1,Boston Jersey Decal (Home or Away),0xB9183D21
+atl,uniform,disc_b9af7a4d.iff,0A,0x65528800,0xCB97A,1,Team-Select Jersey Decals - ATL_ALT,0xB9AF7A4D
+uniforms,Creation Zone Logo,disc_ba9dd5a4.iff,0A,0x69BD5000,0xAE796,1,"Custom Jersey Decal (recolorable, no logo)",0xBA9DD5A4
+uniforms,uniform_components,disc_bca05015.iff,0A,0x5F056000,0x1F0F61,1,Uniform component - 2048x512 DXN,0xBCA05015
+uniforms,uniform,disc_bcf964d7.iff,0B,0x17E5000,0x8B22A,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xBCF964D7
+uniforms,uniform_components,disc_bd259b1a.iff,0A,0x61858000,0x235105,1,Uniform component - 2048x512 DXN,0xBD259B1A
+uniforms,uniform_components,disc_bd6fcc64.iff,0A,0x57C4B000,0x1CE5BE,1,Uniform component - 2048x512 DXN,0xBD6FCC64
+uniforms,uniform_components,disc_bdc1d671.iff,0B,0x150D6000,0x1B4B7B,1,Uniform component - 2048x512 DXN,0xBDC1D671
+uniforms,Creation Zone Logo,disc_be3e47a8.iff,0A,0x69C83800,0xA56E6,1,"Custom Jersey Decal (recolorable, no logo)",0xBE3E47A8
+uniforms,uniform,disc_be6d9c6d.iff,0A,0x6B2B1800,0x86663,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xBE6D9C6D
+uniforms,uniform_components,disc_bf410f78.iff,0B,0x15644800,0x20C8B2,1,Uniform component - 2048x512 DXN,0xBF410F78
+uniforms,Creation Zone Logo,disc_bfecd226.iff,0B,0x2A4C800,0xC0EBB,1,Colorado Rockies #1 - Creation Logo,0xBFECD226
+uniforms,uniform_components,disc_c0309ae8.iff,0B,0x105D5000,0x198091,1,Uniform component - 2048x512 DXN,0xC0309AE8
+uniforms,uniform_components,disc_c0575e2e.iff,0B,0x10CF6800,0x1D8667,1,Uniform component - 2048x512 DXN,0xC0575E2E
+custom,uniform_customizable,disc_c3a6d25e.iff,0B,0x7AAB000,0xC8788,1,Customizable-team jersey template (RGB tint),0xC3A6D25E
+custom,uniform_customizable,disc_c3fd7c90.iff,0B,0x2BCE800,0xC95D5,1,Customizable-team jersey template (RGB tint),0xC3FD7C90
+custom,uniform_customizable,disc_c4940e38.iff,0A,0x68392000,0xD1B0F,1,Customizable-team jersey template (RGB tint),0xC4940E38
+uniforms,uniform_components,disc_c4d1f65f.iff,0A,0x5A8A1800,0x1EF095,1,Uniform component - 2048x512 DXN,0xC4D1F65F
+uniforms,uniform,disc_c6372b1d.iff,0B,0x3B68800,0x8F493,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xC6372B1D
+sjs,Team-Select Jersey Decal,disc_c65e438a.iff,0B,0x5D7A000,0xEF4DE,1,San Jose Jersey Decal (Home or Away),0xC65E438A
+uniforms,Creation Zone Logo,disc_c6fcf07f.iff,0A,0x69E78800,0xA9A8F,1,"Custom Jersey Decal (recolorable, no logo)",0xC6FCF07F
+nsh,uniform,disc_c7b05cb3.iff,0B,0x2E62000,0x1050D0,1,Team-Select Jersey Decals - NSH_AWAY,0xC7B05CB3
+uniforms,uniform_components,disc_c7ebaff8.iff,0B,0xC66A800,0x195415,1,Uniform component - 2048x512 DXN,0xC7EBAFF8
+uniforms,uniform_components,disc_c98fbdbb.iff,0A,0x59C78000,0x255FD5,1,Uniform component - 2048x512 DXN,0xC98FBDBB
+uniforms,Creation Zone Logo,disc_c9c095d2.iff,0B,0x3CCD000,0x96CAD,1,NY Rangers #1 - Creation Logo,0xC9C095D2
+uniforms,uniform_components,disc_ca634c71.iff,0A,0x5C574800,0x1D4E8A,1,Uniform component - 2048x512 DXN,0xCA634C71
+custom,uniform_customizable,disc_ca699e74.iff,0A,0x68D74000,0xEFF2C,1,Customizable-team jersey template (RGB tint),0xCA699E74
+nyi,Team-Select Jersey Decal,disc_cadd6f09.iff,0B,0x35EF000,0x1186E5,1,NY Islanders Jersey Decal (Home or Away),0xCADD6F09
+pit,Team-Select Jersey Decal,disc_cafeec02.iff,0B,0x5679000,0xE9E3E,1,Pittsburgh Jersey Decal (Home or Away),0xCAFEEC02
+uniforms,Team-Select Jersey Decal,disc_cb0dfe59.iff,0A,0x676F4000,0xE5DFF,1,Calgary Alternate Jersey Decal,0xCB0DFE59
+buf,Team-Select Jersey Decal,disc_cbd10903.iff,0B,0x7EAE000,0xBEF5D,1,Western All-Stars Jersey Decal,0xCBD10903
+det,Team-Select Jersey Decal,disc_cbdc62a6.iff,0B,0x6639800,0xBE864,1,Switzerland Jersey Decal (Home or Away),0xCBDC62A6
+custom,uniform_customizable,disc_cc3d4bfb.iff,0B,0x1B54800,0xEA52B,1,Customizable-team jersey template (RGB tint),0xCC3D4BFB
+custom,uniform_customizable,disc_cd8bf405.iff,0A,0x65EB7800,0xED0FA,1,Customizable-team jersey template (RGB tint),0xCD8BF405
+custom,uniform_customizable,disc_ce106647.iff,0B,0x54C5800,0xCB205,1,Customizable-team jersey template (RGB tint),0xCE106647
+uniforms,uniform_components,disc_cea49399.iff,0A,0x566FC800,0x210DC1,1,Uniform component - 2048x512 DXN,0xCEA49399
+custom,uniform_customizable,disc_cea5a7ce.iff,0A,0x6750D000,0xFDBCE,1,Customizable-team jersey template (RGB tint),0xCEA5A7CE
+uniforms,uniform_components,disc_cec0de7d.iff,0A,0x5C749800,0x1E6954,1,Uniform component - 2048x512 DXN,0xCEC0DE7D
+phi,Team-Select Jersey Decal,disc_cfadf8a4.iff,0B,0x81B6000,0xC1C6A,1,Washington Home Jersey Decal,0xCFADF8A4
+det,Team-Select Jersey Decal,disc_cffaa846.iff,0B,0x1BE000,0xD0A9A,1,Detroit Jersey Decal (Home or Away),0xCFFAA846
+uniforms,uniform_components,disc_d0f16c26.iff,0B,0x11B16800,0x23B335,1,Uniform component - 2048x512 DXN,0xD0F16C26
+ott,Team-Select Jersey Decal,disc_d1101743.iff,0B,0x43BC800,0x1025CF,1,Ottawa Jersey Decal (Home or Away),0xD1101743
+van,uniform,disc_d113c92f.iff,0B,0x77AA800,0xFF5CD,1,Team-Select Jersey Decals - VAN_ALT,0xD113C92F
+uniforms,uniform_components,disc_d21bdff8.iff,0B,0xAC46800,0x20C320,1,Uniform component - 2048x512 DXN,0xD21BDFF8
+pho,uniform,disc_d2c83ce5.iff,0B,0x48F0000,0xE933D,1,Team-Select Jersey Decals - PHO_ALT,0xD2C83CE5
+ott,Team-Select Jersey Decal,disc_d2f669a2.iff,0A,0x6B15B800,0xCF60A,1,Dallas Alternate Jersey Decal,0xD2F669A2
+custom,uniform_customizable,disc_d31f15a7.iff,0A,0x66680000,0xDD6D7,1,Customizable-team jersey template (RGB tint),0xD31F15A7
+uniforms,Creation Zone Logo,disc_d322080a.iff,0A,0x6A9EB800,0xA95E8,1,"Custom Jersey Decal (recolorable, no logo)",0xD322080A
+uniforms,uniform_components,disc_d34a36eb.iff,0A,0x58080800,0x20A5A1,1,Uniform component - 2048x512 DXN,0xD34A36EB
+uniforms,uniform_components,disc_d3cfc36a.iff,0A,0x5BA45800,0x1E3C45,1,Uniform component - 2048x512 DXN,0xD3CFC36A
+pho,Team-Select Jersey Decal,disc_d43e49dd.iff,0B,0x4F21000,0xF67F5,1,Phoenix Jersey Decal (Home or Away),0xD43E49DD
+custom,uniform_customizable,disc_d5cbff03.iff,0A,0x68536000,0xFA4AD,1,Customizable-team jersey template (RGB tint),0xD5CBFF03
+custom,uniform_customizable,disc_d75f82a6.iff,0A,0x657C2800,0xDD1A6,1,Customizable-team jersey template (RGB tint),0xD75F82A6
+uniforms,uniform_components,disc_d76c5166.iff,0A,0x5BC29800,0x1CF05A,1,Uniform component - 2048x512 DXN,0xD76C5166
+custom,uniform_customizable,disc_d7819a06.iff,0A,0x6ABFC800,0xBDB9D,1,Customizable-team jersey template (RGB tint),0xD7819A06
+uniforms,Team-Select Jersey Decal,disc_d7ace868.iff,0A,0x6AF55800,0xA2636,1,Czech Republic Jersey Decal (Home or Away),0xD7ACE868
+tbl,Team-Select Jersey Decal,disc_d7c6e2b1.iff,0B,0x71D000,0x10CF63,1,Edmonton Away/Alt Jersey Decal,0xD7C6E2B1
+lak,uniform,disc_d7dd102f.iff,0B,0x15F3000,0xEDB26,1,Team-Select Jersey Decals - LAK_ALT,0xD7DD102F
+uniforms,uniform,disc_d89d7bce.iff,0B,0x28F3000,0x8FD74,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xD89D7BCE
+phi,Team-Select Jersey Decal,disc_d920399a.iff,0B,0x481B800,0xD4050,1,Philadelphia Jersey Decal (Home or Away),0xD920399A
+uniforms,uniform_components,disc_d92cc335.iff,0B,0x10ECF000,0x216021,1,Uniform component - 2048x512 DXN,0xD92CC335
+custom,uniform_customizable,disc_da03b018.iff,0B,0x916000,0xD5780,1,Customizable-team jersey template (RGB tint),0xDA03B018
+uniforms,Creation Zone Logo,disc_da6463de.iff,0A,0x6515B000,0xB3A0D,1,Anaheim Ducks #1 - Creation Logo,0xDA6463DE
+dal,Creation Zone Logo,disc_dae37e74.iff,0A,0x6B5D0800,0xBDC62,1,Dallas Stars - Creation Logo [Away/Home],0xDAE37E74
+nsh,Creation Zone Logo,disc_db18659d.iff,0B,0x3300000,0xF3A03,1,Nashville Predators #1 - Creation Logo [Home],0xDB18659D
+uniforms,uniform_components,disc_db8ea831.iff,0B,0x18731000,0x1C7C1A,1,Uniform component - 2048x512 DXN,0xDB8EA831
+uniforms,Creation Zone Logo,disc_dbf3ed68.iff,0A,0x6A1BE800,0xA3BEB,1,"Custom Jersey Decal (recolorable, no logo)",0xDBF3ED68
+uniforms,uniform_components,disc_dc3bfd1e.iff,0A,0x58495800,0x266E5A,1,Uniform component - 2048x512 DXN,0xDC3BFD1E
+edm,Team-Select Jersey Decal,disc_dd42f138.iff,0B,0x6FEA800,0xD9112,1,Toronto Alternate Jersey Decal,0xDD42F138
+mtl,Team-Select Jersey Decal,disc_dea09125.iff,0B,0x6EED800,0xFCD20,1,Tampa Bay Jersey Decal (Home or Away),0xDEA09125
+uniforms,uniform_components,disc_def8bfe5.iff,0B,0x1628A000,0x2251B7,1,Uniform component - 2048x512 DXN,0xDEF8BFE5
+uniforms,Creation Zone Logo,disc_df507f64.iff,0A,0x6A3A5800,0x9EBB4,1,"Custom Jersey Decal (recolorable, no logo)",0xDF507F64
+uniforms,Creation Zone Logo,disc_df7411ea.iff,0A,0x6520F000,0xCDDDD,1,Anaheim Ducks Alt #1 - Creation Logo,0xDF7411EA
+uniforms,Team-Select Jersey Decal,disc_df834df1.iff,0B,0x76E9800,0xC0805,1,USA Jersey Decal (Home or Away),0xDF834DF1
+custom,uniform_customizable,disc_e04455dd.iff,0B,0x80F2800,0xC33CE,1,Customizable-team jersey template (RGB tint),0xE04455DD
+uniforms,Team-Select Jersey Decal,disc_e083de40.iff,0B,0x1D43800,0xD9F64,1,Latvia Jersey Decal (Home or Away),0xE083DE40
+uniforms,uniform_components,disc_e0d29871.iff,0B,0xCF1C800,0x1F89DC,1,Uniform component - 2048x512 DXN,0xE0D29871
+uniforms,uniform_components,disc_e1298398.iff,0A,0x61CC3000,0x1FAA1C,1,Uniform component - 2048x512 DXN,0xE1298398
+uniforms,uniform_components,disc_e1ae9e32.iff,0A,0x38E62800,0x1DE1BA,1,Uniform component - 2048x512 DXN,0xE1AE9E32
+uniforms,uniform_components,disc_e1c94df4.iff,0A,0x6370F000,0x1FF3C9,1,Uniform component - 2048x512 DXN,0xE1C94DF4
+uniforms,Creation Zone Logo,disc_e208cae1.iff,0A,0x692B4000,0xAC6B2,1,"Custom Jersey Decal (recolorable, no logo)",0xE208CAE1
+uniforms,uniform_components,disc_e2e50181.iff,0A,0x5FBE3000,0x1E0FFE,1,Uniform component - 2048x512 DXN,0xE2E50181
+custom,uniform_customizable,disc_e2e63ed9.iff,0B,0x4E2B800,0xF5041,1,Customizable-team jersey template (RGB tint),0xE2E63ED9
+tor,Creation Zone Logo,disc_e5324209.iff,0B,0x71D3000,0x10FA28,1,Toronto Maple Leafs #1 - Creation Logo [Away],0xE5324209
+uniforms,uniform_components,disc_e646938d.iff,0A,0x6019C000,0x1F68D9,1,Uniform component - 2048x512 DXN,0xE646938D
+stl,Creation Zone Logo,disc_e6ab58ed.iff,0A,0x69360800,0x9B097,1,"Custom Jersey Decal (recolorable, no logo)",0xE6AB58ED
+uniforms,uniform_components,disc_e6d609e0.iff,0A,0x39041000,0x20EF17,1,Uniform component - 2048x512 DXN,0xE6D609E0
+custom,uniform_customizable,disc_e7f100f2.iff,0A,0x67CE4800,0x1245ED,1,Customizable-team jersey template (RGB tint),0xE7F100F2
+uniforms,uniform_components,disc_e8b66c1a.iff,0B,0xB49C000,0x1C8103,1,Uniform component - 2048x512 DXN,0xE8B66C1A
+custom,uniform_customizable,disc_e9d12214.iff,0B,0x24AC000,0xED7FA,1,Customizable-team jersey template (RGB tint),0xE9D12214
+uniforms,uniform_components,disc_ea34e4e3.iff,0A,0x5E529000,0x1DAB47,1,Uniform component - 2048x512 DXN,0xEA34E4E3
+uniforms,uniform_components,disc_eabd0dad.iff,0A,0x54EEA000,0x21B4BA,1,Uniform component - 2048x512 DXN,0xEABD0DAD
+cgy,Creation Zone Logo,disc_eae82ee1.iff,0A,0x67B4D800,0xCB601,1,Atlanta Flames #1 (Calgary) - Creation Logo [Alternate],0xEAE82EE1
+custom,uniform_customizable,disc_eb3b91ca.iff,0B,0x5312000,0xE79A1,1,Customizable-team jersey template (RGB tint),0xEB3B91CA
+phi,Team-Select Jersey Decal,disc_ec7b7622.iff,0B,0x6460800,0x119EC2,1,St Louis Jersey Decal (Home or Away),0xEC7B7622
+uniforms,uniform_components,disc_ec957f4a.iff,0A,0x39E33000,0x20036B,1,Uniform component - 2048x512 DXN,0xEC957F4A
+uniforms,uniform_components,disc_ee0102ef.iff,0A,0x597FF800,0x2359E7,1,Uniform component - 2048x512 DXN,0xEE0102EF
+uniforms,uniform_components,disc_ee9776ef.iff,0A,0x5EAB2800,0x1D35A6,1,Uniform component - 2048x512 DXN,0xEE9776EF
+uniforms,uniform,disc_f01b8d3c.iff,0B,0x4B4B000,0x7AFE7,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xF01B8D3C
+uniforms,uniform_components,disc_f0628dd8.iff,0B,0xE5FD000,0x1B581A,1,Uniform component - 2048x512 DXN,0xF0628DD8
+min,uniform,disc_f169624b.iff,0B,0x1FAF000,0xFA95C,1,Team-Select Jersey Decals - MIN_AWAY,0xF169624B
+uniforms,uniform_components,disc_f1a36398.iff,0A,0x5AC80800,0x2295D1,1,Uniform component - 2048x512 DXN,0xF1A36398
+chi,Team-Select Jersey Decal,disc_f2454057.iff,0A,0x6873A000,0x11AEDF,1,Chicago Winter Classic Jersey Decal,0xF2454057
+uniforms,Team-Select Jersey Decal,disc_f418ab2b.iff,0A,0x68916800,0xF175A,1,Colorado Jersey Decal (Home or Away),0xF418AB2B
+uniforms,uniform_components,disc_f56f5a22.iff,0A,0x571A2000,0x22B6B4,1,Uniform component - 2048x512 DXN,0xF56F5A22
+uniforms,uniform_components,disc_f61c3cc9.iff,0B,0xE03F800,0x1D35B7,1,Uniform component - 2048x512 DXN,0xF61C3CC9
+uniforms,uniform_components,disc_f64109e9.iff,0A,0x53C7D800,0x229483,1,Uniform component - 2048x512 DXN,0xF64109E9
+custom,uniform_customizable,disc_f7068b93.iff,0A,0x67071800,0xD9C96,1,Customizable-team jersey template (RGB tint),0xF7068B93
+uniforms,uniform_components,disc_f73bf9f4.iff,0A,0x5DBD2800,0x1DFFBB,1,Uniform component - 2048x512 DXN,0xF73BF9F4
+uniforms,uniform_components,disc_f7b27e4d.iff,0B,0x11F56000,0x203C78,1,Uniform component - 2048x512 DXN,0xF7B27E4D
+uniforms,uniform,disc_f7c0b82c.iff,0B,0x2FF7000,0x8F270,1,Team-Select Jersey Decals - unidentified (browse preview to identify team),0xF7C0B82C
+uniforms,uniform_components,disc_f7f7b617.iff,0B,0x976B000,0x1FE7B3,1,Uniform component - 2048x512 DXN,0xF7F7B617
+uniforms,uniform_components,disc_f837817c.iff,0B,0xBE29800,0x20C685,1,Uniform component - 2048x512 DXN,0xF837817C
+uniforms,uniform_components,disc_f86c2fb2.iff,0B,0x1782A800,0x1ED10F,1,Uniform component - 2048x512 DXN,0xF86C2FB2
+edm,Team-Select Jersey Decal,disc_f9594c92.iff,0B,0x5868000,0xA23D2,1,Russia Jersey Decal (Home or Away),0xF9594C92
+uniforms,Team-Select Jersey Decal,disc_f9af1b9d.iff,0A,0x65A61800,0xCFAED,1,Latvia Jersey Decal (Home or Away),0xF9AF1B9D
+tor,Creation Zone Logo,disc_f9f54624.iff,0B,0x4D73800,0xB7F60,1,Winnipeg Jets (Phoenix/ATL) - Creation Logo [Alternate],0xF9F54624
+uniforms,Creation Zone Logo,disc_fba445fa.iff,0A,0x6969C800,0x9FE24,1,"Custom Jersey Decal (recolorable, no logo)",0xFBA445FA
+uniforms,Team-Select Jersey Decal,disc_fc27de47.iff,0B,0x1179000,0xAB8C5,1,France Jersey Decal (Home or Away),0xFC27DE47
+ott,uniform,disc_fcc1b122.iff,0B,0x3FC9800,0xE80AA,1,Team-Select Jersey Decals - OTT_ALT,0xFCC1B122
+uniforms,uniform_components,disc_fd361632.iff,0A,0x593E0800,0x20F5BB,1,Uniform component - 2048x512 DXN,0xFD361632
+uniforms,Creation Zone Logo,disc_fd73ee55.iff,0A,0x68C09000,0xB52F3,1,Quebec Nordiques #1 - Creation Logo,0xFD73EE55
+custom,uniform_customizable,disc_ff07d7f6.iff,0A,0x6973C800,0xB0D02,1,Customizable-team jersey template (RGB tint),0xFF07D7F6
+2k,uniforms,uniform_2k_away.iff,0A,0x38484800,0x23DF8C,1,uniform_2k_away.iff,0xFBE08F21
+2k,uniforms,uniform_2k_home.iff,0A,0x386C2800,0x23DF52,1,uniform_2k_home.iff,0x624CFC5B
+aut,uniforms,uniform_aut_away.iff,0A,0x3A246800,0x203EF2,1,uniform_aut_away.iff,0x859980D2
+aut,uniforms,uniform_aut_home.iff,0A,0x3A44A800,0x2034BD,1,uniform_aut_home.iff,0x1C35F3A8
+bel,uniforms,uniform_bel_away.iff,0A,0x53426000,0x1E63D7,1,uniform_bel_away.iff,0x688857F5
+bel,uniforms,uniform_bel_home.iff,0A,0x5360C800,0x1E5EEE,1,uniform_bel_home.iff,0xF124248F
+can,uniforms,uniform_can_away.iff,0A,0x55731800,0x1E536F,1,uniform_can_away.iff,0x4701B825
+can,uniforms,uniform_can_home.iff,0A,0x55917000,0x1E536F,1,uniform_can_home.iff,0xDEADCB5F
+cze,uniforms,uniform_cze_away.iff,0A,0x60B06000,0x1BD634,1,uniform_cze_away.iff,0x3236005D
+cze,uniforms,uniform_cze_home.iff,0A,0x60CC3800,0x1BD634,1,uniform_cze_home.iff,0xAB9A7327
+dmk,uniforms,uniform_dmk_away.iff,0A,0x62A5C000,0x212766,1,uniform_dmk_away.iff,0xDFAA0829
+dmk,uniforms,uniform_dmk_home.iff,0A,0x62C6E800,0x21249B,1,uniform_dmk_home.iff,0x46067B53
+eca,uniforms,uniform_eca_alt.iff,0A,0x62E81000,0x1B97A0,1,uniform_eca_alt.iff,0x721D4CC4
+fin,uniforms,uniform_fin_away.iff,0A,0x63B2D000,0x1F2A87,1,uniform_fin_away.iff,0x65612E70
+fin,uniforms,uniform_fin_home.iff,0A,0x63D20000,0x1F2A87,1,uniform_fin_home.iff,0xFCCD5D0A
+fra,uniforms,uniform_fra_away.iff,0A,0x649C9800,0x1D8D23,1,uniform_fra_away.iff,0x19BD3672
+fra,uniforms,uniform_fra_home.iff,0A,0x64BA2800,0x1D885E,1,uniform_fra_home.iff,0x80114508
+ger,uniforms,uniform_ger_away.iff,0B,0x8278000,0x1D1B15,1,uniform_ger_away.iff,0xC94C91BE
+ger,uniforms,uniform_ger_home.iff,0B,0x844A000,0x1D14E5,1,uniform_ger_home.iff,0x50E0E2C4
+kaz,uniforms,uniform_kaz_away.iff,0B,0x861B800,0x1F4A3D,1,uniform_kaz_away.iff,0x6F48EF49
+kaz,uniforms,uniform_kaz_home.iff,0B,0x8810800,0x1F4A3D,1,uniform_kaz_home.iff,0xF6E49C33
+lat,uniforms,uniform_lat_away.iff,0B,0x9B82000,0x20B195,1,uniform_lat_away.iff,0x05193675
+lat,uniforms,uniform_lat_home.iff,0B,0x9D8D800,0x20AF9F,1,uniform_lat_home.iff,0x9CB5450F
+muvo,uniforms,uniform_muvo_away.iff,0A,0x66EAF800,0xE7F6C,1,uniform_muvo_away.iff,0x139F9C97
+muvo,uniforms,uniform_muvo_home.iff,0A,0x6714B800,0xE7F6C,1,uniform_muvo_home.iff,0x8A33EFED
+rus,uniforms,uniform_rus_away.iff,0B,0x1282C800,0x1BF36E,1,uniform_rus_away.iff,0x1CC3A4A7
+rus,uniforms,uniform_rus_home.iff,0B,0x129EC000,0x1BF36E,1,uniform_rus_home.iff,0x856FD7DD
+slo,uniforms,uniform_slo_away.iff,0B,0x1368E800,0x1BB1CB,1,uniform_slo_away.iff,0x6F4F73E0
+slo,uniforms,uniform_slo_home.iff,0B,0x1384A000,0x1BB1CB,1,uniform_slo_home.iff,0xF6E3009A
+sui,uniforms,uniform_sui_away.iff,0B,0x14537800,0x1D0EC0,1,uniform_sui_away.iff,0xB7EAF9E9
+sui,uniforms,uniform_sui_home.iff,0B,0x14708800,0x1D0CB4,1,uniform_sui_home.iff,0x2E468A93
+swe,uniforms,uniform_swe_away.iff,0B,0x148D9800,0x1EF58D,1,uniform_swe_away.iff,0xF5BAA0A6
+swe,uniforms,uniform_swe_home.iff,0B,0x14AC9000,0x1EF3EE,1,uniform_swe_home.iff,0x6C16D3DC
+ukr,uniforms,uniform_ukr_away.iff,0B,0x168AC800,0x1F834C,1,uniform_ukr_away.iff,0x7B19C9DB
+ukr,uniforms,uniform_ukr_home.iff,0B,0x16AA5000,0x1F834C,1,uniform_ukr_home.iff,0xE2B5BAA1
+usa,uniforms,uniform_usa_away.iff,0B,0x16C9D800,0x1FBD26,1,uniform_usa_away.iff,0xA3B5D6BE
+usa,uniforms,uniform_usa_home.iff,0B,0x16E99800,0x1FBD26,1,uniform_usa_home.iff,0x3A19A5C4
+wca,uniforms,uniform_wca_alt.iff,0B,0x181E6000,0x1BBF9E,1,uniform_wca_alt.iff,0x848731CE
+misc,unknown_textures,disc_0b5585fa.iff,0A,0xBB3800,0x182BE9,1,Texture - 128x128 8,0x0B5585FA
+misc,unknown_textures,disc_0c4ddb6d.iff,0A,0x374EE000,0x2F865,1,Texture - 128x128 DXT1,0x0C4DDB6D
+misc,unknown_textures,disc_0f9679a8.iff,0A,0x51D7800,0x33C06,1,Texture - 128x128 DXT1,0x0F9679A8
+misc,unknown_textures,disc_10037a27.iff,0A,0x35EE9800,0x31EB,1,Texture - 512x512 DXT1,0x10037A27
+misc,unknown_textures,disc_1203db4c.iff,0B,0x3766A800,0x51B53,1,Texture - 64x64 565,0x1203DB4C
+misc,unknown_textures,disc_16adbc6d.iff,0B,0x377D0000,0x756C,1,Texture - 128x128 8,0x16ADBC6D
+misc,unknown_textures,disc_178aebb8.iff,0A,0x4C52000,0x33C0C,1,Texture - 128x128 DXT1,0x178AEBB8
+misc,unknown_textures,disc_1ba379f9.iff,0B,0x377D7800,0x72C0,1,Texture - 128x128 8,0x1BA379F9
+misc,unknown_textures,disc_1c91b957.iff,0A,0x36E13800,0x2F865,1,Texture - 128x128 DXT1,0x1C91B957
+misc,unknown_textures,disc_1ccb8f60.iff,0A,0x455800,0x16E9FA,1,Texture - 512x256 DXT5A,0x1CCB8F60
+misc,unknown_textures,disc_1fe790b5.iff,0B,0x377C1000,0x74AC,1,Texture - 128x128 8,0x1FE790B5
+misc,unknown_textures,disc_22157797.iff,0B,0x377C8800,0x7366,1,Texture - 128x128 8,0x22157797
+misc,unknown_textures,disc_235126e4.iff,0A,0x4A38800,0x33C06,1,Texture - 128x128 DXT1,0x235126E4
+misc,unknown_textures,disc_281f472f.iff,0A,0x44C9800,0x2135F,1,Texture - 256x256 DXT4_5,0x281F472F
+misc,unknown_textures,disc_28a27d7f.iff,0A,0x176000,0x16DBFF,1,Texture - 512x256 DXT5A,0x28A27D7F
+misc,unknown_textures,disc_2901983a.iff,0B,0x37074000,0x34EF0,1,Texture - 256x256 DXT5A,0x2901983A
+misc,unknown_textures,disc_2a9900ed.iff,0A,0x4628000,0x16C1A,1,Texture - 512x512 DXT1,0x2A9900ED
+misc,unknown_textures,disc_2cbae29e.iff,0B,0x3747B800,0xBFB17,1,Texture - 512x128 DXT4_5,0x2CBAE29E
+misc,unknown_textures,disc_2ffbdb0d.iff,0A,0x37EEF800,0x79F7,1,Texture - 128x128 8,0x2FFBDB0D
+misc,unknown_textures,disc_32f65018.iff,0A,0x520B800,0x33C0F,1,Texture - 128x128 DXT1,0x32F65018
+misc,unknown_textures,disc_3acdfc06.iff,0B,0x370A9800,0x41671,1,Texture - 256x256 DXT5A,0x3ACDFC06
+misc,unknown_textures,disc_3e6e3fbf.iff,0B,0x37857000,0x308A3,1,Texture - 256x256 DXT5A,0x3E6E3FBF
+misc,unknown_textures,disc_4166eef3.iff,0B,0x377B9800,0x74B8,1,Texture - 128x128 8,0x4166EEF3
+misc,unknown_textures,disc_4230c4b4.iff,0A,0x373F1800,0x2F865,1,Texture - 128x128 DXT1,0x4230C4B4
+misc,unknown_textures,disc_44fa44ad.iff,0A,0x2E855000,0x6AE54C,1,Texture - 256x256 DXN,0x44FA44AD
+misc,unknown_textures,disc_4ba500c3.iff,0B,0x376BC800,0x521FB,1,Texture - 64x64 565,0x4BA500C3
+misc,unknown_textures,disc_502a9168.iff,0A,0x4C86000,0x33C0C,1,Texture - 128x128 DXT1,0x502A9168
+misc,unknown_textures,disc_52df144f.iff,0A,0x450C800,0x2135F,1,Texture - 256x256 DXT4_5,0x52DF144F
+misc,unknown_textures,disc_591778d9.iff,0B,0x3720D000,0x39503,1,Texture - 64x64 565,0x591778D9
+misc,unknown_textures,disc_645ed337.iff,0A,0x3717E800,0x7EB9,1,Texture - 128x128 8,0x645ED337
+misc,unknown_textures,disc_65859bb1.iff,0A,0x37143800,0x3A9ED,1,Texture - 256x256 DXT5A,0x65859BB1
+misc,unknown_textures,disc_6d0f1131.iff,0B,0x37588000,0x30C4B,1,Texture - 1280x720 DXT1,0x6D0F1131
+misc,unknown_textures,disc_6d4ab8d8.iff,0A,0x4CBA000,0x33C0C,1,Texture - 128x128 DXT1,0x6D4AB8D8
+misc,unknown_textures,disc_6fbf3dff.iff,0A,0x44EB000,0x21365,1,Texture - 256x256 DXT4_5,0x6FBF3DFF
+misc,unknown_textures,disc_72751f5b.iff,0A,0x37EE7000,0x8393,1,Texture - 128x128 8,0x72751F5B
+misc,unknown_textures,disc_7c130a50.iff,0B,0x3770F000,0x659D9,1,Texture - 256x256 DXT5A,0x7C130A50
+misc,unknown_textures,disc_7df05b07.iff,0A,0x5061000,0x33C01,1,Texture - 128x128 DXT1,0x7DF05B07
+misc,unknown_textures,disc_84ce56b1.iff,0A,0x37211800,0x2F865,1,Texture - 128x128 DXT1,0x84CE56B1
+misc,unknown_textures,disc_87f402ed.iff,0A,0xD36800,0x17E988,1,Texture - 128x128 8,0x87F402ED
+misc,unknown_textures,disc_8dc61d5c.iff,0B,0x3FE41800,0x399817,1,Texture - 256x256 DXT4_5,0x8DC61D5C
+misc,unknown_textures,disc_9026dba4.iff,0A,0x37E1F000,0x7A4B,1,Texture - 128x128 8,0x9026DBA4
+misc,unknown_textures,disc_9712b37f.iff,0A,0x732000,0x17FBBF,1,Texture - 128x128 8,0x9712B37F
+misc,unknown_textures,disc_9dae1c76.iff,0A,0x37EB7000,0x2F865,1,Texture - 128x128 DXT1,0x9DAE1C76
+misc,unknown_textures,disc_9f9c288f.iff,0B,0x37246800,0x34E4D,1,Texture - 256x256 DXT5A,0x9F9C288F
+misc,unknown_textures,disc_a0ce35c6.iff,0A,0x37E87000,0x2F865,1,Texture - 128x128 DXT1,0xA0CE35C6
+misc,logo_hidden,disc_a300d85f.iff,0B,0x3FAD9800,0x274C50,1,"Frontend Logos MEDIUM 256 (team select/menus, 120)",0xA300D85F
+misc,unknown_textures,disc_a3159703.iff,0A,0x50D6000,0x33C11,1,Texture - 128x128 DXT1,0xA3159703
+misc,logo_hidden,disc_a38365c6.iff,0B,0x3FD4E800,0xF2A46,1,"Frontend Logos SMALL 128 (team select/menus, 120)",0xA38365C6
+misc,unknown_textures,disc_ae6dc34c.iff,0A,0x8B2000,0x17EB5C,1,Texture - 128x128 8,0xAE6DC34C
+misc,unknown_textures,disc_af1160aa.iff,0B,0x375DC000,0x46FD2,1,Texture - 256x256 DXT5A,0xAF1160AA
+misc,unknown_textures,disc_b267fa08.iff,0A,0x1007000,0x3550,1,Texture - ? ?,0xB267FA08
+misc,unknown_textures,disc_b8d2a7d6.iff,0A,0x36FF3800,0x2F865,1,Texture - 128x128 DXT1,0xB8D2A7D6
+players,player_portraits,disc_b9610aac.iff,0B,0x40519000,0x41AF53B,1,Player Portraits (1478),0xB9610AAC
+misc,unknown_textures,disc_bc158df0.iff,0A,0x37421800,0x9C1EC,1,Texture - 256x256 DXT5A,0xBC158DF0
+misc,unknown_textures,disc_bd1ab121.iff,0A,0xA000,0x16B8CD,1,Texture - 512x256 DXT5A,0xBD1AB121
+misc,unknown_textures,disc_beb6bde2.iff,0A,0x2E4000,0x1714EF,1,Texture - 512x256 DXT5A,0xBEB6BDE2
+misc,unknown_textures,disc_bf3ab129.iff,0B,0x36FED000,0x86E88,1,Texture - 1280x720 8888,0xBF3AB129
+misc,unknown_textures,disc_c0652a80.iff,0A,0xA31000,0x18214D,1,Texture - 128x128 8,0xC0652A80
+misc,unknown_textures,disc_c212f4b6.iff,0A,0x37053800,0x2F865,1,Texture - 128x128 DXT1,0xC212F4B6
+misc,unknown_textures,disc_d0968a2b.iff,0A,0x37186800,0x2AE55,1,Texture - 128x128 DXT1,0xD0968A2B
+misc,unknown_textures,disc_d0cb5e9a.iff,0B,0x3D678800,0x6719F,1,Texture - 256x256 DXT4_5,0xD0CB5E9A
+misc,unknown_textures,disc_d4555c2b.iff,0B,0x37775000,0x440DB,1,Texture - 256x256 DXT4_5,0xD4555C2B
+misc,unknown_textures,disc_d6997418.iff,0A,0x4E5E800,0x33C11,1,Texture - 128x128 DXT1,0xD6997418
+misc,unknown_textures,disc_d6c1b61d.iff,0B,0x37888000,0x44F29,1,Texture - 256x256 DXT5A,0xD6C1B61D
+misc,unknown_textures,disc_ddf126b8.iff,0A,0x5C4800,0x16CC48,1,Texture - 512x256 DXT5A,0xDDF126B8
+misc,unknown_textures,disc_e6615568.iff,0A,0x35EED000,0x31EB,1,Texture - 512x512 DXT1,0xE6615568
+misc,unknown_textures,disc_e69e3391.iff,0A,0x429E000,0x2EADF,1,Texture - 256x256 DXT4_5,0xE69E3391
+misc,unknown_textures,disc_ebec7073.iff,0A,0x2D401800,0x6AE582,1,Texture - 256x256 DXN,0xEBEC7073
+misc,unknown_textures,disc_ec851e30.iff,0B,0x37623000,0x47498,1,Texture - 256x256 DXT5A,0xEC851E30
+misc,unknown_textures,disc_ef561598.iff,0A,0x4DC2800,0x33C11,1,Texture - 128x128 DXT1,0xEF561598
+misc,unknown_textures,disc_ff72dd06.iff,0A,0x37023800,0x2F865,1,Texture - 128x128 DXT1,0xFF72DD06
+misc,unknown_textures,droster.iff,0A,0x3BC4000,0xC5AFE,1,droster.iff,0xA6931DB3
+misc,unknown_textures,iconnav.iff,0A,0x3C8A000,0xA78,1,iconnav.iff,0xEF6AB9CE
+misc,unknown_textures,iconnav_movie.iff,0A,0x3C8B800,0x6CC,1,iconnav_movie.iff,0xF35AE24E
+misc,unknown_textures,iconnav_movie1.iff,0A,0x3C8B000,0x532,1,iconnav_movie1.iff,0x9337B589
+misc,unknown_textures,loading_audio.iff,0A,0x100F000,0x76C,1,loading_audio.iff,0x4EB3D677
+misc,unknown_textures,paintro.iff,0B,0x36C8E000,0x8EC,1,paintro.iff,0x6622AC71
+misc,unknown_textures,pasfx.iff,0B,0x36948000,0x2E4,1,pasfx.iff,0xB4096B9E
+misc,unknown_textures,portrait.iff,0A,0x100F800,0xFE8A,1,portrait.iff,0x86C0EDF8
+misc,unknown_textures,roster.iff,0A,0x3AFE000,0xC5AFE,1,roster.iff,0x480FAE44
+scenes,scene_arena,disc_01d45ee5.iff,0A,0xEB5800,0xAF8E0,1,Arena interior scene (raw VRAM — use Capture from Game),0x01D45EE5
+scenes,scene_textures,disc_063e336b.iff,0A,0x3ACF000,0x2EF0B,1,Scene sprite (browse preview to view),0x063E336B
+scenes,scene_arena,disc_0ec99461.iff,0A,0x381FA000,0x28A27E,1,Arena interior scene (raw VRAM — use Capture from Game),0x0EC99461
+scenes,scene_textures,disc_124fabc8.iff,0B,0x19D96000,0x2DE7,1,Scene sprite (browse preview to view),0x124FABC8
+scenes,scene_arena,disc_149cd4f2.iff,0B,0x39D59000,0xF987FB,1,Arena interior scene (raw VRAM — use Capture from Game),0x149CD4F2
+scenes,scene_textures,disc_1897ddac.iff,0B,0x1935A000,0x20B5,1,Scene sprite (browse preview to view),0x1897DDAC
+scenes,scene_arena,disc_29fcfd42.iff,0B,0x3ACF1800,0xF41FEF,1,Arena interior scene (raw VRAM — use Capture from Game),0x29FCFD42
+scenes,scene_textures,disc_39339425.iff,0B,0x199D0000,0x1D52,1,Scene sprite (browse preview to view),0x39339425
+scenes,scene_textures,disc_3ec3dd0a.iff,0A,0x5272000,0x5C59EC,1,Scene texture atlas (88 tex),0x3EC3DD0A
+scenes,scene_arena,disc_533cae22.iff,0B,0x38E4C000,0xF0CFDB,1,Arena interior scene (raw VRAM — use Capture from Game),0x533CAE22
+scenes,scene_textures,disc_5f37a77c.iff,0B,0x19359000,0xEBB,1,Scene sprite (browse preview to view),0x5F37A77C
+scenes,scene_textures,disc_6062a0e9.iff,0A,0x1085A000,0x76F86A,1,Skybox / environment + reflection probes (60 tex),0x6062A0E9
+scenes,scene_textures,disc_68cbc238.iff,0B,0x1A7BD800,0x2C64,1,Scene sprite (browse preview to view),0x68CBC238
+scenes,scene_arena,disc_6e5c8792.iff,0B,0x37EF6800,0xF557EC,1,Arena interior scene (raw VRAM — use Capture from Game),0x6E5C8792
+scenes,scene_textures,disc_87d850bc.iff,0A,0x9D8E000,0x503324,1,Scene texture atlas (65 tex),0x87D850BC
+scenes,scene_textures,disc_8b06ebfb.iff,0B,0x195EC800,0x8ED,1,Scene sprite (browse preview to view),0x8B06EBFB
+scenes,scene_textures,disc_9136299c.iff,0A,0xCC5C000,0x59CB74,1,Scene texture atlas (86 tex),0x9136299C
+scenes,scene_textures,disc_a0d1f224.iff,0B,0x19A6C800,0x1D52,1,Scene sprite (browse preview to view),0xA0D1F224
+scenes,scene_textures,disc_a2ce5f09.iff,0B,0x195DD800,0x8ED,1,Scene sprite (browse preview to view),0xA2CE5F09
+scenes,scene_arena,disc_a4fc6431.iff,0A,0x3EEA800,0x8A33A,1,Arena interior scene (raw VRAM — use Capture from Game),0xA4FC6431
+scenes,scene_textures,disc_b6ff4c3d.iff,0B,0x19391800,0x20B5,1,Scene sprite (browse preview to view),0xB6FF4C3D
+scenes,scene_textures,disc_b71bebdb.iff,0B,0x1A7C0800,0x2D80,1,Scene sprite (browse preview to view),0xB71BEBDB
+scenes,scene_textures,disc_bab8790c.iff,0A,0x988F800,0x4FE479,1,Scene texture atlas (87 tex),0xBAB8790C
+scenes,scene_textures,disc_cca6912b.iff,0B,0x195ED800,0x10DC,1,Scene sprite (browse preview to view),0xCCA6912B
+scenes,scene_textures,disc_d864b87c.iff,0A,0x1372D800,0x6814C3,1,Winter Classic outdoor stadium environment (152 tex),0xD864B87C
+scenes,scene_textures,disc_e50491cc.iff,0A,0x13251000,0x4DC3F5,1,Scene texture atlas (89 tex),0xE50491CC
+scenes,scene_textures,disc_e56e25d9.iff,0B,0x195DE800,0x10DC,1,Scene sprite (browse preview to view),0xE56E25D9
+scenes,scene_textures,disc_f15f36ed.iff,0B,0x19390800,0xEBB,1,Scene sprite (browse preview to view),0xF15F36ED
+scenes,scene_textures,disc_f2c4ee76.iff,0A,0xBA80800,0x4FC6B9,1,Scene texture atlas (80 tex),0xF2C4EE76
+scenes,scene_textures,disc_fd1803dc.iff,0A,0x9272800,0x61CB82,1,Scene texture atlas (97 tex),0xFD1803DC
+misc,recovered_textures,jukebox.iff,0B,0x3753b800,0x4c11f,1,Jukebox Soundtrack Art (13 tracks),0x1e24d65f
+misc,recovered_textures,franchise.iff,0B,0x370eb000,0x121b13,1,Franchise Mode UI (partial recover),0x852e246f

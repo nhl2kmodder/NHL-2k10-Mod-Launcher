@@ -1,0 +1,5032 @@
+{
+ "_README": [
+  "One entry per JERSEY = one in-game uniform + the front-end team-select sheet that mirrors it.",
+  "Editing texture0 (stamps<->decals) or texture1 (normal<->decals_normal) must be written to",
+  "BOTH, which is what launcher/jerseys.py does on Apply. idx2..5 (helmet/letters/crowd) exist",
+  "on the uniform only.",
+  "Built by hashing decoded texture0 of every uniform_*/disc_* asset: the sheet's `decals` is a",
+  "byte-identical copy of the uniform's `stamps`. Where several uniforms share one image (the",
+  "20 teams whose home and away art is identical, and the creation-zone slots), content cannot",
+  "say which sheet belongs to which uniform, so they are paired by OFFSET RANK - the Nth uniform",
+  "by offset <-> the Nth sheet by offset, within an archive. That rule reproduces 145/145 of the",
+  "unambiguous content matches.",
+  "'leftovers' = assets with no counterpart (front-end-only sheets, or uniforms we haven't paired)."
+ ],
+ "jerseys": [
+  {
+   "hash": "0b776f437b695dc708b244d35bfdee30",
+   "name": "uniform_2k_away.iff",
+   "named_uniforms": [
+    "uniform_2k_away.iff"
+   ],
+   "uniforms": [
+    "uniform_2k_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b4b6b7ec.iff"
+   ],
+   "members": [
+    "disc_b4b6b7ec.iff",
+    "uniform_2k_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "73d310aa2a586688b818fd7f7b3fa05b",
+   "name": "uniform_2k_home.iff",
+   "named_uniforms": [
+    "uniform_2k_home.iff"
+   ],
+   "uniforms": [
+    "uniform_2k_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2d1ac496.iff"
+   ],
+   "members": [
+    "disc_2d1ac496.iff",
+    "uniform_2k_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "cb9cdaabfcf360ed4aa31a5b2c02bd73",
+   "name": "uniform_ana_away.iff",
+   "named_uniforms": [
+    "uniform_ana_away.iff"
+   ],
+   "uniforms": [
+    "uniform_ana_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2c5361c4.iff"
+   ],
+   "members": [
+    "disc_2c5361c4.iff",
+    "uniform_ana_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "378cedb571d1feda66ce12c3524b0965",
+   "name": "uniform_ana_home.iff",
+   "named_uniforms": [
+    "uniform_ana_home.iff"
+   ],
+   "uniforms": [
+    "uniform_ana_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b5ff12be.iff"
+   ],
+   "members": [
+    "disc_b5ff12be.iff",
+    "uniform_ana_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "260f65690954c031d07a69f76b397bb5",
+   "name": "uniform_atl_alt.iff",
+   "named_uniforms": [
+    "uniform_atl_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_atl_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b9af7a4d.iff"
+   ],
+   "members": [
+    "disc_b9af7a4d.iff",
+    "uniform_atl_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "773ab4b795e1f92b6482596a3e2e4b4c",
+   "name": "uniform_atl_away.iff",
+   "named_uniforms": [
+    "uniform_atl_away.iff"
+   ],
+   "uniforms": [
+    "uniform_atl_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_95f4763b.iff"
+   ],
+   "members": [
+    "disc_95f4763b.iff",
+    "uniform_atl_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "8c8a69dc765f1e40ffe4e13ad696888e",
+   "name": "uniform_atl_home.iff",
+   "named_uniforms": [
+    "uniform_atl_home.iff"
+   ],
+   "uniforms": [
+    "uniform_atl_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_0c580541.iff"
+   ],
+   "members": [
+    "disc_0c580541.iff",
+    "uniform_atl_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e747bfb4c94b4df844903be74d8675fd",
+   "name": "uniform_aut_away.iff",
+   "named_uniforms": [
+    "uniform_aut_away.iff"
+   ],
+   "uniforms": [
+    "uniform_aut_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_600368e7.iff"
+   ],
+   "members": [
+    "disc_600368e7.iff",
+    "uniform_aut_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "c3668d46b1eee2e7e6c90003f77f57cc",
+   "name": "uniform_aut_home.iff",
+   "named_uniforms": [
+    "uniform_aut_home.iff"
+   ],
+   "uniforms": [
+    "uniform_aut_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f9af1b9d.iff"
+   ],
+   "members": [
+    "disc_f9af1b9d.iff",
+    "uniform_aut_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "855f88d366ddc89cf83a0b3550a25c92",
+   "name": "uniform_bel_away.iff",
+   "named_uniforms": [
+    "uniform_bel_away.iff"
+   ],
+   "uniforms": [
+    "uniform_bel_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8d12bfc0.iff"
+   ],
+   "members": [
+    "disc_8d12bfc0.iff",
+    "uniform_bel_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "1c7f3149c818a8dee734abf282013262",
+   "name": "uniform_bel_home.iff",
+   "named_uniforms": [
+    "uniform_bel_home.iff"
+   ],
+   "uniforms": [
+    "uniform_bel_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_14beccba.iff"
+   ],
+   "members": [
+    "disc_14beccba.iff",
+    "uniform_bel_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f76c0cd595bdc37afad17ecb748e02ac",
+   "name": "uniform_bos_alt.iff",
+   "named_uniforms": [
+    "uniform_bos_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_bos_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8c7aebf3.iff"
+   ],
+   "members": [
+    "disc_8c7aebf3.iff",
+    "uniform_bos_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "31d148e4831ff911b40423f063b28077",
+   "name": "uniform_bos_away.iff",
+   "named_uniforms": [
+    "uniform_bos_away.iff"
+   ],
+   "uniforms": [
+    "uniform_bos_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b9183d21.iff"
+   ],
+   "members": [
+    "disc_b9183d21.iff",
+    "uniform_bos_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "264e393ffc4ab8a50e2de41c28ead5cb",
+   "name": "uniform_bos_home.iff",
+   "named_uniforms": [
+    "uniform_bos_home.iff"
+   ],
+   "uniforms": [
+    "uniform_bos_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_20b44e5b.iff"
+   ],
+   "members": [
+    "disc_20b44e5b.iff",
+    "uniform_bos_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3ea323415fbee36c8f37646534b6d793",
+   "name": "uniform_buf_alt.iff",
+   "named_uniforms": [
+    "uniform_buf_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_buf_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5aa1fdec.iff"
+   ],
+   "members": [
+    "disc_5aa1fdec.iff",
+    "uniform_buf_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "dab731f56f13ac1bfe62867496ebe98e",
+   "name": "uniform_buf_away.iff",
+   "named_uniforms": [
+    "uniform_buf_away.iff"
+   ],
+   "uniforms": [
+    "uniform_buf_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_34c6ebc2.iff"
+   ],
+   "members": [
+    "disc_34c6ebc2.iff",
+    "uniform_buf_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6b8ef9bffd052d4bc2b2f2d659530f10",
+   "name": "uniform_buf_home.iff",
+   "named_uniforms": [
+    "uniform_buf_home.iff"
+   ],
+   "uniforms": [
+    "uniform_buf_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ad6a98b8.iff"
+   ],
+   "members": [
+    "disc_ad6a98b8.iff",
+    "uniform_buf_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d4ed75ae7fd337eff754130ef1614742",
+   "name": "uniform_can_away.iff",
+   "named_uniforms": [
+    "uniform_can_away.iff"
+   ],
+   "uniforms": [
+    "uniform_can_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a29b5010.iff"
+   ],
+   "members": [
+    "disc_a29b5010.iff",
+    "uniform_can_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d4ed75ae7fd337eff754130ef1614742",
+   "name": "uniform_can_home.iff",
+   "named_uniforms": [
+    "uniform_can_home.iff"
+   ],
+   "uniforms": [
+    "uniform_can_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3b37236a.iff"
+   ],
+   "members": [
+    "disc_3b37236a.iff",
+    "uniform_can_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "9dfa378f2a85cf8d2ffb1e4388511493",
+   "name": "uniform_car_alt.iff",
+   "named_uniforms": [
+    "uniform_car_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_car_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_444610c3.iff"
+   ],
+   "members": [
+    "disc_444610c3.iff",
+    "uniform_car_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "8ffa2426100cd6fea2a6a058fc043746",
+   "name": "uniform_car_away.iff",
+   "named_uniforms": [
+    "uniform_car_away.iff"
+   ],
+   "uniforms": [
+    "uniform_car_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9f093176.iff"
+   ],
+   "members": [
+    "disc_9f093176.iff",
+    "uniform_car_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "807066e9b8aeba129b1531fb7587f153",
+   "name": "uniform_car_home.iff",
+   "named_uniforms": [
+    "uniform_car_home.iff"
+   ],
+   "uniforms": [
+    "uniform_car_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_06a5420c.iff"
+   ],
+   "members": [
+    "disc_06a5420c.iff",
+    "uniform_car_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "60b0ba2b24a1510123ea167e6dd263e2",
+   "name": "uniform_cbj_away.iff",
+   "named_uniforms": [
+    "uniform_cbj_away.iff"
+   ],
+   "uniforms": [
+    "uniform_cbj_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3292966b.iff"
+   ],
+   "members": [
+    "disc_3292966b.iff",
+    "uniform_cbj_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "83175c533000149378eaca76091ffd22",
+   "name": "uniform_cbj_home.iff",
+   "named_uniforms": [
+    "uniform_cbj_home.iff"
+   ],
+   "uniforms": [
+    "uniform_cbj_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ab3ee511.iff"
+   ],
+   "members": [
+    "disc_ab3ee511.iff",
+    "uniform_cbj_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f7f623d1f0a2cefe5900094e225a21a7",
+   "name": "uniform_cgy_alt.iff",
+   "named_uniforms": [
+    "uniform_cgy_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_cgy_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cb0dfe59.iff"
+   ],
+   "members": [
+    "disc_cb0dfe59.iff",
+    "uniform_cgy_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d2b7e6c2cad714929054b5a1df6abb57",
+   "name": "uniform_cgy_away.iff",
+   "named_uniforms": [
+    "uniform_cgy_away.iff"
+   ],
+   "uniforms": [
+    "uniform_cgy_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8f5c00c2.iff"
+   ],
+   "members": [
+    "disc_8f5c00c2.iff",
+    "uniform_cgy_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6199b8cc84a38ae7d52873af5b535483",
+   "name": "uniform_cgy_home.iff",
+   "named_uniforms": [
+    "uniform_cgy_home.iff"
+   ],
+   "uniforms": [
+    "uniform_cgy_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_16f073b8.iff"
+   ],
+   "members": [
+    "disc_16f073b8.iff",
+    "uniform_cgy_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "5b9079c65bc32bd2a7592182f1b663e7",
+   "name": "uniform_chi_alt.iff",
+   "named_uniforms": [
+    "uniform_chi_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_chi_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_96c6e7a5.iff"
+   ],
+   "members": [
+    "disc_96c6e7a5.iff",
+    "uniform_chi_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "c57234ef6599f4b11fa71e8595c3a43a",
+   "name": "uniform_chi_away.iff",
+   "named_uniforms": [
+    "uniform_chi_away.iff"
+   ],
+   "uniforms": [
+    "uniform_chi_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3b0a75ec.iff"
+   ],
+   "members": [
+    "disc_3b0a75ec.iff",
+    "uniform_chi_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "0f742cbf47f027a5d705ae53f782a098",
+   "name": "uniform_chi_home.iff",
+   "named_uniforms": [
+    "uniform_chi_home.iff"
+   ],
+   "uniforms": [
+    "uniform_chi_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a2a60696.iff"
+   ],
+   "members": [
+    "disc_a2a60696.iff",
+    "uniform_chi_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3a96931326082c9bd8f792c0214e29bb",
+   "name": "uniform_col_alt.iff",
+   "named_uniforms": [
+    "uniform_col_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_col_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3e8db993.iff"
+   ],
+   "members": [
+    "disc_3e8db993.iff",
+    "uniform_col_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fa55d7e2fc3c67b8a5cb8c8122e1fcab",
+   "name": "uniform_col_away.iff",
+   "named_uniforms": [
+    "uniform_col_away.iff"
+   ],
+   "uniforms": [
+    "uniform_col_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f418ab2b.iff"
+   ],
+   "members": [
+    "disc_f418ab2b.iff",
+    "uniform_col_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "9f3c7b6d78b8ec3c1598275d7f933ccd",
+   "name": "uniform_col_home.iff",
+   "named_uniforms": [
+    "uniform_col_home.iff"
+   ],
+   "uniforms": [
+    "uniform_col_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_6db4d851.iff"
+   ],
+   "members": [
+    "disc_6db4d851.iff",
+    "uniform_col_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a4519724f2d91c915e0e670a5ef32501",
+   "name": "uniform_cze_away.iff",
+   "named_uniforms": [
+    "uniform_cze_away.iff"
+   ],
+   "uniforms": [
+    "uniform_cze_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d7ace868.iff"
+   ],
+   "members": [
+    "disc_d7ace868.iff",
+    "uniform_cze_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a4519724f2d91c915e0e670a5ef32501",
+   "name": "uniform_cze_home.iff",
+   "named_uniforms": [
+    "uniform_cze_home.iff"
+   ],
+   "uniforms": [
+    "uniform_cze_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4e009b12.iff"
+   ],
+   "members": [
+    "disc_4e009b12.iff",
+    "uniform_cze_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "58c4dc84361bd816c2226fdc0ad2b5d5",
+   "name": "uniform_dal_alt.iff",
+   "named_uniforms": [
+    "uniform_dal_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_dal_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_097f9ca3.iff"
+   ],
+   "members": [
+    "disc_097f9ca3.iff",
+    "uniform_dal_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "70ee143c9d239906b7b6c8a737bcc17f",
+   "name": "uniform_dal_away.iff",
+   "named_uniforms": [
+    "uniform_dal_away.iff"
+   ],
+   "uniforms": [
+    "uniform_dal_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d2f669a2.iff"
+   ],
+   "members": [
+    "disc_d2f669a2.iff",
+    "uniform_dal_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "58673057358899b5114b9aa4e2fe5f9d",
+   "name": "uniform_dal_home.iff",
+   "named_uniforms": [
+    "uniform_dal_home.iff"
+   ],
+   "uniforms": [
+    "uniform_dal_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4b5a1ad8.iff"
+   ],
+   "members": [
+    "disc_4b5a1ad8.iff",
+    "uniform_dal_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "5ac7de444bfdcb93e905809d0593fd43",
+   "name": "uniform_det_home.iff",
+   "named_uniforms": [
+    "uniform_det_home.iff"
+   ],
+   "uniforms": [
+    "uniform_det_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_det_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "dfd8a2d40fc91cebe79f32d62a83d753",
+   "name": "uniform_dmk_away.iff",
+   "named_uniforms": [
+    "uniform_dmk_away.iff"
+   ],
+   "uniforms": [
+    "uniform_dmk_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_dmk_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "aa7a1389613d96f69d8cbf9a63b0c5af",
+   "name": "uniform_dmk_home.iff",
+   "named_uniforms": [
+    "uniform_dmk_home.iff"
+   ],
+   "uniforms": [
+    "uniform_dmk_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_dmk_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f7805656c75cf4173cefaa4ba5a4686c",
+   "name": "uniform_eca_alt.iff",
+   "named_uniforms": [
+    "uniform_eca_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_eca_alt.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_eca_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "66df26225858a05391d3b0ec7fe779e9",
+   "name": "uniform_edm_alt.iff",
+   "named_uniforms": [
+    "uniform_edm_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_edm_alt.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_edm_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d6fc3cbe576ba5973c383278017840d8",
+   "name": "uniform_edm_away.iff",
+   "named_uniforms": [
+    "uniform_edm_away.iff"
+   ],
+   "uniforms": [
+    "uniform_edm_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_edm_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "1d0609b46520069c3729cb62e3afc512",
+   "name": "uniform_edm_home.iff",
+   "named_uniforms": [
+    "uniform_edm_home.iff"
+   ],
+   "uniforms": [
+    "uniform_edm_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_edm_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d3cc9b5c4524c6c2d0d1db786023957a",
+   "name": "uniform_fin_away.iff",
+   "named_uniforms": [
+    "uniform_fin_away.iff"
+   ],
+   "uniforms": [
+    "uniform_fin_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fin_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d3cc9b5c4524c6c2d0d1db786023957a",
+   "name": "uniform_fin_home.iff",
+   "named_uniforms": [
+    "uniform_fin_home.iff"
+   ],
+   "uniforms": [
+    "uniform_fin_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fin_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d62772871dfaf483e8cf717e0b57cbdc",
+   "name": "uniform_fla_alt.iff",
+   "named_uniforms": [
+    "uniform_fla_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_fla_alt.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fla_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d80b59c5974e40ec6d9c70fcaa846165",
+   "name": "uniform_fla_away.iff",
+   "named_uniforms": [
+    "uniform_fla_away.iff"
+   ],
+   "uniforms": [
+    "uniform_fla_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fla_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4a3a3438f9c91545ed7044f095905af9",
+   "name": "uniform_fla_home.iff",
+   "named_uniforms": [
+    "uniform_fla_home.iff"
+   ],
+   "uniforms": [
+    "uniform_fla_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fla_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ebcb789b5057c3a3d4c4a9a3724641de",
+   "name": "uniform_fra_away.iff",
+   "named_uniforms": [
+    "uniform_fra_away.iff"
+   ],
+   "uniforms": [
+    "uniform_fra_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fra_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ce7f33a779064b496c536c1524bc3676",
+   "name": "uniform_fra_home.iff",
+   "named_uniforms": [
+    "uniform_fra_home.iff"
+   ],
+   "uniforms": [
+    "uniform_fra_home.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_fra_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "c45a8e18021740c5e3b9e9f8a761398f",
+   "name": "uniform_ger_away.iff",
+   "named_uniforms": [
+    "uniform_ger_away.iff"
+   ],
+   "uniforms": [
+    "uniform_ger_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2cd6798b.iff"
+   ],
+   "members": [
+    "disc_2cd6798b.iff",
+    "uniform_ger_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4e4abb9a6761a8c59aff0646babe7e72",
+   "name": "uniform_ger_home.iff",
+   "named_uniforms": [
+    "uniform_ger_home.iff"
+   ],
+   "uniforms": [
+    "uniform_ger_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b57a0af1.iff"
+   ],
+   "members": [
+    "disc_b57a0af1.iff",
+    "uniform_ger_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a0d3ed094efe781f016a1fc3632b8d06",
+   "name": "uniform_kaz_away.iff",
+   "named_uniforms": [
+    "uniform_kaz_away.iff"
+   ],
+   "uniforms": [
+    "uniform_kaz_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8ad2077c.iff"
+   ],
+   "members": [
+    "disc_8ad2077c.iff",
+    "uniform_kaz_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a0d3ed094efe781f016a1fc3632b8d06",
+   "name": "uniform_kaz_home.iff",
+   "named_uniforms": [
+    "uniform_kaz_home.iff"
+   ],
+   "uniforms": [
+    "uniform_kaz_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_137e7406.iff"
+   ],
+   "members": [
+    "disc_137e7406.iff",
+    "uniform_kaz_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "46ede64924bfeada8f31d3c25a1d45d2",
+   "name": "uniform_lak_alt.iff",
+   "named_uniforms": [
+    "uniform_lak_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_lak_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d7dd102f.iff"
+   ],
+   "members": [
+    "disc_d7dd102f.iff",
+    "uniform_lak_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fd4bb00cf43bb44aef4d1529403e47cd",
+   "name": "uniform_lak_away.iff",
+   "named_uniforms": [
+    "uniform_lak_away.iff"
+   ],
+   "uniforms": [
+    "uniform_lak_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_36260425.iff"
+   ],
+   "members": [
+    "disc_36260425.iff",
+    "uniform_lak_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a3dfba679cf582b56d008f82ca8f67e8",
+   "name": "uniform_lak_home.iff",
+   "named_uniforms": [
+    "uniform_lak_home.iff"
+   ],
+   "uniforms": [
+    "uniform_lak_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_af8a775f.iff"
+   ],
+   "members": [
+    "disc_af8a775f.iff",
+    "uniform_lak_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "58f260f338fb666fa9fd59a4758011c4",
+   "name": "uniform_lat_away.iff",
+   "named_uniforms": [
+    "uniform_lat_away.iff"
+   ],
+   "uniforms": [
+    "uniform_lat_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e083de40.iff"
+   ],
+   "members": [
+    "disc_e083de40.iff",
+    "uniform_lat_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "638e95d1f75b108285bbd133b870924a",
+   "name": "uniform_lat_home.iff",
+   "named_uniforms": [
+    "uniform_lat_home.iff"
+   ],
+   "uniforms": [
+    "uniform_lat_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_792fad3a.iff"
+   ],
+   "members": [
+    "disc_792fad3a.iff",
+    "uniform_lat_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "b3ea0819c3cbb3d56e80e036a21d4d72",
+   "name": "uniform_min_alt.iff",
+   "named_uniforms": [
+    "uniform_min_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_min_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4f13ca54.iff"
+   ],
+   "members": [
+    "disc_4f13ca54.iff",
+    "uniform_min_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fb3163012c8118dbb25f6fcf44914d01",
+   "name": "uniform_min_away.iff",
+   "named_uniforms": [
+    "uniform_min_away.iff"
+   ],
+   "uniforms": [
+    "uniform_min_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f169624b.iff"
+   ],
+   "members": [
+    "disc_f169624b.iff",
+    "uniform_min_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "84da052b0bcb978d577a919aa3f1b460",
+   "name": "uniform_min_home.iff",
+   "named_uniforms": [
+    "uniform_min_home.iff"
+   ],
+   "uniforms": [
+    "uniform_min_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_68c51131.iff"
+   ],
+   "members": [
+    "disc_68c51131.iff",
+    "uniform_min_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "b7679f43013f4f224861b18042e14bad",
+   "name": "uniform_mtl_away.iff",
+   "named_uniforms": [
+    "uniform_mtl_away.iff"
+   ],
+   "uniforms": [
+    "uniform_mtl_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_90fe3bba.iff"
+   ],
+   "members": [
+    "disc_90fe3bba.iff",
+    "uniform_mtl_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3904cc7fbcc49b94a2a04aa6b0084d46",
+   "name": "uniform_mtl_home.iff",
+   "named_uniforms": [
+    "uniform_mtl_home.iff"
+   ],
+   "uniforms": [
+    "uniform_mtl_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_095248c0.iff"
+   ],
+   "members": [
+    "disc_095248c0.iff",
+    "uniform_mtl_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6d03b304fc4c6c0ab6d56761c3c3559b",
+   "name": "uniform_njd_away.iff",
+   "named_uniforms": [
+    "uniform_njd_away.iff"
+   ],
+   "uniforms": [
+    "uniform_njd_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_08374673.iff"
+   ],
+   "members": [
+    "disc_08374673.iff",
+    "uniform_njd_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6d03b304fc4c6c0ab6d56761c3c3559b",
+   "name": "uniform_njd_home.iff",
+   "named_uniforms": [
+    "uniform_njd_home.iff"
+   ],
+   "uniforms": [
+    "uniform_njd_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_919b3509.iff"
+   ],
+   "members": [
+    "disc_919b3509.iff",
+    "uniform_njd_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "5500a0da7fdc2ac649b7d5c2d6a04a14",
+   "name": "uniform_nsh_alt.iff",
+   "named_uniforms": [
+    "uniform_nsh_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_nsh_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9567c4fe.iff"
+   ],
+   "members": [
+    "disc_9567c4fe.iff",
+    "uniform_nsh_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f089c39261c71b3bc645097bfb9ab9fd",
+   "name": "uniform_nsh_away.iff",
+   "named_uniforms": [
+    "uniform_nsh_away.iff"
+   ],
+   "uniforms": [
+    "uniform_nsh_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c7b05cb3.iff"
+   ],
+   "members": [
+    "disc_c7b05cb3.iff",
+    "uniform_nsh_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e94d428c6dba1bbc8eb480300d02d89b",
+   "name": "uniform_nsh_home.iff",
+   "named_uniforms": [
+    "uniform_nsh_home.iff"
+   ],
+   "uniforms": [
+    "uniform_nsh_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5e1c2fc9.iff"
+   ],
+   "members": [
+    "disc_5e1c2fc9.iff",
+    "uniform_nsh_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e8e45a791c037fbff96cc76a54500355",
+   "name": "uniform_nyi_alt.iff",
+   "named_uniforms": [
+    "uniform_nyi_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_nyi_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_953e4074.iff"
+   ],
+   "members": [
+    "disc_953e4074.iff",
+    "uniform_nyi_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f44af4572a5009c9fd107d08cb1be648",
+   "name": "uniform_nyi_away.iff",
+   "named_uniforms": [
+    "uniform_nyi_away.iff"
+   ],
+   "uniforms": [
+    "uniform_nyi_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cadd6f09.iff"
+   ],
+   "members": [
+    "disc_cadd6f09.iff",
+    "uniform_nyi_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "89ee92fbf60e5dcf767339ec25d4cf9d",
+   "name": "uniform_nyi_home.iff",
+   "named_uniforms": [
+    "uniform_nyi_home.iff"
+   ],
+   "uniforms": [
+    "uniform_nyi_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_53711c73.iff"
+   ],
+   "members": [
+    "disc_53711c73.iff",
+    "uniform_nyi_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d7350f79a033b5150587e5c1d3f58c21",
+   "name": "uniform_nyr_away.iff",
+   "named_uniforms": [
+    "uniform_nyr_away.iff"
+   ],
+   "uniforms": [
+    "uniform_nyr_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_15931516.iff"
+   ],
+   "members": [
+    "disc_15931516.iff",
+    "uniform_nyr_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "876bde0820571a1d0ed793a233554d23",
+   "name": "uniform_nyr_home.iff",
+   "named_uniforms": [
+    "uniform_nyr_home.iff"
+   ],
+   "uniforms": [
+    "uniform_nyr_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8c3f666c.iff"
+   ],
+   "members": [
+    "disc_8c3f666c.iff",
+    "uniform_nyr_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "2ce8174cf85b985dcaf2e498dcc08a62",
+   "name": "uniform_ott_alt.iff",
+   "named_uniforms": [
+    "uniform_ott_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_ott_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_fcc1b122.iff"
+   ],
+   "members": [
+    "disc_fcc1b122.iff",
+    "uniform_ott_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "40803f7418acf60ad514770a96e324de",
+   "name": "uniform_ott_away.iff",
+   "named_uniforms": [
+    "uniform_ott_away.iff"
+   ],
+   "uniforms": [
+    "uniform_ott_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_48bc6439.iff"
+   ],
+   "members": [
+    "disc_48bc6439.iff",
+    "uniform_ott_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "2dfb93e8338d20f8fc2c95366a8ee434",
+   "name": "uniform_ott_home.iff",
+   "named_uniforms": [
+    "uniform_ott_home.iff"
+   ],
+   "uniforms": [
+    "uniform_ott_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d1101743.iff"
+   ],
+   "members": [
+    "disc_d1101743.iff",
+    "uniform_ott_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fa963976f262faf4134564fe8c2e0a85",
+   "name": "uniform_phi_alt.iff",
+   "named_uniforms": [
+    "uniform_phi_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_phi_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a1d2456f.iff"
+   ],
+   "members": [
+    "disc_a1d2456f.iff",
+    "uniform_phi_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a27b924e4a27d3c3f1b319a8da5a9090",
+   "name": "uniform_phi_away.iff",
+   "named_uniforms": [
+    "uniform_phi_away.iff"
+   ],
+   "uniforms": [
+    "uniform_phi_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_408c4ae0.iff"
+   ],
+   "members": [
+    "disc_408c4ae0.iff",
+    "uniform_phi_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "874a4c37eaf17baa7efbd7d2d6033aab",
+   "name": "uniform_phi_home.iff",
+   "named_uniforms": [
+    "uniform_phi_home.iff"
+   ],
+   "uniforms": [
+    "uniform_phi_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d920399a.iff"
+   ],
+   "members": [
+    "disc_d920399a.iff",
+    "uniform_phi_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d53e6ae0bc05bc1589c243cf32166a90",
+   "name": "uniform_pho_alt.iff",
+   "named_uniforms": [
+    "uniform_pho_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_pho_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d2c83ce5.iff"
+   ],
+   "members": [
+    "disc_d2c83ce5.iff",
+    "uniform_pho_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "53bc6a7dafaaeb72e36e597d19181bf7",
+   "name": "uniform_pho_away.iff",
+   "named_uniforms": [
+    "uniform_pho_away.iff"
+   ],
+   "uniforms": [
+    "uniform_pho_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4d923aa7.iff"
+   ],
+   "members": [
+    "disc_4d923aa7.iff",
+    "uniform_pho_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "53bc6a7dafaaeb72e36e597d19181bf7",
+   "name": "uniform_pho_home.iff",
+   "named_uniforms": [
+    "uniform_pho_home.iff"
+   ],
+   "uniforms": [
+    "uniform_pho_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d43e49dd.iff"
+   ],
+   "members": [
+    "disc_d43e49dd.iff",
+    "uniform_pho_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "21efd9a94b6de0cc94409f8d51139f50",
+   "name": "uniform_pit_alt.iff",
+   "named_uniforms": [
+    "uniform_pit_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_pit_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_139f8b77.iff"
+   ],
+   "members": [
+    "disc_139f8b77.iff",
+    "uniform_pit_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "743063b259c27f8e3f8a1a011ff68d63",
+   "name": "uniform_pit_away.iff",
+   "named_uniforms": [
+    "uniform_pit_away.iff"
+   ],
+   "uniforms": [
+    "uniform_pit_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_53529f78.iff"
+   ],
+   "members": [
+    "disc_53529f78.iff",
+    "uniform_pit_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "0e0f1148a0ed15da2c5474892c5aa4f7",
+   "name": "uniform_pit_home.iff",
+   "named_uniforms": [
+    "uniform_pit_home.iff"
+   ],
+   "uniforms": [
+    "uniform_pit_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cafeec02.iff"
+   ],
+   "members": [
+    "disc_cafeec02.iff",
+    "uniform_pit_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "42cff1130f5871f8358e7de10d2ee96b",
+   "name": "uniform_rus_away.iff",
+   "named_uniforms": [
+    "uniform_rus_away.iff"
+   ],
+   "uniforms": [
+    "uniform_rus_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f9594c92.iff"
+   ],
+   "members": [
+    "disc_f9594c92.iff",
+    "uniform_rus_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "42cff1130f5871f8358e7de10d2ee96b",
+   "name": "uniform_rus_home.iff",
+   "named_uniforms": [
+    "uniform_rus_home.iff"
+   ],
+   "uniforms": [
+    "uniform_rus_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_60f53fe8.iff"
+   ],
+   "members": [
+    "disc_60f53fe8.iff",
+    "uniform_rus_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "51b39b683c22c67cf00fa87717bc62a8",
+   "name": "uniform_sjs_alt.iff",
+   "named_uniforms": [
+    "uniform_sjs_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_sjs_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_052b3bbc.iff"
+   ],
+   "members": [
+    "disc_052b3bbc.iff",
+    "uniform_sjs_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6f6274b6d04d84945dc26074c8efc10d",
+   "name": "uniform_sjs_away.iff",
+   "named_uniforms": [
+    "uniform_sjs_away.iff"
+   ],
+   "uniforms": [
+    "uniform_sjs_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5ff230f0.iff"
+   ],
+   "members": [
+    "disc_5ff230f0.iff",
+    "uniform_sjs_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "50d375bb017dff97fcfff096716ba711",
+   "name": "uniform_sjs_home.iff",
+   "named_uniforms": [
+    "uniform_sjs_home.iff"
+   ],
+   "uniforms": [
+    "uniform_sjs_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c65e438a.iff"
+   ],
+   "members": [
+    "disc_c65e438a.iff",
+    "uniform_sjs_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "96023f178e535e58f628a0260576fd9e",
+   "name": "uniform_slo_away.iff",
+   "named_uniforms": [
+    "uniform_slo_away.iff"
+   ],
+   "uniforms": [
+    "uniform_slo_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8ad59bd5.iff"
+   ],
+   "members": [
+    "disc_8ad59bd5.iff",
+    "uniform_slo_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "96023f178e535e58f628a0260576fd9e",
+   "name": "uniform_slo_home.iff",
+   "named_uniforms": [
+    "uniform_slo_home.iff"
+   ],
+   "uniforms": [
+    "uniform_slo_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1379e8af.iff"
+   ],
+   "members": [
+    "disc_1379e8af.iff",
+    "uniform_slo_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "09793490eb80a8f8ad58c2cea2159eb9",
+   "name": "uniform_stl_alt.iff",
+   "named_uniforms": [
+    "uniform_stl_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_stl_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4f350747.iff"
+   ],
+   "members": [
+    "disc_4f350747.iff",
+    "uniform_stl_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3f1d16187da12a726f3d892354641e53",
+   "name": "uniform_stl_away.iff",
+   "named_uniforms": [
+    "uniform_stl_away.iff"
+   ],
+   "uniforms": [
+    "uniform_stl_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_75d70558.iff"
+   ],
+   "members": [
+    "disc_75d70558.iff",
+    "uniform_stl_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "9ceac644c8b2b7300708ad1a30de82d3",
+   "name": "uniform_stl_home.iff",
+   "named_uniforms": [
+    "uniform_stl_home.iff"
+   ],
+   "uniforms": [
+    "uniform_stl_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ec7b7622.iff"
+   ],
+   "members": [
+    "disc_ec7b7622.iff",
+    "uniform_stl_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3dc1caca679914b33efccf1e67639832",
+   "name": "uniform_sui_away.iff",
+   "named_uniforms": [
+    "uniform_sui_away.iff"
+   ],
+   "uniforms": [
+    "uniform_sui_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_527011dc.iff"
+   ],
+   "members": [
+    "disc_527011dc.iff",
+    "uniform_sui_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3b82ec17838133a24f97c84dea38e57a",
+   "name": "uniform_sui_home.iff",
+   "named_uniforms": [
+    "uniform_sui_home.iff"
+   ],
+   "uniforms": [
+    "uniform_sui_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cbdc62a6.iff"
+   ],
+   "members": [
+    "disc_cbdc62a6.iff",
+    "uniform_sui_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "68a60ff0bda49e982113b1690b0395ad",
+   "name": "uniform_swe_away.iff",
+   "named_uniforms": [
+    "uniform_swe_away.iff"
+   ],
+   "uniforms": [
+    "uniform_swe_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_10204893.iff"
+   ],
+   "members": [
+    "disc_10204893.iff",
+    "uniform_swe_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3051c465c50ae4f95e0a490d523a4ba0",
+   "name": "uniform_swe_home.iff",
+   "named_uniforms": [
+    "uniform_swe_home.iff"
+   ],
+   "uniforms": [
+    "uniform_swe_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_898c3be9.iff"
+   ],
+   "members": [
+    "disc_898c3be9.iff",
+    "uniform_swe_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "2a51801033b6fa84e4f99a7201537500",
+   "name": "uniform_tbl_alt.iff",
+   "named_uniforms": [
+    "uniform_tbl_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_tbl_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4cbee36b.iff"
+   ],
+   "members": [
+    "disc_4cbee36b.iff",
+    "uniform_tbl_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "adffe4e51554a18c6369dc3517da438f",
+   "name": "uniform_tbl_away.iff",
+   "named_uniforms": [
+    "uniform_tbl_away.iff"
+   ],
+   "uniforms": [
+    "uniform_tbl_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_470ce25f.iff"
+   ],
+   "members": [
+    "disc_470ce25f.iff",
+    "uniform_tbl_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "61891c7a69fb0228fac7a0c84912d3e3",
+   "name": "uniform_tbl_home.iff",
+   "named_uniforms": [
+    "uniform_tbl_home.iff"
+   ],
+   "uniforms": [
+    "uniform_tbl_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_dea09125.iff"
+   ],
+   "members": [
+    "disc_dea09125.iff",
+    "uniform_tbl_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "13c7cc48fb1555e619b6222b0d5c30dc",
+   "name": "uniform_tor_alt.iff",
+   "named_uniforms": [
+    "uniform_tor_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_tor_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_dd42f138.iff"
+   ],
+   "members": [
+    "disc_dd42f138.iff",
+    "uniform_tor_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "65b29040dcd6230ac24662ef80d35af8",
+   "name": "uniform_tor_away.iff",
+   "named_uniforms": [
+    "uniform_tor_away.iff"
+   ],
+   "uniforms": [
+    "uniform_tor_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b5ff1e03.iff"
+   ],
+   "members": [
+    "disc_b5ff1e03.iff",
+    "uniform_tor_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d74258531941b9fbd753b945066169ef",
+   "name": "uniform_tor_home.iff",
+   "named_uniforms": [
+    "uniform_tor_home.iff"
+   ],
+   "uniforms": [
+    "uniform_tor_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2c536d79.iff"
+   ],
+   "members": [
+    "disc_2c536d79.iff",
+    "uniform_tor_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d178ff5de1ed38ac097ece40b60c9be8",
+   "name": "uniform_ukr_away.iff",
+   "named_uniforms": [
+    "uniform_ukr_away.iff"
+   ],
+   "uniforms": [
+    "uniform_ukr_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9e8321ee.iff"
+   ],
+   "members": [
+    "disc_9e8321ee.iff",
+    "uniform_ukr_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d178ff5de1ed38ac097ece40b60c9be8",
+   "name": "uniform_ukr_home.iff",
+   "named_uniforms": [
+    "uniform_ukr_home.iff"
+   ],
+   "uniforms": [
+    "uniform_ukr_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_072f5294.iff"
+   ],
+   "members": [
+    "disc_072f5294.iff",
+    "uniform_ukr_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a7bb9778d67f68608d83595e08691d45",
+   "name": "uniform_usa_away.iff",
+   "named_uniforms": [
+    "uniform_usa_away.iff"
+   ],
+   "uniforms": [
+    "uniform_usa_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_462f3e8b.iff"
+   ],
+   "members": [
+    "disc_462f3e8b.iff",
+    "uniform_usa_away.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a7bb9778d67f68608d83595e08691d45",
+   "name": "uniform_usa_home.iff",
+   "named_uniforms": [
+    "uniform_usa_home.iff"
+   ],
+   "uniforms": [
+    "uniform_usa_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_df834df1.iff"
+   ],
+   "members": [
+    "disc_df834df1.iff",
+    "uniform_usa_home.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "3ff309bdc3e76db03b122ae2a9c225c8",
+   "name": "uniform_van_alt.iff",
+   "named_uniforms": [
+    "uniform_van_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_van_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d113c92f.iff"
+   ],
+   "members": [
+    "disc_d113c92f.iff",
+    "uniform_van_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e6b23dc07ae7dbece901cf4b7ca6c011",
+   "name": "uniform_van_away.iff",
+   "named_uniforms": [
+    "uniform_van_away.iff"
+   ],
+   "uniforms": [
+    "uniform_van_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3620cafc.iff"
+   ],
+   "members": [
+    "disc_3620cafc.iff",
+    "uniform_van_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fab8257a645a793cce0752d27dcd37b6",
+   "name": "uniform_van_home.iff",
+   "named_uniforms": [
+    "uniform_van_home.iff"
+   ],
+   "uniforms": [
+    "uniform_van_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_af8cb986.iff"
+   ],
+   "members": [
+    "disc_af8cb986.iff",
+    "uniform_van_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f9508e274e1730e005dfbb88c979aed3",
+   "name": "uniform_wca_alt.iff",
+   "named_uniforms": [
+    "uniform_wca_alt.iff"
+   ],
+   "uniforms": [
+    "uniform_wca_alt.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cbd10903.iff"
+   ],
+   "members": [
+    "disc_cbd10903.iff",
+    "uniform_wca_alt.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e7cd150e5cb0b40647bff5311893cb71",
+   "name": "uniform_wsh_away.iff",
+   "named_uniforms": [
+    "uniform_wsh_away.iff"
+   ],
+   "uniforms": [
+    "uniform_wsh_away.iff"
+   ],
+   "frontend_sheets": [
+    "disc_56018bde.iff"
+   ],
+   "members": [
+    "disc_56018bde.iff",
+    "uniform_wsh_away.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3fff94cce12260a776a2533953c35d46",
+   "name": "uniform_wsh_home.iff",
+   "named_uniforms": [
+    "uniform_wsh_home.iff"
+   ],
+   "uniforms": [
+    "uniform_wsh_home.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cfadf8a4.iff"
+   ],
+   "members": [
+    "disc_cfadf8a4.iff",
+    "uniform_wsh_home.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a99fe8509194b92f12d01c1678c2e23f",
+   "name": "disc_0050d8c1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0050d8c1.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3b9a252d.iff"
+   ],
+   "members": [
+    "disc_0050d8c1.iff",
+    "disc_3b9a252d.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "f0116aa648250df5f35b7ad9cfaa7599",
+   "name": "disc_01f819f1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_01f819f1.iff"
+   ],
+   "frontend_sheets": [
+    "disc_303f107a.iff"
+   ],
+   "members": [
+    "disc_01f819f1.iff",
+    "disc_303f107a.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "f743ac2ca41a22ae61edb8e776e9a591",
+   "name": "disc_0330a0f5.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0330a0f5.iff"
+   ],
+   "frontend_sheets": [
+    "disc_aab7c45b.iff"
+   ],
+   "members": [
+    "disc_0330a0f5.iff",
+    "disc_aab7c45b.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e3c751cdafb4949961453b7d96fa22bc",
+   "name": "disc_038bc52c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_038bc52c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_324ccca7.iff"
+   ],
+   "members": [
+    "disc_038bc52c.iff",
+    "disc_324ccca7.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "7d227ac8dd353d4cd49714eed65e81c9",
+   "name": "disc_055b8bfd.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_055b8bfd.iff"
+   ],
+   "frontend_sheets": [
+    "disc_349c8276.iff"
+   ],
+   "members": [
+    "disc_055b8bfd.iff",
+    "disc_349c8276.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "cca0a80acbd3cf3ece1544c179e3a858",
+   "name": "disc_07285720.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_07285720.iff"
+   ],
+   "frontend_sheets": [
+    "disc_36ef5eab.iff"
+   ],
+   "members": [
+    "disc_07285720.iff",
+    "disc_36ef5eab.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "42a1dc47eba97a483e723a13eaedafde",
+   "name": "disc_0b5a204e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0b5a204e.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3a9d29c5.iff"
+   ],
+   "members": [
+    "disc_0b5a204e.iff",
+    "disc_3a9d29c5.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "59239dd2548559f79378bfe69171f293",
+   "name": "disc_0cc4f4b8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0cc4f4b8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a5439016.iff"
+   ],
+   "members": [
+    "disc_0cc4f4b8.iff",
+    "disc_a5439016.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "495d0251a5ccdd4fc2916389c82a6a33",
+   "name": "disc_0e9a8891.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0e9a8891.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a71dec3f.iff"
+   ],
+   "members": [
+    "disc_0e9a8891.iff",
+    "disc_a71dec3f.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_0ef0fbc7.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0ef0fbc7.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a7779f69.iff"
+   ],
+   "members": [
+    "disc_0ef0fbc7.iff",
+    "disc_a7779f69.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "9dc48fe00e09e9776cb47afc7d59db96",
+   "name": "disc_0ff9b242.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_0ff9b242.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3e3ebbc9.iff"
+   ],
+   "members": [
+    "disc_0ff9b242.iff",
+    "disc_3e3ebbc9.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "71295142cda064a068be482a70389fc0",
+   "name": "disc_12b5856c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_12b5856c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_297f7880.iff"
+   ],
+   "members": [
+    "disc_12b5856c.iff",
+    "disc_297f7880.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "49bc9b4d9a54e2e39715ad73fdb454ac",
+   "name": "disc_12f6af55.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_12f6af55.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2331a6de.iff"
+   ],
+   "members": [
+    "disc_12f6af55.iff",
+    "disc_2331a6de.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "c45ee2c76a176acbf1e37a3f63665a02",
+   "name": "disc_14256b17.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_14256b17.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2fef96fb.iff"
+   ],
+   "members": [
+    "disc_14256b17.iff",
+    "disc_2fef96fb.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "eaa5adf8f41ab8f0e17faedfa3f753f1",
+   "name": "disc_142a4603.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_142a4603.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2d885e09.iff"
+   ],
+   "members": [
+    "disc_142a4603.iff",
+    "disc_2d885e09.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "16b14b9778f0c53e30a4675d6de4ee82",
+   "name": "disc_14be17cd.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_14be17cd.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2f74ea21.iff"
+   ],
+   "members": [
+    "disc_14be17cd.iff",
+    "disc_2f74ea21.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ff6d09259b526a067d422d575050a95d",
+   "name": "disc_157e0079.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_157e0079.iff"
+   ],
+   "frontend_sheets": [
+    "disc_bcf964d7.iff"
+   ],
+   "members": [
+    "disc_157e0079.iff",
+    "disc_bcf964d7.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "2e1d6f8aa5c2518298322c684360b42f",
+   "name": "disc_16553d59.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_16553d59.iff"
+   ],
+   "frontend_sheets": [
+    "disc_279234d2.iff"
+   ],
+   "members": [
+    "disc_16553d59.iff",
+    "disc_279234d2.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "594d4e9fc22bd4ff391be41cfedf7177",
+   "name": "disc_1673d77f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1673d77f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2db92a93.iff"
+   ],
+   "members": [
+    "disc_1673d77f.iff",
+    "disc_2db92a93.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6873015d2d862cab44f4d4c6b2b62e78",
+   "name": "disc_17eaf8c3.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_17eaf8c3.iff"
+   ],
+   "frontend_sheets": [
+    "disc_be6d9c6d.iff"
+   ],
+   "members": [
+    "disc_17eaf8c3.iff",
+    "disc_be6d9c6d.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ee394100d9e6d74a9525cfc6224bf8d2",
+   "name": "disc_19307bf5.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_19307bf5.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_19307bf5.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4b0f3cae3c39973792fc314753b16d25",
+   "name": "disc_1a274a37.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1a274a37.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2be043bc.iff"
+   ],
+   "members": [
+    "disc_1a274a37.iff",
+    "disc_2be043bc.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "e10dfc76f4e213e25ca8f5a61aff80c2",
+   "name": "disc_1ad20411.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1ad20411.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2118f9fd.iff"
+   ],
+   "members": [
+    "disc_1ad20411.iff",
+    "disc_2118f9fd.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "1f65e6958ed745043eaee6f5ae0f878a",
+   "name": "disc_1e11d259.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1e11d259.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b796b6f7.iff"
+   ],
+   "members": [
+    "disc_1e11d259.iff",
+    "disc_b796b6f7.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a7dddb8a18127f6cae207263ae4fef75",
+   "name": "disc_1e84d83b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1e84d83b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2f43d1b0.iff"
+   ],
+   "members": [
+    "disc_1e84d83b.iff",
+    "disc_2f43d1b0.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6fe3e8060d1175d7fa41d8cb11cb10d5",
+   "name": "disc_1fe2b956.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1fe2b956.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2640a15c.iff"
+   ],
+   "members": [
+    "disc_1fe2b956.iff",
+    "disc_2640a15c.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_1ff989cb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_1ff989cb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b67eed65.iff"
+   ],
+   "members": [
+    "disc_1ff989cb.iff",
+    "disc_b67eed65.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1530b9151029964b0adea8ba0702c963",
+   "name": "disc_21afb163.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_21afb163.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1068b8e8.iff"
+   ],
+   "members": [
+    "disc_1068b8e8.iff",
+    "disc_21afb163.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "56b76dce1ea00bad11efe0703d0d6631",
+   "name": "disc_21ee8883.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_21ee8883.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1a24756f.iff"
+   ],
+   "members": [
+    "disc_1a24756f.iff",
+    "disc_21ee8883.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e42271baaff1a3b3d1f2867d9f33ecdd",
+   "name": "disc_246da50b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_246da50b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8deac1a5.iff"
+   ],
+   "members": [
+    "disc_246da50b.iff",
+    "disc_8deac1a5.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "57e065474ab976bf85c60a1088e2184e",
+   "name": "disc_2489e860.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_2489e860.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1d2bf06a.iff"
+   ],
+   "members": [
+    "disc_1d2bf06a.iff",
+    "disc_2489e860.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_24c3bf1e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_24c3bf1e.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8d44dbb0.iff"
+   ],
+   "members": [
+    "disc_24c3bf1e.iff",
+    "disc_8d44dbb0.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "174f94c165a108940c7de5961c8300d9",
+   "name": "disc_250c236f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_250c236f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_14cb2ae4.iff"
+   ],
+   "members": [
+    "disc_14cb2ae4.iff",
+    "disc_250c236f.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "9461d461c6708eb47dd974869ab8cb57",
+   "name": "disc_26ed7c02.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_26ed7c02.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1f4f6408.iff"
+   ],
+   "members": [
+    "disc_1f4f6408.iff",
+    "disc_26ed7c02.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "381780205d41f9d9b0bd3028a1b3e6b1",
+   "name": "disc_2b0d88dc.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_2b0d88dc.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1aca8157.iff"
+   ],
+   "members": [
+    "disc_1aca8157.iff",
+    "disc_2b0d88dc.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a8e62d2abbf16ab57d09dba5386a5716",
+   "name": "disc_2d7da4ac.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_2d7da4ac.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_2d7da4ac.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e5dc64696db0e6db8591126bfb99cd68",
+   "name": "disc_2f09c6dc.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_2f09c6dc.iff"
+   ],
+   "frontend_sheets": [
+    "disc_16abded6.iff"
+   ],
+   "members": [
+    "disc_16abded6.iff",
+    "disc_2f09c6dc.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e636a5168a9f44b3e0743db693b4970d",
+   "name": "disc_32a107c7.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_32a107c7.iff"
+   ],
+   "frontend_sheets": [
+    "disc_03660e4c.iff"
+   ],
+   "members": [
+    "disc_03660e4c.iff",
+    "disc_32a107c7.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d611513651a20e4fc1af619168f20d6f",
+   "name": "disc_33580390.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_33580390.iff"
+   ],
+   "frontend_sheets": [
+    "disc_0892fe7c.iff"
+   ],
+   "members": [
+    "disc_0892fe7c.iff",
+    "disc_33580390.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "78d4db15b2f13792aab4cdd3483a3b84",
+   "name": "disc_34c0d263.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_34c0d263.iff"
+   ],
+   "frontend_sheets": [
+    "disc_0d62ca69.iff"
+   ],
+   "members": [
+    "disc_0d62ca69.iff",
+    "disc_34c0d263.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ffba4005d9b11bb714ae3de225231b6e",
+   "name": "disc_360295cb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_360295cb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_07c59c40.iff"
+   ],
+   "members": [
+    "disc_07c59c40.iff",
+    "disc_360295cb.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ba66ff9c924a78274a536731c70f4241",
+   "name": "disc_36465fe3.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_36465fe3.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9fc13b4d.iff"
+   ],
+   "members": [
+    "disc_36465fe3.iff",
+    "disc_9fc13b4d.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "4c068f0a43db08d028e02d511891195d",
+   "name": "disc_373db9b1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_373db9b1.iff"
+   ],
+   "frontend_sheets": [
+    "disc_0cf7445d.iff"
+   ],
+   "members": [
+    "disc_0cf7445d.iff",
+    "disc_373db9b1.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4414726098458b6b4434678338cd28b1",
+   "name": "disc_3ebec4a1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_3ebec4a1.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_3ebec4a1.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a31fa7950394e54f2c373b516d20aa6a",
+   "name": "disc_4080b04f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4080b04f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7b4a4da3.iff"
+   ],
+   "members": [
+    "disc_4080b04f.iff",
+    "disc_7b4a4da3.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4d37de31116f8c5ec63d3275bc36fbc0",
+   "name": "disc_4222db4b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4222db4b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_79e826a7.iff"
+   ],
+   "members": [
+    "disc_4222db4b.iff",
+    "disc_79e826a7.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a0e544540ae80e9ea4cdb33e20a493ab",
+   "name": "disc_45978e64.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_45978e64.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7e5d7388.iff"
+   ],
+   "members": [
+    "disc_45978e64.iff",
+    "disc_7e5d7388.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "8bc54226bf8b53dd059cef0d44597658",
+   "name": "disc_4754cc9f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4754cc9f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7c9e3173.iff"
+   ],
+   "members": [
+    "disc_4754cc9f.iff",
+    "disc_7c9e3173.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "448638dc6ccbc900f66dfa5fae0221b2",
+   "name": "disc_495d1f5c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_495d1f5c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7297e2b0.iff"
+   ],
+   "members": [
+    "disc_495d1f5c.iff",
+    "disc_7297e2b0.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "afc96f9ae202f360fe777a9868a98c97",
+   "name": "disc_4a63b010.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4a63b010.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7ba4b99b.iff"
+   ],
+   "members": [
+    "disc_4a63b010.iff",
+    "disc_7ba4b99b.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ce604f68305b5f620d236f95c11103d9",
+   "name": "disc_4ae64591.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4ae64591.iff"
+   ],
+   "frontend_sheets": [
+    "disc_73445d9b.iff"
+   ],
+   "members": [
+    "disc_4ae64591.iff",
+    "disc_73445d9b.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "26a1ec0e47bc66154ab017dc22c502b0",
+   "name": "disc_4bb7ac82.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4bb7ac82.iff"
+   ],
+   "frontend_sheets": [
+    "disc_707d516e.iff"
+   ],
+   "members": [
+    "disc_4bb7ac82.iff",
+    "disc_707d516e.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e6f9a8457184fa4fa0203fc8199e60d0",
+   "name": "disc_4ec0221c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_4ec0221c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_7f072b97.iff"
+   ],
+   "members": [
+    "disc_4ec0221c.iff",
+    "disc_7f072b97.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ef73560dccbc3fba9f6e54b90dd775cc",
+   "name": "disc_53cf3f0b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_53cf3f0b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_62083680.iff"
+   ],
+   "members": [
+    "disc_53cf3f0b.iff",
+    "disc_62083680.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "92f781c4c83395dc5cbb924f666971f1",
+   "name": "disc_5708e0e3.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_5708e0e3.iff"
+   ],
+   "frontend_sheets": [
+    "disc_6eaaf8e9.iff"
+   ],
+   "members": [
+    "disc_5708e0e3.iff",
+    "disc_6eaaf8e9.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "cc7921b255e875a6c4f5e38bca2f556e",
+   "name": "disc_576cad07.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_576cad07.iff"
+   ],
+   "frontend_sheets": [
+    "disc_66aba48c.iff"
+   ],
+   "members": [
+    "disc_576cad07.iff",
+    "disc_66aba48c.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6463abaa9184717ac4527fb3d5a10f85",
+   "name": "disc_599ce992.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_599ce992.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f01b8d3c.iff"
+   ],
+   "members": [
+    "disc_599ce992.iff",
+    "disc_f01b8d3c.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "490c4060f23d507d140998f0e291a724",
+   "name": "disc_59fb2d54.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_59fb2d54.iff"
+   ],
+   "frontend_sheets": [
+    "disc_6059355e.iff"
+   ],
+   "members": [
+    "disc_59fb2d54.iff",
+    "disc_6059355e.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "030abdd8556b02f9c4b9d5a7f6288bc3",
+   "name": "disc_5d7d8525.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_5d7d8525.iff"
+   ],
+   "frontend_sheets": [
+    "disc_64df9d2f.iff"
+   ],
+   "members": [
+    "disc_5d7d8525.iff",
+    "disc_64df9d2f.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "dab29fb01c6e873d6602a3202edca5b9",
+   "name": "disc_5e47dc82.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_5e47dc82.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f7c0b82c.iff"
+   ],
+   "members": [
+    "disc_5e47dc82.iff",
+    "disc_f7c0b82c.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "9b686bab2a1f7444d52ddac18f3df9db",
+   "name": "disc_619bf206.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_619bf206.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5a510fea.iff"
+   ],
+   "members": [
+    "disc_5a510fea.iff",
+    "disc_619bf206.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e6e7063a50e34fe57a5629886bb5500e",
+   "name": "disc_61c05cc8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_61c05cc8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5a0aa124.iff"
+   ],
+   "members": [
+    "disc_5a0aa124.iff",
+    "disc_61c05cc8.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fac03ff0028c7082db718aeb5f98c8ed",
+   "name": "disc_649a6548.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_649a6548.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5d387d42.iff"
+   ],
+   "members": [
+    "disc_5d387d42.iff",
+    "disc_649a6548.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "bba66e1db3b90be14fae32316f79701a",
+   "name": "disc_680f10e2.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_680f10e2.iff"
+   ],
+   "frontend_sheets": [
+    "disc_53c5ed0e.iff"
+   ],
+   "members": [
+    "disc_53c5ed0e.iff",
+    "disc_680f10e2.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "018bdda73146846c834867ab89219270",
+   "name": "disc_69cefea2.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_69cefea2.iff"
+   ],
+   "frontend_sheets": [
+    "disc_506ce6a8.iff"
+   ],
+   "members": [
+    "disc_506ce6a8.iff",
+    "disc_69cefea2.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "38ed218c89a0e278c420f4c5316444a9",
+   "name": "disc_6cc32958.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6cc32958.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5709d4b4.iff"
+   ],
+   "members": [
+    "disc_5709d4b4.iff",
+    "disc_6cc32958.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "7e6c9be6a01db2e955afe698eeb49637",
+   "name": "disc_6e1e0d37.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6e1e0d37.iff"
+   ],
+   "frontend_sheets": [
+    "disc_57bc153d.iff"
+   ],
+   "members": [
+    "disc_57bc153d.iff",
+    "disc_6e1e0d37.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "db960015fc8500393bdce3a301952709",
+   "name": "disc_6e5bc56d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6e5bc56d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_55913881.iff"
+   ],
+   "members": [
+    "disc_55913881.iff",
+    "disc_6e5bc56d.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4b8faff44cca370cda39c4363f2e71ce",
+   "name": "disc_6e978a8e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6e978a8e.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5f508305.iff"
+   ],
+   "members": [
+    "disc_5f508305.iff",
+    "disc_6e978a8e.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "3540880a09faa1ba90f55b4c5ef707b7",
+   "name": "disc_6fb04fb3.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6fb04fb3.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c6372b1d.iff"
+   ],
+   "members": [
+    "disc_6fb04fb3.iff",
+    "disc_c6372b1d.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ed1831a4c3fc73f8f23964e4c7c73a94",
+   "name": "disc_6fed7a93.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_6fed7a93.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5427877f.iff"
+   ],
+   "members": [
+    "disc_5427877f.iff",
+    "disc_6fed7a93.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_711a1f60.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_711a1f60.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d89d7bce.iff"
+   ],
+   "members": [
+    "disc_711a1f60.iff",
+    "disc_d89d7bce.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "eb5a304a513ce2c4e90599f992531d5c",
+   "name": "disc_73117ed7.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_73117ed7.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4ab366dd.iff"
+   ],
+   "members": [
+    "disc_4ab366dd.iff",
+    "disc_73117ed7.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a175565465eb2ea09c1a4d51869c30c7",
+   "name": "disc_73989799.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_73989799.iff"
+   ],
+   "frontend_sheets": [
+    "disc_425f9e12.iff"
+   ],
+   "members": [
+    "disc_425f9e12.iff",
+    "disc_73989799.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "b0f5c3536955c30a45cd16afbcaff197",
+   "name": "disc_75390c30.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_75390c30.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4ef3f1dc.iff"
+   ],
+   "members": [
+    "disc_4ef3f1dc.iff",
+    "disc_75390c30.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "04679eab6992afb5a3d4547e2b754824",
+   "name": "disc_773b0595.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_773b0595.iff"
+   ],
+   "frontend_sheets": [
+    "disc_46fc0c1e.iff"
+   ],
+   "members": [
+    "disc_46fc0c1e.iff",
+    "disc_773b0595.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "f40c2e57b83a3ef040199975c991261c",
+   "name": "disc_77ad7195.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_77ad7195.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4c678c79.iff"
+   ],
+   "members": [
+    "disc_4c678c79.iff",
+    "disc_77ad7195.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "c72013844664e75cc374e9c825c64914",
+   "name": "disc_7802ed48.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_7802ed48.iff"
+   ],
+   "frontend_sheets": [
+    "disc_43c810a4.iff"
+   ],
+   "members": [
+    "disc_43c810a4.iff",
+    "disc_7802ed48.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4598c8fd11b3724521e72c5dc66acbd5",
+   "name": "disc_78653e8e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_78653e8e.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_78653e8e.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "d8db036e4ef28a78eba13b51574f4ea9",
+   "name": "disc_7885f0e2.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_7885f0e2.iff"
+   ],
+   "frontend_sheets": [
+    "disc_434f0d0e.iff"
+   ],
+   "members": [
+    "disc_434f0d0e.iff",
+    "disc_7885f0e2.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "40deeccc43fae576bf0b30b9e131e63e",
+   "name": "disc_797eeb0b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_797eeb0b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_42b416e7.iff"
+   ],
+   "members": [
+    "disc_42b416e7.iff",
+    "disc_797eeb0b.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4689b2721c8d096b3f88e99760a89a38",
+   "name": "disc_79a8b44b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_79a8b44b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_426249a7.iff"
+   ],
+   "members": [
+    "disc_426249a7.iff",
+    "disc_79a8b44b.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "35dd771c5e8867508ccdf4a1e759d2a6",
+   "name": "disc_7b4972fb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_7b4972fb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4a8e7b70.iff"
+   ],
+   "members": [
+    "disc_4a8e7b70.iff",
+    "disc_7b4972fb.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6a025d604d0cca8807364e74265fab22",
+   "name": "disc_7f7a7a9a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_7f7a7a9a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_46d86290.iff"
+   ],
+   "members": [
+    "disc_46d86290.iff",
+    "disc_7f7a7a9a.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "18067dc40fa93b538a31193f2513634a",
+   "name": "disc_7feae0f7.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_7feae0f7.iff"
+   ],
+   "frontend_sheets": [
+    "disc_4e2de97c.iff"
+   ],
+   "members": [
+    "disc_4e2de97c.iff",
+    "disc_7feae0f7.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "07d587692096849e656b7f7b134815a7",
+   "name": "disc_837e776b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_837e776b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b8b48a87.iff"
+   ],
+   "members": [
+    "disc_837e776b.iff",
+    "disc_b8b48a87.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4b0f3cae3c39973792fc314753b16d25",
+   "name": "disc_838b394d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_838b394d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b24c30c6.iff"
+   ],
+   "members": [
+    "disc_838b394d.iff",
+    "disc_b24c30c6.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6fe3e8060d1175d7fa41d8cb11cb10d5",
+   "name": "disc_864eca2c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_864eca2c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_bfecd226.iff"
+   ],
+   "members": [
+    "disc_864eca2c.iff",
+    "disc_bfecd226.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_8655fab1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8655fab1.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2fd29e1f.iff"
+   ],
+   "members": [
+    "disc_2fd29e1f.iff",
+    "disc_8655fab1.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a7dddb8a18127f6cae207263ae4fef75",
+   "name": "disc_8728ab41.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8728ab41.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b6efa2ca.iff"
+   ],
+   "members": [
+    "disc_8728ab41.iff",
+    "disc_b6efa2ca.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1f65e6958ed745043eaee6f5ae0f878a",
+   "name": "disc_87bda123.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_87bda123.iff"
+   ],
+   "frontend_sheets": [
+    "disc_2e3ac58d.iff"
+   ],
+   "members": [
+    "disc_2e3ac58d.iff",
+    "disc_87bda123.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "90ab9912bf4f18871afff410630c478d",
+   "name": "disc_8b19f616.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8b19f616.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b0d30bfa.iff"
+   ],
+   "members": [
+    "disc_8b19f616.iff",
+    "disc_b0d30bfa.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "49bc9b4d9a54e2e39715ad73fdb454ac",
+   "name": "disc_8b5adc2f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8b5adc2f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ba9dd5a4.iff"
+   ],
+   "members": [
+    "disc_8b5adc2f.iff",
+    "disc_ba9dd5a4.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "7989e1b19ac209796571774449c553ac",
+   "name": "disc_8cd27303.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8cd27303.iff"
+   ],
+   "frontend_sheets": [
+    "disc_255517ad.iff"
+   ],
+   "members": [
+    "disc_255517ad.iff",
+    "disc_8cd27303.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "cc28b3fe07b3247cd372d4493e309ac5",
+   "name": "disc_8d1264b7.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8d1264b7.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b6d8995b.iff"
+   ],
+   "members": [
+    "disc_8d1264b7.iff",
+    "disc_b6d8995b.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "eaa5adf8f41ab8f0e17faedfa3f753f1",
+   "name": "disc_8d863579.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8d863579.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b4242d73.iff"
+   ],
+   "members": [
+    "disc_8d863579.iff",
+    "disc_b4242d73.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "2856660a86cf0e021c4dd9b82cbaeb62",
+   "name": "disc_8d89186d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8d89186d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b643e581.iff"
+   ],
+   "members": [
+    "disc_8d89186d.iff",
+    "disc_b643e581.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6873015d2d862cab44f4d4c6b2b62e78",
+   "name": "disc_8e468bb9.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8e468bb9.iff"
+   ],
+   "frontend_sheets": [
+    "disc_27c1ef17.iff"
+   ],
+   "members": [
+    "disc_27c1ef17.iff",
+    "disc_8e468bb9.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "c4f64fb0cba48200f7d5b1334bdad68a",
+   "name": "disc_8fdfa405.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8fdfa405.iff"
+   ],
+   "frontend_sheets": [
+    "disc_b41559e9.iff"
+   ],
+   "members": [
+    "disc_8fdfa405.iff",
+    "disc_b41559e9.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "2e1d6f8aa5c2518298322c684360b42f",
+   "name": "disc_8ff94e23.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_8ff94e23.iff"
+   ],
+   "frontend_sheets": [
+    "disc_be3e47a8.iff"
+   ],
+   "members": [
+    "disc_8ff94e23.iff",
+    "disc_be3e47a8.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "42a1dc47eba97a483e723a13eaedafde",
+   "name": "disc_92f65334.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_92f65334.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a3315abf.iff"
+   ],
+   "members": [
+    "disc_92f65334.iff",
+    "disc_a3315abf.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "59239dd2548559f79378bfe69171f293",
+   "name": "disc_956887c2.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_956887c2.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3cefe36c.iff"
+   ],
+   "members": [
+    "disc_3cefe36c.iff",
+    "disc_956887c2.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "9dc48fe00e09e9776cb47afc7d59db96",
+   "name": "disc_9655c138.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9655c138.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a792c8b3.iff"
+   ],
+   "members": [
+    "disc_9655c138.iff",
+    "disc_a792c8b3.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "495d0251a5ccdd4fc2916389c82a6a33",
+   "name": "disc_9736fbeb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9736fbeb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3eb19f45.iff"
+   ],
+   "members": [
+    "disc_3eb19f45.iff",
+    "disc_9736fbeb.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_975c88bd.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_975c88bd.iff"
+   ],
+   "frontend_sheets": [
+    "disc_3edbec13.iff"
+   ],
+   "members": [
+    "disc_3edbec13.iff",
+    "disc_975c88bd.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "f0116aa648250df5f35b7ad9cfaa7599",
+   "name": "disc_98546a8b.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_98546a8b.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a9936300.iff"
+   ],
+   "members": [
+    "disc_98546a8b.iff",
+    "disc_a9936300.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "d99f4644b58748a345fd75f5f3f0c39b",
+   "name": "disc_99fcabbb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_99fcabbb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a2365657.iff"
+   ],
+   "members": [
+    "disc_99fcabbb.iff",
+    "disc_a2365657.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e3c751cdafb4949961453b7d96fa22bc",
+   "name": "disc_9a27b656.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9a27b656.iff"
+   ],
+   "frontend_sheets": [
+    "disc_abe0bfdd.iff"
+   ],
+   "members": [
+    "disc_9a27b656.iff",
+    "disc_abe0bfdd.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "72b9eec3f144c22c6e720feac642cf42",
+   "name": "disc_9a9cd38f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9a9cd38f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_331bb721.iff"
+   ],
+   "members": [
+    "disc_331bb721.iff",
+    "disc_9a9cd38f.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "7d227ac8dd353d4cd49714eed65e81c9",
+   "name": "disc_9cf7f887.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9cf7f887.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ad30f10c.iff"
+   ],
+   "members": [
+    "disc_9cf7f887.iff",
+    "disc_ad30f10c.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "261f27b8eb80c0f77488bffcfe439d5c",
+   "name": "disc_9e6461dc.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9e6461dc.iff"
+   ],
+   "frontend_sheets": [
+    "disc_a5ae9c30.iff"
+   ],
+   "members": [
+    "disc_9e6461dc.iff",
+    "disc_a5ae9c30.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "cca0a80acbd3cf3ece1544c179e3a858",
+   "name": "disc_9e84245a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_9e84245a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_af432dd1.iff"
+   ],
+   "members": [
+    "disc_9e84245a.iff",
+    "disc_af432dd1.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "863efd31cb4d7658260bcd17474e258f",
+   "name": "disc_a712b7db.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_a712b7db.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_a712b7db.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3a836481634ab3b5bf6882b0b7546e0f",
+   "name": "disc_aaf470ea.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_aaf470ea.iff"
+   ],
+   "frontend_sheets": [
+    "disc_913e8d06.iff"
+   ],
+   "members": [
+    "disc_913e8d06.iff",
+    "disc_aaf470ea.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e636a5168a9f44b3e0743db693b4970d",
+   "name": "disc_ab0d74bd.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ab0d74bd.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9aca7d36.iff"
+   ],
+   "members": [
+    "disc_9aca7d36.iff",
+    "disc_ab0d74bd.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "78d4db15b2f13792aab4cdd3483a3b84",
+   "name": "disc_ad6ca119.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ad6ca119.iff"
+   ],
+   "frontend_sheets": [
+    "disc_94ceb913.iff"
+   ],
+   "members": [
+    "disc_94ceb913.iff",
+    "disc_ad6ca119.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "583fdc34f51665bff4f0699fb1f0a9ec",
+   "name": "disc_ae91cacb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ae91cacb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_955b3727.iff"
+   ],
+   "members": [
+    "disc_955b3727.iff",
+    "disc_ae91cacb.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ffba4005d9b11bb714ae3de225231b6e",
+   "name": "disc_afaee6b1.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_afaee6b1.iff"
+   ],
+   "frontend_sheets": [
+    "disc_9e69ef3a.iff"
+   ],
+   "members": [
+    "disc_9e69ef3a.iff",
+    "disc_afaee6b1.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ba66ff9c924a78274a536731c70f4241",
+   "name": "disc_afea2c99.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_afea2c99.iff"
+   ],
+   "frontend_sheets": [
+    "disc_066d4837.iff"
+   ],
+   "members": [
+    "disc_066d4837.iff",
+    "disc_afea2c99.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "381780205d41f9d9b0bd3028a1b3e6b1",
+   "name": "disc_b2a1fba6.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_b2a1fba6.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8366f22d.iff"
+   ],
+   "members": [
+    "disc_8366f22d.iff",
+    "disc_b2a1fba6.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "40fecd1bce4501a437e28ddd0328d991",
+   "name": "disc_b4d1d7d6.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_b4d1d7d6.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_b4d1d7d6.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a0cae354ad44ee94f10fa57f349fb227",
+   "name": "disc_b6a5b5a6.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_b6a5b5a6.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8f07adac.iff"
+   ],
+   "members": [
+    "disc_8f07adac.iff",
+    "disc_b6a5b5a6.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "1530b9151029964b0adea8ba0702c963",
+   "name": "disc_b803c219.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_b803c219.iff"
+   ],
+   "frontend_sheets": [
+    "disc_89c4cb92.iff"
+   ],
+   "members": [
+    "disc_89c4cb92.iff",
+    "disc_b803c219.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "e1f7a28311066d987e827b615da073f3",
+   "name": "disc_b842fbf9.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_b842fbf9.iff"
+   ],
+   "frontend_sheets": [
+    "disc_83880615.iff"
+   ],
+   "members": [
+    "disc_83880615.iff",
+    "disc_b842fbf9.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "174f94c165a108940c7de5961c8300d9",
+   "name": "disc_bca05015.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_bca05015.iff"
+   ],
+   "frontend_sheets": [
+    "disc_8d67599e.iff"
+   ],
+   "members": [
+    "disc_8d67599e.iff",
+    "disc_bca05015.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "57e065474ab976bf85c60a1088e2184e",
+   "name": "disc_bd259b1a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_bd259b1a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_84878310.iff"
+   ],
+   "members": [
+    "disc_84878310.iff",
+    "disc_bd259b1a.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_bd6fcc64.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_bd6fcc64.iff"
+   ],
+   "frontend_sheets": [
+    "disc_14e8a8ca.iff"
+   ],
+   "members": [
+    "disc_14e8a8ca.iff",
+    "disc_bd6fcc64.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "e42271baaff1a3b3d1f2867d9f33ecdd",
+   "name": "disc_bdc1d671.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_bdc1d671.iff"
+   ],
+   "frontend_sheets": [
+    "disc_1446b2df.iff"
+   ],
+   "members": [
+    "disc_1446b2df.iff",
+    "disc_bdc1d671.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "9461d461c6708eb47dd974869ab8cb57",
+   "name": "disc_bf410f78.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_bf410f78.iff"
+   ],
+   "frontend_sheets": [
+    "disc_86e31772.iff"
+   ],
+   "members": [
+    "disc_86e31772.iff",
+    "disc_bf410f78.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6463abaa9184717ac4527fb3d5a10f85",
+   "name": "disc_c0309ae8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_c0309ae8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_69b7fe46.iff"
+   ],
+   "members": [
+    "disc_69b7fe46.iff",
+    "disc_c0309ae8.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "490c4060f23d507d140998f0e291a724",
+   "name": "disc_c0575e2e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_c0575e2e.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f9f54624.iff"
+   ],
+   "members": [
+    "disc_c0575e2e.iff",
+    "disc_f9f54624.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "030abdd8556b02f9c4b9d5a7f6288bc3",
+   "name": "disc_c4d1f65f.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_c4d1f65f.iff"
+   ],
+   "frontend_sheets": [
+    "disc_fd73ee55.iff"
+   ],
+   "members": [
+    "disc_c4d1f65f.iff",
+    "disc_fd73ee55.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ebe0023526885d1c798662e048fbae19",
+   "name": "disc_c7ebaff8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_c7ebaff8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_6e6ccb56.iff"
+   ],
+   "members": [
+    "disc_6e6ccb56.iff",
+    "disc_c7ebaff8.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "303b1c8ce078f49abd01d941d64c6ba2",
+   "name": "disc_c98fbdbb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_c98fbdbb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f2454057.iff"
+   ],
+   "members": [
+    "disc_c98fbdbb.iff",
+    "disc_f2454057.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ef73560dccbc3fba9f6e54b90dd775cc",
+   "name": "disc_ca634c71.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ca634c71.iff"
+   ],
+   "frontend_sheets": [
+    "disc_fba445fa.iff"
+   ],
+   "members": [
+    "disc_ca634c71.iff",
+    "disc_fba445fa.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "92f781c4c83395dc5cbb924f666971f1",
+   "name": "disc_cea49399.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_cea49399.iff"
+   ],
+   "frontend_sheets": [
+    "disc_f7068b93.iff"
+   ],
+   "members": [
+    "disc_cea49399.iff",
+    "disc_f7068b93.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "cc7921b255e875a6c4f5e38bca2f556e",
+   "name": "disc_cec0de7d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_cec0de7d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ff07d7f6.iff"
+   ],
+   "members": [
+    "disc_cec0de7d.iff",
+    "disc_ff07d7f6.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "69d466dc8c2a0b290f2fbd4fc822ad83",
+   "name": "disc_d0f16c26.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d0f16c26.iff"
+   ],
+   "frontend_sheets": [
+    "disc_eb3b91ca.iff"
+   ],
+   "members": [
+    "disc_d0f16c26.iff",
+    "disc_eb3b91ca.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4c7ea6d09f7ecf18d1de196c90573c64",
+   "name": "disc_d21bdff8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d21bdff8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e9d12214.iff"
+   ],
+   "members": [
+    "disc_d21bdff8.iff",
+    "disc_e9d12214.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "ce604f68305b5f620d236f95c11103d9",
+   "name": "disc_d34a36eb.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d34a36eb.iff"
+   ],
+   "frontend_sheets": [
+    "disc_eae82ee1.iff"
+   ],
+   "members": [
+    "disc_d34a36eb.iff",
+    "disc_eae82ee1.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "afc96f9ae202f360fe777a9868a98c97",
+   "name": "disc_d3cfc36a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d3cfc36a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e208cae1.iff"
+   ],
+   "members": [
+    "disc_d3cfc36a.iff",
+    "disc_e208cae1.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "e6f9a8457184fa4fa0203fc8199e60d0",
+   "name": "disc_d76c5166.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d76c5166.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e6ab58ed.iff"
+   ],
+   "members": [
+    "disc_d76c5166.iff",
+    "disc_e6ab58ed.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "96e087384d9bde45baa5b40b319876a9",
+   "name": "disc_d92cc335.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_d92cc335.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e2e63ed9.iff"
+   ],
+   "members": [
+    "disc_d92cc335.iff",
+    "disc_e2e63ed9.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "bb36b321e165031ae26eec3405e52a92",
+   "name": "disc_db8ea831.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_db8ea831.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e04455dd.iff"
+   ],
+   "members": [
+    "disc_db8ea831.iff",
+    "disc_e04455dd.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "a0e544540ae80e9ea4cdb33e20a493ab",
+   "name": "disc_dc3bfd1e.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_dc3bfd1e.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e7f100f2.iff"
+   ],
+   "members": [
+    "disc_dc3bfd1e.iff",
+    "disc_e7f100f2.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "16091ecdfe60bb928dd2a66ccf5879ec",
+   "name": "disc_def8bfe5.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_def8bfe5.iff"
+   ],
+   "frontend_sheets": [
+    "disc_e5324209.iff"
+   ],
+   "members": [
+    "disc_def8bfe5.iff",
+    "disc_e5324209.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "12f79453a29dfc55cc6bf35efcc32f68",
+   "name": "disc_e0d29871.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e0d29871.iff"
+   ],
+   "frontend_sheets": [
+    "disc_db18659d.iff"
+   ],
+   "members": [
+    "disc_db18659d.iff",
+    "disc_e0d29871.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "081d37aa991effe4f049d9826d74fc37",
+   "name": "disc_e1298398.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e1298398.iff"
+   ],
+   "frontend_sheets": [
+    "disc_dae37e74.iff"
+   ],
+   "members": [
+    "disc_dae37e74.iff",
+    "disc_e1298398.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "69dcc3224a979282098c56d90ea85bc7",
+   "name": "disc_e1ae9e32.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e1ae9e32.iff"
+   ],
+   "frontend_sheets": [
+    "disc_da6463de.iff"
+   ],
+   "members": [
+    "disc_da6463de.iff",
+    "disc_e1ae9e32.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "0dcdc757379204199dcb1c94fc2e6be6",
+   "name": "disc_e1c94df4.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e1c94df4.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_e1c94df4.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "35dd771c5e8867508ccdf4a1e759d2a6",
+   "name": "disc_e2e50181.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e2e50181.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d322080a.iff"
+   ],
+   "members": [
+    "disc_d322080a.iff",
+    "disc_e2e50181.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "18067dc40fa93b538a31193f2513634a",
+   "name": "disc_e646938d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e646938d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d7819a06.iff"
+   ],
+   "members": [
+    "disc_d7819a06.iff",
+    "disc_e646938d.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "6a025d604d0cca8807364e74265fab22",
+   "name": "disc_e6d609e0.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e6d609e0.iff"
+   ],
+   "frontend_sheets": [
+    "disc_df7411ea.iff"
+   ],
+   "members": [
+    "disc_df7411ea.iff",
+    "disc_e6d609e0.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "1703190fa71a9d1550941a4657b0171d",
+   "name": "disc_e8b66c1a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_e8b66c1a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_413108b4.iff"
+   ],
+   "members": [
+    "disc_413108b4.iff",
+    "disc_e8b66c1a.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "a175565465eb2ea09c1a4d51869c30c7",
+   "name": "disc_ea34e4e3.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ea34e4e3.iff"
+   ],
+   "frontend_sheets": [
+    "disc_dbf3ed68.iff"
+   ],
+   "members": [
+    "disc_dbf3ed68.iff",
+    "disc_ea34e4e3.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "eb5a304a513ce2c4e90599f992531d5c",
+   "name": "disc_eabd0dad.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_eabd0dad.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d31f15a7.iff"
+   ],
+   "members": [
+    "disc_d31f15a7.iff",
+    "disc_eabd0dad.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "ee7382b6323f1a0d77d01d977a837c60",
+   "name": "disc_ec957f4a.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ec957f4a.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d75f82a6.iff"
+   ],
+   "members": [
+    "disc_d75f82a6.iff",
+    "disc_ec957f4a.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "e456ebc5cdbe7ae58f55b0d4e0d22962",
+   "name": "disc_ee0102ef.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ee0102ef.iff"
+   ],
+   "frontend_sheets": [
+    "disc_d5cbff03.iff"
+   ],
+   "members": [
+    "disc_d5cbff03.iff",
+    "disc_ee0102ef.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "04679eab6992afb5a3d4547e2b754824",
+   "name": "disc_ee9776ef.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_ee9776ef.iff"
+   ],
+   "frontend_sheets": [
+    "disc_df507f64.iff"
+   ],
+   "members": [
+    "disc_df507f64.iff",
+    "disc_ee9776ef.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "018bdda73146846c834867ab89219270",
+   "name": "disc_f0628dd8.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f0628dd8.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c9c095d2.iff"
+   ],
+   "members": [
+    "disc_c9c095d2.iff",
+    "disc_f0628dd8.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "233b944394219b54cb8dc6f4fe7088c1",
+   "name": "disc_f1a36398.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f1a36398.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ca699e74.iff"
+   ],
+   "members": [
+    "disc_ca699e74.iff",
+    "disc_f1a36398.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "38ed218c89a0e278c420f4c5316444a9",
+   "name": "disc_f56f5a22.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f56f5a22.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cea5a7ce.iff"
+   ],
+   "members": [
+    "disc_cea5a7ce.iff",
+    "disc_f56f5a22.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "3540880a09faa1ba90f55b4c5ef707b7",
+   "name": "disc_f61c3cc9.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f61c3cc9.iff"
+   ],
+   "frontend_sheets": [
+    "disc_5f9b5867.iff"
+   ],
+   "members": [
+    "disc_5f9b5867.iff",
+    "disc_f61c3cc9.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "3c12dcc69210f6408e7db991733a65e3",
+   "name": "disc_f64109e9.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f64109e9.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cd8bf405.iff"
+   ],
+   "members": [
+    "disc_cd8bf405.iff",
+    "disc_f64109e9.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "4b8faff44cca370cda39c4363f2e71ce",
+   "name": "disc_f73bf9f4.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f73bf9f4.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c6fcf07f.iff"
+   ],
+   "members": [
+    "disc_c6fcf07f.iff",
+    "disc_f73bf9f4.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "7e6c9be6a01db2e955afe698eeb49637",
+   "name": "disc_f7b27e4d.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f7b27e4d.iff"
+   ],
+   "frontend_sheets": [
+    "disc_ce106647.iff"
+   ],
+   "members": [
+    "disc_ce106647.iff",
+    "disc_f7b27e4d.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  },
+  {
+   "hash": "4c2e5ab2049eba36dbcee019506a2bcc",
+   "name": "disc_f7f7b617.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f7f7b617.iff"
+   ],
+   "frontend_sheets": [
+    "disc_cc3d4bfb.iff"
+   ],
+   "members": [
+    "disc_cc3d4bfb.iff",
+    "disc_f7f7b617.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "6bef7b7f00b5ee515a00b762105abe51",
+   "name": "disc_f837817c.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f837817c.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c3fd7c90.iff"
+   ],
+   "members": [
+    "disc_c3fd7c90.iff",
+    "disc_f837817c.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "3799c1159fd05b4872617f16673d6824",
+   "name": "disc_f86c2fb2.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_f86c2fb2.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c3a6d25e.iff"
+   ],
+   "members": [
+    "disc_c3a6d25e.iff",
+    "disc_f86c2fb2.iff"
+   ],
+   "paired_by": "1:1 content match"
+  },
+  {
+   "hash": "fac03ff0028c7082db718aeb5f98c8ed",
+   "name": "disc_fd361632.iff",
+   "named_uniforms": [],
+   "uniforms": [
+    "disc_fd361632.iff"
+   ],
+   "frontend_sheets": [
+    "disc_c4940e38.iff"
+   ],
+   "members": [
+    "disc_c4940e38.iff",
+    "disc_fd361632.iff"
+   ],
+   "paired_by": "offset-rank (home/away share identical art; rule validated 145/145)"
+  }
+ ],
+ "leftovers": [
+  {
+   "hash": "d80b59c5974e40ec6d9c70fcaa846165",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_00a7318a.iff"
+   ],
+   "members": [
+    "disc_00a7318a.iff"
+   ]
+  },
+  {
+   "hash": "4414726098458b6b4434678338cd28b1",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_0574394d.iff"
+   ],
+   "members": [
+    "disc_0574394d.iff"
+   ]
+  },
+  {
+   "hash": "a8e62d2abbf16ab57d09dba5386a5716",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_16b75940.iff"
+   ],
+   "members": [
+    "disc_16b75940.iff"
+   ]
+  },
+  {
+   "hash": "ee394100d9e6d74a9525cfc6224bf8d2",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_22fa8619.iff"
+   ],
+   "members": [
+    "disc_22fa8619.iff"
+   ]
+  },
+  {
+   "hash": "d3cc9b5c4524c6c2d0d1db786023957a",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_1957b53f.iff"
+   ],
+   "members": [
+    "disc_1957b53f.iff"
+   ]
+  },
+  {
+   "hash": "d3cc9b5c4524c6c2d0d1db786023957a",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_80fbc645.iff"
+   ],
+   "members": [
+    "disc_80fbc645.iff"
+   ]
+  },
+  {
+   "hash": "045033b43fddf66268fa0900d2e3eeaf",
+   "uniforms": [
+    "disc_2855617b.iff",
+    "disc_b1f91201.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "disc_2855617b.iff",
+    "disc_b1f91201.iff"
+   ]
+  },
+  {
+   "hash": "66df26225858a05391d3b0ec7fe779e9",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_39a39c64.iff"
+   ],
+   "members": [
+    "disc_39a39c64.iff"
+   ]
+  },
+  {
+   "hash": "dfd8a2d40fc91cebe79f32d62a83d753",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_3a30e01c.iff"
+   ],
+   "members": [
+    "disc_3a30e01c.iff"
+   ]
+  },
+  {
+   "hash": "f7805656c75cf4173cefaa4ba5a4686c",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_3d4b7409.iff"
+   ],
+   "members": [
+    "disc_3d4b7409.iff"
+   ]
+  },
+  {
+   "hash": "4598c8fd11b3724521e72c5dc66acbd5",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_43afc362.iff"
+   ],
+   "members": [
+    "disc_43afc362.iff"
+   ]
+  },
+  {
+   "hash": "1d0609b46520069c3729cb62e3afc512",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_4e6a91cb.iff"
+   ],
+   "members": [
+    "disc_4e6a91cb.iff"
+   ]
+  },
+  {
+   "hash": "d62772871dfaf483e8cf717e0b57cbdc",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_55a24985.iff"
+   ],
+   "members": [
+    "disc_55a24985.iff"
+   ]
+  },
+  {
+   "hash": "ce7f33a779064b496c536c1524bc3676",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_658bad3d.iff"
+   ],
+   "members": [
+    "disc_658bad3d.iff"
+   ]
+  },
+  {
+   "hash": "40fecd1bce4501a437e28ddd0328d991",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_8f1b2a3a.iff"
+   ],
+   "members": [
+    "disc_8f1b2a3a.iff"
+   ]
+  },
+  {
+   "hash": "4a3a3438f9c91545ed7044f095905af9",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_990b42f0.iff"
+   ],
+   "members": [
+    "disc_990b42f0.iff"
+   ]
+  },
+  {
+   "hash": "863efd31cb4d7658260bcd17474e258f",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_9cd84a37.iff"
+   ],
+   "members": [
+    "disc_9cd84a37.iff"
+   ]
+  },
+  {
+   "hash": "aa7a1389613d96f69d8cbf9a63b0c5af",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_a39c9366.iff"
+   ],
+   "members": [
+    "disc_a39c9366.iff"
+   ]
+  },
+  {
+   "hash": "5ac7de444bfdcb93e905809d0593fd43",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_cffaa846.iff"
+   ],
+   "members": [
+    "disc_cffaa846.iff"
+   ]
+  },
+  {
+   "hash": "d6fc3cbe576ba5973c383278017840d8",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_d7c6e2b1.iff"
+   ],
+   "members": [
+    "disc_d7c6e2b1.iff"
+   ]
+  },
+  {
+   "hash": "0dcdc757379204199dcb1c94fc2e6be6",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_da03b018.iff"
+   ],
+   "members": [
+    "disc_da03b018.iff"
+   ]
+  },
+  {
+   "hash": "ebcb789b5057c3a3d4c4a9a3724641de",
+   "uniforms": [],
+   "frontend_sheets": [
+    "disc_fc27de47.iff"
+   ],
+   "members": [
+    "disc_fc27de47.iff"
+   ]
+  },
+  {
+   "hash": "1398e3945cf634ca20653d48a57f8fed",
+   "uniforms": [
+    "uniform_det_away.iff"
+   ],
+   "frontend_sheets": [],
+   "members": [
+    "uniform_det_away.iff"
+   ]
+  }
+ ]
+}

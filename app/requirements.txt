@@ -1,0 +1,16 @@
+# NHL 2K10 Mod Launcher — Python dependencies
+# Install with:   pip install -r requirements.txt
+# Requires Python 3.10+ (uses tkinter, which ships with the standard python.org installer).
+
+# ── Runtime (needed to run the launcher from source) ─────────────────────
+Pillow>=10.0        # image decode/encode + Tk preview (PIL)
+numpy               # texture (de)tiling, DXT/linear encode, array math
+requests            # NHL.com portrait auto-download (Portraits tab)
+onnxruntime         # OPTIONAL — face-parsing model for portrait/jersey compositing.
+                    #   The app runs without it (falls back to a heuristic cutout),
+                    #   but installing it gives the better result.
+
+# ── Build only (to produce the standalone .exe) ──────────────────────────
+# Not needed just to run from source. Install if you're building:
+#   pip install pyinstaller
+# then:  python -m PyInstaller nhl2k10_launcher.spec --noconfirm   (or rebuild_exe.bat)

@@ -1,0 +1,42 @@
+# ── Python ───────────────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+env/
+
+# ── PyInstaller build artifacts ──────────────────────────────────────────
+app/build/
+app/dist/
+*.spec.bak
+*.manifest
+# (nhl2k10_launcher.spec IS tracked — it's the build recipe, not an artifact)
+
+# ── Editor backups / scratch ─────────────────────────────────────────────
+*.bak
+*.orig
+*.tmp
+*~
+.DS_Store
+Thumbs.db
+
+# ── Audio tools: NOT redistributable / too large — users supply their own ─
+#    (see app/tools/README.md)
+app/tools/ffmpeg/
+app/tools/xma2encode.exe
+
+# ── Game data — copyrighted, never commit ────────────────────────────────
+#    The multi-GB extracted archives and anything derived from game media.
+0A
+0B
+1B
+1A
+*.xex
+*.ROS
+Roster.ROS
+live_capture/
+config
+
+# ── Per-user launcher state (lives in %APPDATA%, never in the repo) ───────
+NHL2K10 Mod Launcher/

@@ -1,0 +1,8379 @@
+{
+ "version": 1,
+ "generated": "2026-07-18",
+ "comment": "Sound-name hash directories recovered from audio bank IFFs. Each bank IFF carries 20-byte entries [crc32(name)][0x1AEDDA1F][2][ref][wave_off]; names hash with plain zlib crc32 (Str_Hash @0x84113740 = CRC32 of the wide string's ASCII bytes, no uppercasing). 'name' is the cracked authored name (null = hash not yet cracked). wave_off is relative to the owning container (scene-container banks embed waves; pasfx/paintro/loading_audio pair with a same-stem .cdf wave container). In-container wave codec is NOT the 1A/1B XMA2 packing (undecoded as of 2026-07-18).",
+ "named": 552,
+ "total": 1385,
+ "banks": {
+  "bootup_audio.iff": {
+   "arc": "0A",
+   "sounds": [
+    {
+     "hash": "0x1A3AF949",
+     "name": null,
+     "wave_off": "0x87800",
+     "entry_off": "0xEB5868"
+    },
+    {
+     "hash": "0xDA6CAF57",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0xEB587C"
+    }
+   ]
+  },
+  "loading_audio.iff": {
+   "arc": "0A",
+   "sounds": [
+    {
+     "hash": "0x022DD27F",
+     "name": null,
+     "wave_off": "0x41000",
+     "entry_off": "0x100F108"
+    },
+    {
+     "hash": "0x05401666",
+     "name": null,
+     "wave_off": "0xA1800",
+     "entry_off": "0x100F11C"
+    },
+    {
+     "hash": "0x1B36E33E",
+     "name": null,
+     "wave_off": "0x136000",
+     "entry_off": "0x100F130"
+    },
+    {
+     "hash": "0x1C5B2727",
+     "name": null,
+     "wave_off": "0x1A7800",
+     "entry_off": "0x100F144"
+    },
+    {
+     "hash": "0x301BB0FD",
+     "name": null,
+     "wave_off": "0x249000",
+     "entry_off": "0x100F158"
+    },
+    {
+     "hash": "0x33C5C8E2",
+     "name": null,
+     "wave_off": "0x32E000",
+     "entry_off": "0x100F16C"
+    },
+    {
+     "hash": "0x34A80CFB",
+     "name": null,
+     "wave_off": "0x383000",
+     "entry_off": "0x100F180"
+    },
+    {
+     "hash": "0x377674E4",
+     "name": null,
+     "wave_off": "0x2B5000",
+     "entry_off": "0x100F194"
+    },
+    {
+     "hash": "0x40714472",
+     "name": null,
+     "wave_off": "0x29A800",
+     "entry_off": "0x100F1A8"
+    },
+    {
+     "hash": "0x43AF3C6D",
+     "name": null,
+     "wave_off": "0x36A800",
+     "entry_off": "0x100F1BC"
+    },
+    {
+     "hash": "0x44C2F874",
+     "name": null,
+     "wave_off": "0x319000",
+     "entry_off": "0x100F1D0"
+    },
+    {
+     "hash": "0x471C806B",
+     "name": null,
+     "wave_off": "0x22C800",
+     "entry_off": "0x100F1E4"
+    },
+    {
+     "hash": "0x6B5C17B1",
+     "name": null,
+     "wave_off": "0x18D000",
+     "entry_off": "0x100F1F8"
+    },
+    {
+     "hash": "0x6C31D3A8",
+     "name": null,
+     "wave_off": "0x11E800",
+     "entry_off": "0x100F20C"
+    },
+    {
+     "hash": "0x724726F0",
+     "name": null,
+     "wave_off": "0x89800",
+     "entry_off": "0x100F220"
+    },
+    {
+     "hash": "0x752AE2E9",
+     "name": null,
+     "wave_off": "0x2B000",
+     "entry_off": "0x100F234"
+    },
+    {
+     "hash": "0x823FB284",
+     "name": null,
+     "wave_off": "0xEB800",
+     "entry_off": "0x100F248"
+    },
+    {
+     "hash": "0x8552769D",
+     "name": null,
+     "wave_off": "0x153000",
+     "entry_off": "0x100F25C"
+    },
+    {
+     "hash": "0x8CE43AB6",
+     "name": null,
+     "wave_off": "0x1C3000",
+     "entry_off": "0x100F270"
+    },
+    {
+     "hash": "0x95FF0BF7",
+     "name": null,
+     "wave_off": "0xBB800",
+     "entry_off": "0x100F284"
+    },
+    {
+     "hash": "0x9B2483C5",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x100F298"
+    },
+    {
+     "hash": "0x9C4947DC",
+     "name": null,
+     "wave_off": "0x58800",
+     "entry_off": "0x100F2AC"
+    },
+    {
+     "hash": "0xA417116A",
+     "name": null,
+     "wave_off": "0x39A000",
+     "entry_off": "0x100F2C0"
+    },
+    {
+     "hash": "0xA7C96975",
+     "name": null,
+     "wave_off": "0x2D0000",
+     "entry_off": "0x100F2D4"
+    },
+    {
+     "hash": "0xA912E147",
+     "name": null,
+     "wave_off": "0x1F7800",
+     "entry_off": "0x100F2E8"
+    },
+    {
+     "hash": "0xADA15D41",
+     "name": null,
+     "wave_off": "0x341000",
+     "entry_off": "0x100F2FC"
+    },
+    {
+     "hash": "0xAE7F255E",
+     "name": null,
+     "wave_off": "0x261800",
+     "entry_off": "0x100F310"
+    },
+    {
+     "hash": "0xB3D7A819",
+     "name": null,
+     "wave_off": "0x3BF000",
+     "entry_off": "0x100F324"
+    },
+    {
+     "hash": "0xD0CE59E3",
+     "name": null,
+     "wave_off": "0x2EB000",
+     "entry_off": "0x100F338"
+    },
+    {
+     "hash": "0xD31021FC",
+     "name": null,
+     "wave_off": "0x3AA000",
+     "entry_off": "0x100F34C"
+    },
+    {
+     "hash": "0xD97815C8",
+     "name": null,
+     "wave_off": "0x27F800",
+     "entry_off": "0x100F360"
+    },
+    {
+     "hash": "0xDAA66DD7",
+     "name": null,
+     "wave_off": "0x355000",
+     "entry_off": "0x100F374"
+    },
+    {
+     "hash": "0xDDCBA9CE",
+     "name": null,
+     "wave_off": "0x306800",
+     "entry_off": "0x100F388"
+    },
+    {
+     "hash": "0xDE15D1D1",
+     "name": null,
+     "wave_off": "0x212000",
+     "entry_off": "0x100F39C"
+    },
+    {
+     "hash": "0xE2F83B61",
+     "name": null,
+     "wave_off": "0xD2800",
+     "entry_off": "0x100F3B0"
+    },
+    {
+     "hash": "0xEB4E774A",
+     "name": null,
+     "wave_off": "0x6E800",
+     "entry_off": "0x100F3C4"
+    },
+    {
+     "hash": "0xEC23B353",
+     "name": null,
+     "wave_off": "0x17800",
+     "entry_off": "0x100F3D8"
+    },
+    {
+     "hash": "0xF255460B",
+     "name": null,
+     "wave_off": "0x170800",
+     "entry_off": "0x100F3EC"
+    },
+    {
+     "hash": "0xF5388212",
+     "name": null,
+     "wave_off": "0x105800",
+     "entry_off": "0x100F400"
+    },
+    {
+     "hash": "0xFBE30A20",
+     "name": null,
+     "wave_off": "0x1DF000",
+     "entry_off": "0x100F414"
+    }
+   ]
+  },
+  "frontend.iff": {
+   "arc": "0A",
+   "sounds": [
+    {
+     "hash": "0x011C6574",
+     "name": "menu-error_01",
+     "wave_off": "0x37000",
+     "entry_off": "0x3EEA8E4"
+    },
+    {
+     "hash": "0x08B9041E",
+     "name": null,
+     "wave_off": "0x4A800",
+     "entry_off": "0x3EEA8F8"
+    },
+    {
+     "hash": "0x0B59CDCF",
+     "name": null,
+     "wave_off": "0x11800",
+     "entry_off": "0x3EEA90C"
+    },
+    {
+     "hash": "0x0C883023",
+     "name": null,
+     "wave_off": "0x38800",
+     "entry_off": "0x3EEA920"
+    },
+    {
+     "hash": "0x1268766F",
+     "name": null,
+     "wave_off": "0x5A000",
+     "entry_off": "0x3EEA934"
+    },
+    {
+     "hash": "0x284071CA",
+     "name": null,
+     "wave_off": "0x18800",
+     "entry_off": "0x3EEA948"
+    },
+    {
+     "hash": "0x2F680FC6",
+     "name": null,
+     "wave_off": "0x43800",
+     "entry_off": "0x3EEA95C"
+    },
+    {
+     "hash": "0x324DBEDC",
+     "name": null,
+     "wave_off": "0x1E000",
+     "entry_off": "0x3EEA970"
+    },
+    {
+     "hash": "0x40C1BA2C",
+     "name": "menu-misc_01",
+     "wave_off": "0x44000",
+     "entry_off": "0x3EEA984"
+    },
+    {
+     "hash": "0x4333679F",
+     "name": null,
+     "wave_off": "0x21000",
+     "entry_off": "0x3EEA998"
+    },
+    {
+     "hash": "0x48879EE6",
+     "name": null,
+     "wave_off": "0x65000",
+     "entry_off": "0x3EEA9AC"
+    },
+    {
+     "hash": "0x4D060144",
+     "name": null,
+     "wave_off": "0x45000",
+     "entry_off": "0x3EEA9C0"
+    },
+    {
+     "hash": "0x589DA495",
+     "name": null,
+     "wave_off": "0x78800",
+     "entry_off": "0x3EEA9D4"
+    },
+    {
+     "hash": "0x636D5AE6",
+     "name": null,
+     "wave_off": "0x1A800",
+     "entry_off": "0x3EEA9F8"
+    },
+    {
+     "hash": "0x702E5D5B",
+     "name": null,
+     "wave_off": "0x4D000",
+     "entry_off": "0x3EEAA0C"
+    },
+    {
+     "hash": "0x7FD4C845",
+     "name": "2klogo_01",
+     "wave_off": "0x0",
+     "entry_off": "0x3EEAA20"
+    },
+    {
+     "hash": "0x7FE458A8",
+     "name": null,
+     "wave_off": "0x45800",
+     "entry_off": "0x3EEAA34"
+    },
+    {
+     "hash": "0x85C1BD48",
+     "name": null,
+     "wave_off": "0x4E000",
+     "entry_off": "0x3EEAA48"
+    },
+    {
+     "hash": "0x9248554F",
+     "name": null,
+     "wave_off": "0x4F000",
+     "entry_off": "0x3EEAA6C"
+    },
+    {
+     "hash": "0x943E94C6",
+     "name": null,
+     "wave_off": "0x64000",
+     "entry_off": "0x3EEAA80"
+    },
+    {
+     "hash": "0x9768157D",
+     "name": null,
+     "wave_off": "0x15800",
+     "entry_off": "0x3EEAA94"
+    },
+    {
+     "hash": "0x9CA9027D",
+     "name": null,
+     "wave_off": "0x6800",
+     "entry_off": "0x3EEAAA8"
+    },
+    {
+     "hash": "0xAEB358DC",
+     "name": null,
+     "wave_off": "0x46800",
+     "entry_off": "0x3EEAABC"
+    },
+    {
+     "hash": "0xD2F00524",
+     "name": null,
+     "wave_off": "0x2D000",
+     "entry_off": "0x3EEAAF0"
+    },
+    {
+     "hash": "0xD984CBB9",
+     "name": null,
+     "wave_off": "0x13000",
+     "entry_off": "0x3EEAB04"
+    },
+    {
+     "hash": "0xE17625DC",
+     "name": "menu-forward_01",
+     "wave_off": "0x3E000",
+     "entry_off": "0x3EEAB18"
+    },
+    {
+     "hash": "0xEF6FC87F",
+     "name": null,
+     "wave_off": "0x6D000",
+     "entry_off": "0x3EEAB2C"
+    },
+    {
+     "hash": "0xF482E402",
+     "name": null,
+     "wave_off": "0x48800",
+     "entry_off": "0x3EEAB40"
+    },
+    {
+     "hash": "0xFF8EF7C5",
+     "name": "menu-back_01",
+     "wave_off": "0x2E000",
+     "entry_off": "0x3EEAB54"
+    }
+   ]
+  },
+  "disc_aaea7e4d": {
+   "arc": "0A",
+   "sounds": [
+    {
+     "hash": "0x4DB33DE3",
+     "name": null,
+     "wave_off": "0x2800",
+     "entry_off": "0x429A068"
+    },
+    {
+     "hash": "0x8DE56BFD",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x429A07C"
+    }
+   ]
+  },
+  "crowdloops.iff": {
+   "arc": "0A",
+   "sounds": [
+    {
+     "hash": "0x146D7538",
+     "name": "crowd-clap-loop_01",
+     "wave_off": "0x13A800",
+     "entry_off": "0x381FA094"
+    },
+    {
+     "hash": "0x1B450BC8",
+     "name": "crowd-stomp-loop_02",
+     "wave_off": "0x289800",
+     "entry_off": "0x381FA0A8"
+    },
+    {
+     "hash": "0x1CF3027E",
+     "name": "crowd-boo-loop_02",
+     "wave_off": "0x2B000",
+     "entry_off": "0x381FA0BC"
+    },
+    {
+     "hash": "0x5DA77E56",
+     "name": null,
+     "wave_off": "0x238000",
+     "entry_off": "0x381FA0D0"
+    },
+    {
+     "hash": "0x5E052D70",
+     "name": "crowd-scream-loop_01",
+     "wave_off": "0x238800",
+     "entry_off": "0x381FA0E4"
+    },
+    {
+     "hash": "0x79DE3D99",
+     "name": "crowd-cheer-loop_02",
+     "wave_off": "0xC9000",
+     "entry_off": "0x381FA0F8"
+    },
+    {
+     "hash": "0x824C5A72",
+     "name": "crowd-stomp-loop_01",
+     "wave_off": "0x289000",
+     "entry_off": "0x381FA10C"
+    },
+    {
+     "hash": "0x85FA53C4",
+     "name": "crowd-boo-loop_01",
+     "wave_off": "0x0",
+     "entry_off": "0x381FA120"
+    },
+    {
+     "hash": "0x8D642482",
+     "name": "crowd-clap-loop_02",
+     "wave_off": "0x1B7000",
+     "entry_off": "0x381FA134"
+    },
+    {
+     "hash": "0x9769C941",
+     "name": "crowd-lferumble-loop_01",
+     "wave_off": "0x233800",
+     "entry_off": "0x381FA148"
+    },
+    {
+     "hash": "0xC4AE2FEC",
+     "name": null,
+     "wave_off": "0x237800",
+     "entry_off": "0x381FA15C"
+    },
+    {
+     "hash": "0xC70C7CCA",
+     "name": "crowd-scream-loop_02",
+     "wave_off": "0x25B800",
+     "entry_off": "0x381FA170"
+    },
+    {
+     "hash": "0xE0D76C23",
+     "name": "crowd-cheer-loop_01",
+     "wave_off": "0x4F800",
+     "entry_off": "0x381FA184"
+    }
+   ]
+  },
+  "pasfx.iff": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x0FCFDCC9",
+     "name": null,
+     "wave_off": "0x83800",
+     "entry_off": "0x369480A0"
+    },
+    {
+     "hash": "0x42154AB3",
+     "name": null,
+     "wave_off": "0x32000",
+     "entry_off": "0x369480B4"
+    },
+    {
+     "hash": "0x5160EBE4",
+     "name": null,
+     "wave_off": "0xC000",
+     "entry_off": "0x369480C8"
+    },
+    {
+     "hash": "0x643092A1",
+     "name": null,
+     "wave_off": "0x25800",
+     "entry_off": "0x369480DC"
+    },
+    {
+     "hash": "0x7E7EE17C",
+     "name": null,
+     "wave_off": "0x77800",
+     "entry_off": "0x369480F0"
+    },
+    {
+     "hash": "0x9470C398",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x36948104"
+    },
+    {
+     "hash": "0x96C68D73",
+     "name": null,
+     "wave_off": "0x8B000",
+     "entry_off": "0x36948118"
+    },
+    {
+     "hash": "0xB532BBA8",
+     "name": null,
+     "wave_off": "0x52000",
+     "entry_off": "0x3694812C"
+    },
+    {
+     "hash": "0xC1721E69",
+     "name": null,
+     "wave_off": "0x67000",
+     "entry_off": "0x36948140"
+    },
+    {
+     "hash": "0xC69AEC4C",
+     "name": null,
+     "wave_off": "0x42000",
+     "entry_off": "0x36948154"
+    },
+    {
+     "hash": "0xE1C1BDE5",
+     "name": null,
+     "wave_off": "0x93000",
+     "entry_off": "0x36948168"
+    },
+    {
+     "hash": "0xE1FA499D",
+     "name": null,
+     "wave_off": "0x1B800",
+     "entry_off": "0x3694817C"
+    },
+    {
+     "hash": "0xE777B0C6",
+     "name": null,
+     "wave_off": "0x6C000",
+     "entry_off": "0x36948190"
+    },
+    {
+     "hash": "0xF50EDE4A",
+     "name": null,
+     "wave_off": "0x4B000",
+     "entry_off": "0x369481A4"
+    }
+   ]
+  },
+  "paintro.iff": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x00BF0908",
+     "name": null,
+     "wave_off": "0x139000",
+     "entry_off": "0x36C8E12C"
+    },
+    {
+     "hash": "0x07D2CD11",
+     "name": null,
+     "wave_off": "0x171000",
+     "entry_off": "0x36C8E140"
+    },
+    {
+     "hash": "0x19A43849",
+     "name": null,
+     "wave_off": "0x1C3000",
+     "entry_off": "0x36C8E154"
+    },
+    {
+     "hash": "0x1EC9FC50",
+     "name": null,
+     "wave_off": "0x1F7800",
+     "entry_off": "0x36C8E168"
+    },
+    {
+     "hash": "0x21E29E18",
+     "name": null,
+     "wave_off": "0x253000",
+     "entry_off": "0x36C8E17C"
+    },
+    {
+     "hash": "0x268F5A01",
+     "name": null,
+     "wave_off": "0x288000",
+     "entry_off": "0x36C8E190"
+    },
+    {
+     "hash": "0x2B925ACB",
+     "name": null,
+     "wave_off": "0xA4000",
+     "entry_off": "0x36C8E1A4"
+    },
+    {
+     "hash": "0x2CFF9ED2",
+     "name": null,
+     "wave_off": "0xDB800",
+     "entry_off": "0x36C8E1B8"
+    },
+    {
+     "hash": "0x32896B8A",
+     "name": null,
+     "wave_off": "0x1A000",
+     "entry_off": "0x36C8E1CC"
+    },
+    {
+     "hash": "0x35E4AF93",
+     "name": null,
+     "wave_off": "0x50800",
+     "entry_off": "0x36C8E1E0"
+    },
+    {
+     "hash": "0x42E39F05",
+     "name": null,
+     "wave_off": "0x5D800",
+     "entry_off": "0x36C8E1F4"
+    },
+    {
+     "hash": "0x458E5B1C",
+     "name": null,
+     "wave_off": "0x27000",
+     "entry_off": "0x36C8E208"
+    },
+    {
+     "hash": "0x51886A97",
+     "name": null,
+     "wave_off": "0x27A000",
+     "entry_off": "0x36C8E21C"
+    },
+    {
+     "hash": "0x56E5AE8E",
+     "name": null,
+     "wave_off": "0x246000",
+     "entry_off": "0x36C8E230"
+    },
+    {
+     "hash": "0x5BF8AE44",
+     "name": null,
+     "wave_off": "0xEA000",
+     "entry_off": "0x36C8E244"
+    },
+    {
+     "hash": "0x5C956A5D",
+     "name": null,
+     "wave_off": "0xB1800",
+     "entry_off": "0x36C8E258"
+    },
+    {
+     "hash": "0x69CECCC6",
+     "name": null,
+     "wave_off": "0x204800",
+     "entry_off": "0x36C8E26C"
+    },
+    {
+     "hash": "0x6EA308DF",
+     "name": null,
+     "wave_off": "0x1D0800",
+     "entry_off": "0x36C8E280"
+    },
+    {
+     "hash": "0x70D5FD87",
+     "name": null,
+     "wave_off": "0x17F800",
+     "entry_off": "0x36C8E294"
+    },
+    {
+     "hash": "0x77B8399E",
+     "name": null,
+     "wave_off": "0x146800",
+     "entry_off": "0x36C8E2A8"
+    },
+    {
+     "hash": "0x7B4832C4",
+     "name": null,
+     "wave_off": "0x296800",
+     "entry_off": "0x36C8E2BC"
+    },
+    {
+     "hash": "0x80AD69F3",
+     "name": null,
+     "wave_off": "0x1B4800",
+     "entry_off": "0x36C8E2D0"
+    },
+    {
+     "hash": "0x87C0ADEA",
+     "name": null,
+     "wave_off": "0x1EA800",
+     "entry_off": "0x36C8E2E4"
+    },
+    {
+     "hash": "0x8E76E1C1",
+     "name": null,
+     "wave_off": "0x21F800",
+     "entry_off": "0x36C8E2F8"
+    },
+    {
+     "hash": "0x976DD080",
+     "name": null,
+     "wave_off": "0x199000",
+     "entry_off": "0x36C8E30C"
+    },
+    {
+     "hash": "0x99B658B2",
+     "name": null,
+     "wave_off": "0x12B000",
+     "entry_off": "0x36C8E320"
+    },
+    {
+     "hash": "0x9EDB9CAB",
+     "name": null,
+     "wave_off": "0x163800",
+     "entry_off": "0x36C8E334"
+    },
+    {
+     "hash": "0xA55BB202",
+     "name": null,
+     "wave_off": "0x79000",
+     "entry_off": "0x36C8E348"
+    },
+    {
+     "hash": "0xAB803A30",
+     "name": null,
+     "wave_off": "0xB800",
+     "entry_off": "0x36C8E35C"
+    },
+    {
+     "hash": "0xACEDFE29",
+     "name": null,
+     "wave_off": "0x42800",
+     "entry_off": "0x36C8E370"
+    },
+    {
+     "hash": "0xB29B0B71",
+     "name": null,
+     "wave_off": "0x96000",
+     "entry_off": "0x36C8E384"
+    },
+    {
+     "hash": "0xB5F6CF68",
+     "name": null,
+     "wave_off": "0xCC000",
+     "entry_off": "0x36C8E398"
+    },
+    {
+     "hash": "0xB8EBCFA2",
+     "name": null,
+     "wave_off": "0x22C000",
+     "entry_off": "0x36C8E3AC"
+    },
+    {
+     "hash": "0xBC408343",
+     "name": null,
+     "wave_off": "0x105800",
+     "entry_off": "0x36C8E3C0"
+    },
+    {
+     "hash": "0xBF860BBB",
+     "name": null,
+     "wave_off": "0x260800",
+     "entry_off": "0x36C8E3D4"
+    },
+    {
+     "hash": "0xC2F1FFFE",
+     "name": null,
+     "wave_off": "0xBE800",
+     "entry_off": "0x36C8E3E8"
+    },
+    {
+     "hash": "0xC59C3BE7",
+     "name": null,
+     "wave_off": "0x86800",
+     "entry_off": "0x36C8E3FC"
+    },
+    {
+     "hash": "0xC8813B2D",
+     "name": null,
+     "wave_off": "0x26D800",
+     "entry_off": "0x36C8E410"
+    },
+    {
+     "hash": "0xCB47B3D5",
+     "name": null,
+     "wave_off": "0xF7800",
+     "entry_off": "0x36C8E424"
+    },
+    {
+     "hash": "0xCFECFF34",
+     "name": null,
+     "wave_off": "0x239000",
+     "entry_off": "0x36C8E438"
+    },
+    {
+     "hash": "0xD25C8294",
+     "name": null,
+     "wave_off": "0x6B800",
+     "entry_off": "0x36C8E44C"
+    },
+    {
+     "hash": "0xDBEACEBF",
+     "name": null,
+     "wave_off": "0x35000",
+     "entry_off": "0x36C8E460"
+    },
+    {
+     "hash": "0xDC870AA6",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x36C8E474"
+    },
+    {
+     "hash": "0xE06AE016",
+     "name": null,
+     "wave_off": "0x18C800",
+     "entry_off": "0x36C8E488"
+    },
+    {
+     "hash": "0xE9DCAC3D",
+     "name": null,
+     "wave_off": "0x155000",
+     "entry_off": "0x36C8E49C"
+    },
+    {
+     "hash": "0xEEB16824",
+     "name": null,
+     "wave_off": "0x114000",
+     "entry_off": "0x36C8E4B0"
+    },
+    {
+     "hash": "0xF0C79D7C",
+     "name": null,
+     "wave_off": "0x1DE000",
+     "entry_off": "0x36C8E4C4"
+    },
+    {
+     "hash": "0xF7AA5965",
+     "name": null,
+     "wave_off": "0x1A7000",
+     "entry_off": "0x36C8E4D8"
+    },
+    {
+     "hash": "0xF971D157",
+     "name": null,
+     "wave_off": "0x212800",
+     "entry_off": "0x36C8E4EC"
+    }
+   ]
+  },
+  "disc_099f9a9d": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x0242D027",
+     "name": null,
+     "wave_off": "0x8A000",
+     "entry_off": "0x3727BA00"
+    },
+    {
+     "hash": "0x03EA6D3E",
+     "name": null,
+     "wave_off": "0x2D000",
+     "entry_off": "0x3727BA14"
+    },
+    {
+     "hash": "0x0487A927",
+     "name": null,
+     "wave_off": "0x24000",
+     "entry_off": "0x3727BA28"
+    },
+    {
+     "hash": "0x0BCDFF0B",
+     "name": null,
+     "wave_off": "0x63800",
+     "entry_off": "0x3727BA3C"
+    },
+    {
+     "hash": "0x1227B3D9",
+     "name": null,
+     "wave_off": "0x71000",
+     "entry_off": "0x3727BA50"
+    },
+    {
+     "hash": "0x12FAC54F",
+     "name": null,
+     "wave_off": "0xEA000",
+     "entry_off": "0x3727BA64"
+    },
+    {
+     "hash": "0x13976EC9",
+     "name": null,
+     "wave_off": "0xE6800",
+     "entry_off": "0x3727BA78"
+    },
+    {
+     "hash": "0x159331FE",
+     "name": null,
+     "wave_off": "0xFD800",
+     "entry_off": "0x3727BA8C"
+    },
+    {
+     "hash": "0x1B67DD03",
+     "name": "whoosh2",
+     "wave_off": "0x199800",
+     "entry_off": "0x3727BAB8"
+    },
+    {
+     "hash": "0x1BAB325E",
+     "name": null,
+     "wave_off": "0xB9800",
+     "entry_off": "0x3727BACC"
+    },
+    {
+     "hash": "0x1C0A191A",
+     "name": "whoosh6",
+     "wave_off": "0x1A2000",
+     "entry_off": "0x3727BAE0"
+    },
+    {
+     "hash": "0x1E98331F",
+     "name": null,
+     "wave_off": "0xF7800",
+     "entry_off": "0x3727BAF4"
+    },
+    {
+     "hash": "0x1F0FA116",
+     "name": null,
+     "wave_off": "0x15C800",
+     "entry_off": "0x3727BB08"
+    },
+    {
+     "hash": "0x20F96073",
+     "name": null,
+     "wave_off": "0x142000",
+     "entry_off": "0x3727BB2C"
+    },
+    {
+     "hash": "0x21C80035",
+     "name": null,
+     "wave_off": "0x128000",
+     "entry_off": "0x3727BB40"
+    },
+    {
+     "hash": "0x27FB0E78",
+     "name": null,
+     "wave_off": "0x91000",
+     "entry_off": "0x3727BB54"
+    },
+    {
+     "hash": "0x30DC0529",
+     "name": null,
+     "wave_off": "0x3A000",
+     "entry_off": "0x3727BB80"
+    },
+    {
+     "hash": "0x311E4385",
+     "name": "misc2",
+     "wave_off": "0x110000",
+     "entry_off": "0x3727BB94"
+    },
+    {
+     "hash": "0x31E38A13",
+     "name": "whoosh11",
+     "wave_off": "0x18D800",
+     "entry_off": "0x3727BBA8"
+    },
+    {
+     "hash": "0x3657DE76",
+     "name": null,
+     "wave_off": "0xF2800",
+     "entry_off": "0x3727BBBC"
+    },
+    {
+     "hash": "0x3E03650E",
+     "name": null,
+     "wave_off": "0x164800",
+     "entry_off": "0x3727BBF8"
+    },
+    {
+     "hash": "0x46197313",
+     "name": "misc3",
+     "wave_off": "0x118000",
+     "entry_off": "0x3727BC0C"
+    },
+    {
+     "hash": "0x46E4BA85",
+     "name": "whoosh10",
+     "wave_off": "0x185000",
+     "entry_off": "0x3727BC20"
+    },
+    {
+     "hash": "0x47DB35BF",
+     "name": null,
+     "wave_off": "0x3B000",
+     "entry_off": "0x3727BC34"
+    },
+    {
+     "hash": "0x494B23DE",
+     "name": null,
+     "wave_off": "0x132000",
+     "entry_off": "0x3727BC48"
+    },
+    {
+     "hash": "0x4A6FFD0E",
+     "name": null,
+     "wave_off": "0x92000",
+     "entry_off": "0x3727BC5C"
+    },
+    {
+     "hash": "0x4C47B22E",
+     "name": null,
+     "wave_off": "0x12C000",
+     "entry_off": "0x3727BC70"
+    },
+    {
+     "hash": "0x509394FC",
+     "name": null,
+     "wave_off": "0x137800",
+     "entry_off": "0x3727BC9C"
+    },
+    {
+     "hash": "0x57FE50E5",
+     "name": null,
+     "wave_off": "0x145000",
+     "entry_off": "0x3727BCD8"
+    },
+    {
+     "hash": "0x5BFEF0BE",
+     "name": null,
+     "wave_off": "0xED800",
+     "entry_off": "0x3727BCEC"
+    },
+    {
+     "hash": "0x5E806D0E",
+     "name": null,
+     "wave_off": "0x4B000",
+     "entry_off": "0x3727BD00"
+    },
+    {
+     "hash": "0x6314524C",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x3727BD14"
+    },
+    {
+     "hash": "0x64F3AF84",
+     "name": null,
+     "wave_off": "0x1B000",
+     "entry_off": "0x3727BD28"
+    },
+    {
+     "hash": "0x6520834F",
+     "name": null,
+     "wave_off": "0x75000",
+     "entry_off": "0x3727BD3C"
+    },
+    {
+     "hash": "0x68089180",
+     "name": null,
+     "wave_off": "0x161800",
+     "entry_off": "0x3727BD50"
+    },
+    {
+     "hash": "0x6AC95CA5",
+     "name": null,
+     "wave_off": "0x44000",
+     "entry_off": "0x3727BD64"
+    },
+    {
+     "hash": "0x6B0D298C",
+     "name": "whoosh7",
+     "wave_off": "0x1A5000",
+     "entry_off": "0x3727BD78"
+    },
+    {
+     "hash": "0x6C60ED95",
+     "name": "whoosh3",
+     "wave_off": "0x19B000",
+     "entry_off": "0x3727BD8C"
+    },
+    {
+     "hash": "0x6CAC02C8",
+     "name": null,
+     "wave_off": "0xB2800",
+     "entry_off": "0x3727BDA0"
+    },
+    {
+     "hash": "0x738099B1",
+     "name": null,
+     "wave_off": "0x26800",
+     "entry_off": "0x3727BDB4"
+    },
+    {
+     "hash": "0x74ED5DA8",
+     "name": null,
+     "wave_off": "0x31000",
+     "entry_off": "0x3727BDC8"
+    },
+    {
+     "hash": "0x75701093",
+     "name": null,
+     "wave_off": "0x3D800",
+     "entry_off": "0x3727BDDC"
+    },
+    {
+     "hash": "0x7CCACF9D",
+     "name": null,
+     "wave_off": "0x5F800",
+     "entry_off": "0x3727BDF0"
+    },
+    {
+     "hash": "0x7DE49E82",
+     "name": null,
+     "wave_off": "0xC9000",
+     "entry_off": "0x3727BE04"
+    },
+    {
+     "hash": "0x826E8CB9",
+     "name": "whoosh1",
+     "wave_off": "0x182800",
+     "entry_off": "0x3727BE18"
+    },
+    {
+     "hash": "0x850348A0",
+     "name": "whoosh5",
+     "wave_off": "0x19F800",
+     "entry_off": "0x3727BE2C"
+    },
+    {
+     "hash": "0x85CFA7FD",
+     "name": null,
+     "wave_off": "0x9B800",
+     "entry_off": "0x3727BE40"
+    },
+    {
+     "hash": "0x8606F0AC",
+     "name": null,
+     "wave_off": "0x158800",
+     "entry_off": "0x3727BE54"
+    },
+    {
+     "hash": "0x8C9A6044",
+     "name": null,
+     "wave_off": "0x101800",
+     "entry_off": "0x3727BE68"
+    },
+    {
+     "hash": "0x8CB5048B",
+     "name": "whoosh9",
+     "wave_off": "0x1B1000",
+     "entry_off": "0x3727BE7C"
+    },
+    {
+     "hash": "0x907F01DF",
+     "name": null,
+     "wave_off": "0x79000",
+     "entry_off": "0x3727BE90"
+    },
+    {
+     "hash": "0x925419B1",
+     "name": null,
+     "wave_off": "0xC6000",
+     "entry_off": "0x3727BEA4"
+    },
+    {
+     "hash": "0x95A96AA8",
+     "name": null,
+     "wave_off": "0x66800",
+     "entry_off": "0x3727BEB8"
+    },
+    {
+     "hash": "0x97AC2499",
+     "name": null,
+     "wave_off": "0xBF000",
+     "entry_off": "0x3727BECC"
+    },
+    {
+     "hash": "0x9AE33C84",
+     "name": null,
+     "wave_off": "0x2B800",
+     "entry_off": "0x3727BEE0"
+    },
+    {
+     "hash": "0x9B4B819D",
+     "name": null,
+     "wave_off": "0x8B800",
+     "entry_off": "0x3727BEF4"
+    },
+    {
+     "hash": "0x9C628097",
+     "name": null,
+     "wave_off": "0x53000",
+     "entry_off": "0x3727BF08"
+    },
+    {
+     "hash": "0x9D8EF89D",
+     "name": null,
+     "wave_off": "0x22000",
+     "entry_off": "0x3727BF1C"
+    },
+    {
+     "hash": "0x9F30F94D",
+     "name": null,
+     "wave_off": "0x6F000",
+     "entry_off": "0x3727BF30"
+    },
+    {
+     "hash": "0xA4B0E4CE",
+     "name": null,
+     "wave_off": "0x14C800",
+     "entry_off": "0x3727BF44"
+    },
+    {
+     "hash": "0xA70A34B4",
+     "name": null,
+     "wave_off": "0x16C800",
+     "entry_off": "0x3727BF58"
+    },
+    {
+     "hash": "0xA817123F",
+     "name": "misc1",
+     "wave_off": "0x107000",
+     "entry_off": "0x3727BF6C"
+    },
+    {
+     "hash": "0xA8EADBA9",
+     "name": "whoosh12",
+     "wave_off": "0x194000",
+     "entry_off": "0x3727BF80"
+    },
+    {
+     "hash": "0xA9D55493",
+     "name": null,
+     "wave_off": "0x39000",
+     "entry_off": "0x3727BF94"
+    },
+    {
+     "hash": "0xBE9DF5D0",
+     "name": null,
+     "wave_off": "0x13E000",
+     "entry_off": "0x3727BFA8"
+    },
+    {
+     "hash": "0xC7893CB4",
+     "name": null,
+     "wave_off": "0x4E000",
+     "entry_off": "0x3727BFBC"
+    },
+    {
+     "hash": "0xC99AC546",
+     "name": null,
+     "wave_off": "0x13B000",
+     "entry_off": "0x3727BFD0"
+    },
+    {
+     "hash": "0xCD57F6DC",
+     "name": null,
+     "wave_off": "0xD0800",
+     "entry_off": "0x3727BFE4"
+    },
+    {
+     "hash": "0xCDDE56CA",
+     "name": null,
+     "wave_off": "0xD6000",
+     "entry_off": "0x3727BFF8"
+    },
+    {
+     "hash": "0xD00D0422",
+     "name": null,
+     "wave_off": "0x178000",
+     "entry_off": "0x3727C00C"
+    },
+    {
+     "hash": "0xD2C42C6A",
+     "name": null,
+     "wave_off": "0x85800",
+     "entry_off": "0x3727C020"
+    },
+    {
+     "hash": "0xD3623592",
+     "name": null,
+     "wave_off": "0x97800",
+     "entry_off": "0x3727C04C"
+    },
+    {
+     "hash": "0xD87DE6B0",
+     "name": "misc4",
+     "wave_off": "0x121000",
+     "entry_off": "0x3727C060"
+    },
+    {
+     "hash": "0xDD36CEC5",
+     "name": null,
+     "wave_off": "0xCB800",
+     "entry_off": "0x3727C074"
+    },
+    {
+     "hash": "0xDD72B41D",
+     "name": null,
+     "wave_off": "0x1E000",
+     "entry_off": "0x3727C088"
+    },
+    {
+     "hash": "0xE2AE5A3E",
+     "name": null,
+     "wave_off": "0x6B000",
+     "entry_off": "0x3727C09C"
+    },
+    {
+     "hash": "0xE5C39E27",
+     "name": null,
+     "wave_off": "0x5C000",
+     "entry_off": "0x3727C0B0"
+    },
+    {
+     "hash": "0xEC4CB10B",
+     "name": null,
+     "wave_off": "0x8D800",
+     "entry_off": "0x3727C0C4"
+    },
+    {
+     "hash": "0xEDE40C12",
+     "name": null,
+     "wave_off": "0x29800",
+     "entry_off": "0x3727C0D8"
+    },
+    {
+     "hash": "0xF12CCBB0",
+     "name": null,
+     "wave_off": "0x152800",
+     "entry_off": "0x3727C0EC"
+    },
+    {
+     "hash": "0xF2047836",
+     "name": "whoosh4",
+     "wave_off": "0x19D000",
+     "entry_off": "0x3727C100"
+    },
+    {
+     "hash": "0xF2C8976B",
+     "name": null,
+     "wave_off": "0xA7000",
+     "entry_off": "0x3727C114"
+    },
+    {
+     "hash": "0xF98D523D",
+     "name": null,
+     "wave_off": "0x95000",
+     "entry_off": "0x3727C150"
+    },
+    {
+     "hash": "0xFBB2341D",
+     "name": "whoosh8",
+     "wave_off": "0x1AA000",
+     "entry_off": "0x3727C164"
+    }
+   ]
+  },
+  "sfx_arena000.bnk": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x02099B19",
+     "name": null,
+     "wave_off": "0xF0C800",
+     "entry_off": "0x37EF6CE0"
+    },
+    {
+     "hash": "0x021B9F4E",
+     "name": null,
+     "wave_off": "0x32F800",
+     "entry_off": "0x37EF6CF4"
+    },
+    {
+     "hash": "0x02A722C4",
+     "name": "player-slide_00",
+     "wave_off": "0xE46800",
+     "entry_off": "0x37EF6D08"
+    },
+    {
+     "hash": "0x02B679AD",
+     "name": null,
+     "wave_off": "0x5CC800",
+     "entry_off": "0x37EF6D1C"
+    },
+    {
+     "hash": "0x030B46B5",
+     "name": "puck-goalie-blocker_01",
+     "wave_off": "0xDD2800",
+     "entry_off": "0x37EF6D30"
+    },
+    {
+     "hash": "0x035EA496",
+     "name": null,
+     "wave_off": "0x741000",
+     "entry_off": "0x37EF6D44"
+    },
+    {
+     "hash": "0x06FFFA34",
+     "name": null,
+     "wave_off": "0xC5800",
+     "entry_off": "0x37EF6D58"
+    },
+    {
+     "hash": "0x070B35F5",
+     "name": null,
+     "wave_off": "0xB2C800",
+     "entry_off": "0x37EF6D6C"
+    },
+    {
+     "hash": "0x07296DCD",
+     "name": null,
+     "wave_off": "0x55000",
+     "entry_off": "0x37EF6D80"
+    },
+    {
+     "hash": "0x08D3F8D3",
+     "name": "2klogo_00",
+     "wave_off": "0x26800",
+     "entry_off": "0x37EF6D94"
+    },
+    {
+     "hash": "0x09B8AC60",
+     "name": null,
+     "wave_off": "0x131800",
+     "entry_off": "0x37EF6DA8"
+    },
+    {
+     "hash": "0x0C98DB4E",
+     "name": null,
+     "wave_off": "0x67F000",
+     "entry_off": "0x37EF6DBC"
+    },
+    {
+     "hash": "0x0CB81A23",
+     "name": null,
+     "wave_off": "0xB04000",
+     "entry_off": "0x37EF6DD0"
+    },
+    {
+     "hash": "0x0D700675",
+     "name": null,
+     "wave_off": "0x9D3800",
+     "entry_off": "0x37EF6DE4"
+    },
+    {
+     "hash": "0x0D9BE1B2",
+     "name": null,
+     "wave_off": "0xBD4800",
+     "entry_off": "0x37EF6DF8"
+    },
+    {
+     "hash": "0x0DED7E9D",
+     "name": null,
+     "wave_off": "0x3A0000",
+     "entry_off": "0x37EF6E0C"
+    },
+    {
+     "hash": "0x0E0E5161",
+     "name": null,
+     "wave_off": "0x4B4000",
+     "entry_off": "0x37EF6E20"
+    },
+    {
+     "hash": "0x0FEBBB5C",
+     "name": null,
+     "wave_off": "0xAF6800",
+     "entry_off": "0x37EF6E34"
+    },
+    {
+     "hash": "0x0FF85E61",
+     "name": "puck-glass_03",
+     "wave_off": "0xDF4800",
+     "entry_off": "0x37EF6E48"
+    },
+    {
+     "hash": "0x1169E998",
+     "name": "puck-glove_00",
+     "wave_off": "0xDD8000",
+     "entry_off": "0x37EF6E5C"
+    },
+    {
+     "hash": "0x11A10813",
+     "name": null,
+     "wave_off": "0x109800",
+     "entry_off": "0x37EF6E70"
+    },
+    {
+     "hash": "0x12AF5675",
+     "name": null,
+     "wave_off": "0x62000",
+     "entry_off": "0x37EF6E84"
+    },
+    {
+     "hash": "0x141301BE",
+     "name": null,
+     "wave_off": "0xB3E800",
+     "entry_off": "0x37EF6E98"
+    },
+    {
+     "hash": "0x146A6A70",
+     "name": null,
+     "wave_off": "0x41800",
+     "entry_off": "0x37EF6EAC"
+    },
+    {
+     "hash": "0x14BE603E",
+     "name": null,
+     "wave_off": "0x143000",
+     "entry_off": "0x37EF6EC0"
+    },
+    {
+     "hash": "0x15AD03D0",
+     "name": "punch_02",
+     "wave_off": "0xCE9800",
+     "entry_off": "0x37EF6ED4"
+    },
+    {
+     "hash": "0x17FDD8C3",
+     "name": "puck-hit-board_01",
+     "wave_off": "0xD5D800",
+     "entry_off": "0x37EF6EE8"
+    },
+    {
+     "hash": "0x182D57FF",
+     "name": null,
+     "wave_off": "0x149000",
+     "entry_off": "0x37EF6EFC"
+    },
+    {
+     "hash": "0x19ECE845",
+     "name": null,
+     "wave_off": "0x691800",
+     "entry_off": "0x37EF6F10"
+    },
+    {
+     "hash": "0x1EF39926",
+     "name": null,
+     "wave_off": "0xE6000",
+     "entry_off": "0x37EF6F24"
+    },
+    {
+     "hash": "0x1F4093E6",
+     "name": null,
+     "wave_off": "0x154000",
+     "entry_off": "0x37EF6F38"
+    },
+    {
+     "hash": "0x1F54E436",
+     "name": "slap-shot_03",
+     "wave_off": "0xC0C800",
+     "entry_off": "0x37EF6F4C"
+    },
+    {
+     "hash": "0x1F684BB6",
+     "name": "pass-send_02",
+     "wave_off": "0xE6A800",
+     "entry_off": "0x37EF6F60"
+    },
+    {
+     "hash": "0x1FE1FEFC",
+     "name": null,
+     "wave_off": "0xB8C800",
+     "entry_off": "0x37EF6F74"
+    },
+    {
+     "hash": "0x2139E5DE",
+     "name": "skate-right_00",
+     "wave_off": "0xC29000",
+     "entry_off": "0x37EF6F88"
+    },
+    {
+     "hash": "0x21E73672",
+     "name": null,
+     "wave_off": "0x281800",
+     "entry_off": "0x37EF6F9C"
+    },
+    {
+     "hash": "0x22C7CAFB",
+     "name": "goalie-stop-scrape_02",
+     "wave_off": "0xE94000",
+     "entry_off": "0x37EF6FB0"
+    },
+    {
+     "hash": "0x232F883C",
+     "name": "puck-stick_00",
+     "wave_off": "0xCED000",
+     "entry_off": "0x37EF6FC4"
+    },
+    {
+     "hash": "0x252E113F",
+     "name": null,
+     "wave_off": "0x35A800",
+     "entry_off": "0x37EF6FD8"
+    },
+    {
+     "hash": "0x2560B248",
+     "name": "check-boards_00",
+     "wave_off": "0xF27000",
+     "entry_off": "0x37EF6FEC"
+    },
+    {
+     "hash": "0x265193BF",
+     "name": null,
+     "wave_off": "0x4E7800",
+     "entry_off": "0x37EF7000"
+    },
+    {
+     "hash": "0x265421C7",
+     "name": "skate-right_04",
+     "wave_off": "0xC3E000",
+     "entry_off": "0x37EF7014"
+    },
+    {
+     "hash": "0x2840C68E",
+     "name": null,
+     "wave_off": "0x8AF800",
+     "entry_off": "0x37EF7028"
+    },
+    {
+     "hash": "0x2A40D507",
+     "name": null,
+     "wave_off": "0x552800",
+     "entry_off": "0x37EF703C"
+    },
+    {
+     "hash": "0x2A61A060",
+     "name": null,
+     "wave_off": "0x77000",
+     "entry_off": "0x37EF7050"
+    },
+    {
+     "hash": "0x2A911275",
+     "name": "skate-left_10",
+     "wave_off": "0xC96800",
+     "entry_off": "0x37EF7064"
+    },
+    {
+     "hash": "0x2AE9B126",
+     "name": null,
+     "wave_off": "0xB6E000",
+     "entry_off": "0x37EF7078"
+    },
+    {
+     "hash": "0x2B407576",
+     "name": null,
+     "wave_off": "0x335800",
+     "entry_off": "0x37EF708C"
+    },
+    {
+     "hash": "0x2C94D67F",
+     "name": null,
+     "wave_off": "0xB4B800",
+     "entry_off": "0x37EF70A0"
+    },
+    {
+     "hash": "0x2E3E40DD",
+     "name": null,
+     "wave_off": "0x15B800",
+     "entry_off": "0x37EF70B4"
+    },
+    {
+     "hash": "0x2F47C940",
+     "name": null,
+     "wave_off": "0xF01000",
+     "entry_off": "0x37EF70C8"
+    },
+    {
+     "hash": "0x2F9A9403",
+     "name": null,
+     "wave_off": "0x66000",
+     "entry_off": "0x37EF70DC"
+    },
+    {
+     "hash": "0x2F9F8BE3",
+     "name": "pass-recieve_02",
+     "wave_off": "0xE82800",
+     "entry_off": "0x37EF70F0"
+    },
+    {
+     "hash": "0x2FE26DEC",
+     "name": "skate-right_08",
+     "wave_off": "0xC50800",
+     "entry_off": "0x37EF7104"
+    },
+    {
+     "hash": "0x303F6D61",
+     "name": "snap-shot_02",
+     "wave_off": "0xBF6000",
+     "entry_off": "0x37EF7118"
+    },
+    {
+     "hash": "0x31646523",
+     "name": null,
+     "wave_off": "0x616800",
+     "entry_off": "0x37EF712C"
+    },
+    {
+     "hash": "0x31ED4788",
+     "name": null,
+     "wave_off": "0xEB800",
+     "entry_off": "0x37EF7140"
+    },
+    {
+     "hash": "0x326ED339",
+     "name": "faceoff-sticks_01",
+     "wave_off": "0xEE2000",
+     "entry_off": "0x37EF7154"
+    },
+    {
+     "hash": "0x338A2334",
+     "name": "skate-left_00",
+     "wave_off": "0xC67000",
+     "entry_off": "0x37EF7168"
+    },
+    {
+     "hash": "0x34345709",
+     "name": null,
+     "wave_off": "0x9C800",
+     "entry_off": "0x37EF717C"
+    },
+    {
+     "hash": "0x3474B619",
+     "name": "check-body_00",
+     "wave_off": "0xF13000",
+     "entry_off": "0x37EF7190"
+    },
+    {
+     "hash": "0x34E7E72D",
+     "name": "skate-left_04",
+     "wave_off": "0xC7B800",
+     "entry_off": "0x37EF71A4"
+    },
+    {
+     "hash": "0x35368EA5",
+     "name": null,
+     "wave_off": "0x30F000",
+     "entry_off": "0x37EF71B8"
+    },
+    {
+     "hash": "0x35FE8C97",
+     "name": "skate-scrape-stop_02",
+     "wave_off": "0xC1C800",
+     "entry_off": "0x37EF71CC"
+    },
+    {
+     "hash": "0x3743D4C8",
+     "name": null,
+     "wave_off": "0xB95800",
+     "entry_off": "0x37EF71E0"
+    },
+    {
+     "hash": "0x37B5AE4D",
+     "name": "puck-goalie-skate_00",
+     "wave_off": "0xD9E800",
+     "entry_off": "0x37EF71F4"
+    },
+    {
+     "hash": "0x37C68ABA",
+     "name": "menu-misc_00",
+     "wave_off": "0x54000",
+     "entry_off": "0x37EF7208"
+    },
+    {
+     "hash": "0x3822D49F",
+     "name": "skate-right_10",
+     "wave_off": "0xC59000",
+     "entry_off": "0x37EF721C"
+    },
+    {
+     "hash": "0x3B0EA6E2",
+     "name": "gm-puck-handling-l_04",
+     "wave_off": "0xEB6800",
+     "entry_off": "0x37EF7230"
+    },
+    {
+     "hash": "0x3C6362FB",
+     "name": "gm-puck-handling-l_00",
+     "wave_off": "0xEB2800",
+     "entry_off": "0x37EF7244"
+    },
+    {
+     "hash": "0x3D51AB06",
+     "name": "skate-left_08",
+     "wave_off": "0xC8F000",
+     "entry_off": "0x37EF7258"
+    },
+    {
+     "hash": "0x3DAE6430",
+     "name": null,
+     "wave_off": "0x13800",
+     "entry_off": "0x37EF726C"
+    },
+    {
+     "hash": "0x3FC5E253",
+     "name": "goalie-stick-hit-ice_00",
+     "wave_off": "0xEA5800",
+     "entry_off": "0x37EF7280"
+    },
+    {
+     "hash": "0x4044E45E",
+     "name": null,
+     "wave_off": "0xB9A000",
+     "entry_off": "0x37EF7294"
+    },
+    {
+     "hash": "0x41F9F387",
+     "name": null,
+     "wave_off": "0xAFA000",
+     "entry_off": "0x37EF72A8"
+    },
+    {
+     "hash": "0x42F9BC01",
+     "name": "skate-scrape-stop_03",
+     "wave_off": "0xC22800",
+     "entry_off": "0x37EF72BC"
+    },
+    {
+     "hash": "0x4373868F",
+     "name": "check-body_01",
+     "wave_off": "0xF19000",
+     "entry_off": "0x37EF72D0"
+    },
+    {
+     "hash": "0x43E0D7BB",
+     "name": "skate-left_05",
+     "wave_off": "0xC81000",
+     "entry_off": "0x37EF72E4"
+    },
+    {
+     "hash": "0x448D13A2",
+     "name": "skate-left_01",
+     "wave_off": "0xC6D800",
+     "entry_off": "0x37EF72F8"
+    },
+    {
+     "hash": "0x45007575",
+     "name": null,
+     "wave_off": "0x6800",
+     "entry_off": "0x37EF730C"
+    },
+    {
+     "hash": "0x454A8E4A",
+     "name": null,
+     "wave_off": "0x3E800",
+     "entry_off": "0x37EF7320"
+    },
+    {
+     "hash": "0x4569E3AF",
+     "name": "faceoff-sticks_00",
+     "wave_off": "0xED8800",
+     "entry_off": "0x37EF7334"
+    },
+    {
+     "hash": "0x466355B5",
+     "name": null,
+     "wave_off": "0x62C800",
+     "entry_off": "0x37EF7348"
+    },
+    {
+     "hash": "0x48C2D2C5",
+     "name": "goalie-stick-hit-ice_01",
+     "wave_off": "0xEAC800",
+     "entry_off": "0x37EF735C"
+    },
+    {
+     "hash": "0x4A569B90",
+     "name": "skate-left_09",
+     "wave_off": "0xC93000",
+     "entry_off": "0x37EF7370"
+    },
+    {
+     "hash": "0x4A85F3AA",
+     "name": "stick-slide_02",
+     "wave_off": "0x126000",
+     "entry_off": "0x37EF7384"
+    },
+    {
+     "hash": "0x4B64526D",
+     "name": "gm-puck-handling-l_01",
+     "wave_off": "0xEB3800",
+     "entry_off": "0x37EF7398"
+    },
+    {
+     "hash": "0x4C66D4DE",
+     "name": null,
+     "wave_off": "0x1DE800",
+     "entry_off": "0x37EF73AC"
+    },
+    {
+     "hash": "0x4F25E409",
+     "name": "skate-right_11",
+     "wave_off": "0xC5E800",
+     "entry_off": "0x37EF73C0"
+    },
+    {
+     "hash": "0x51531151",
+     "name": "skate-right_05",
+     "wave_off": "0xC43000",
+     "entry_off": "0x37EF73D4"
+    },
+    {
+     "hash": "0x5156A329",
+     "name": null,
+     "wave_off": "0x51C000",
+     "entry_off": "0x37EF73E8"
+    },
+    {
+     "hash": "0x522921A9",
+     "name": null,
+     "wave_off": "0x357800",
+     "entry_off": "0x37EF73FC"
+    },
+    {
+     "hash": "0x526782DE",
+     "name": "check-boards_01",
+     "wave_off": "0xF36000",
+     "entry_off": "0x37EF7410"
+    },
+    {
+     "hash": "0x5428B8AA",
+     "name": "puck-stick_01",
+     "wave_off": "0xCF6800",
+     "entry_off": "0x37EF7424"
+    },
+    {
+     "hash": "0x55C0FA6D",
+     "name": "goalie-stop-scrape_03",
+     "wave_off": "0xE9D000",
+     "entry_off": "0x37EF7438"
+    },
+    {
+     "hash": "0x563ED548",
+     "name": "skate-right_01",
+     "wave_off": "0xC30000",
+     "entry_off": "0x37EF744C"
+    },
+    {
+     "hash": "0x56E006E4",
+     "name": null,
+     "wave_off": "0x22C000",
+     "entry_off": "0x37EF7460"
+    },
+    {
+     "hash": "0x578307A7",
+     "name": null,
+     "wave_off": "0xAFD000",
+     "entry_off": "0x37EF7474"
+    },
+    {
+     "hash": "0x5840F9D6",
+     "name": null,
+     "wave_off": "0xEF9000",
+     "entry_off": "0x37EF7488"
+    },
+    {
+     "hash": "0x586F3F50",
+     "name": null,
+     "wave_off": "0x53800",
+     "entry_off": "0x37EF749C"
+    },
+    {
+     "hash": "0x58E55D7A",
+     "name": "skate-right_09",
+     "wave_off": "0xC54000",
+     "entry_off": "0x37EF74B0"
+    },
+    {
+     "hash": "0x597E5AA3",
+     "name": null,
+     "wave_off": "0x19800",
+     "entry_off": "0x37EF74C4"
+    },
+    {
+     "hash": "0x59D6CDA2",
+     "name": "glass-bang_02",
+     "wave_off": "0xEC5000",
+     "entry_off": "0x37EF74D8"
+    },
+    {
+     "hash": "0x5B93E6E9",
+     "name": null,
+     "wave_off": "0xB4F800",
+     "entry_off": "0x37EF74EC"
+    },
+    {
+     "hash": "0x5C4745E0",
+     "name": null,
+     "wave_off": "0x33B800",
+     "entry_off": "0x37EF7500"
+    },
+    {
+     "hash": "0x5D47E591",
+     "name": null,
+     "wave_off": "0x561800",
+     "entry_off": "0x37EF7514"
+    },
+    {
+     "hash": "0x5D9622E3",
+     "name": "skate-left_11",
+     "wave_off": "0xC9B800",
+     "entry_off": "0x37EF7528"
+    },
+    {
+     "hash": "0x5DDA03D1",
+     "name": null,
+     "wave_off": "0x842000",
+     "entry_off": "0x37EF753C"
+    },
+    {
+     "hash": "0x5DEE81B0",
+     "name": null,
+     "wave_off": "0xB67000",
+     "entry_off": "0x37EF7550"
+    },
+    {
+     "hash": "0x5F47415C",
+     "name": null,
+     "wave_off": "0x39800",
+     "entry_off": "0x37EF7564"
+    },
+    {
+     "hash": "0x60FAE855",
+     "name": "puck-hit-board_00",
+     "wave_off": "0xD55000",
+     "entry_off": "0x37EF7578"
+    },
+    {
+     "hash": "0x62AA3346",
+     "name": "punch_03",
+     "wave_off": "0xCEB000",
+     "entry_off": "0x37EF758C"
+    },
+    {
+     "hash": "0x63143128",
+     "name": null,
+     "wave_off": "0xB41000",
+     "entry_off": "0x37EF75A0"
+    },
+    {
+     "hash": "0x63B950A8",
+     "name": null,
+     "wave_off": "0x140000",
+     "entry_off": "0x37EF75B4"
+    },
+    {
+     "hash": "0x6460CFFF",
+     "name": "player-fall_02",
+     "wave_off": "0xE5B800",
+     "entry_off": "0x37EF75C8"
+    },
+    {
+     "hash": "0x65A866E3",
+     "name": null,
+     "wave_off": "0x63000",
+     "entry_off": "0x37EF75DC"
+    },
+    {
+     "hash": "0x666ED90E",
+     "name": "puck-glove_01",
+     "wave_off": "0xDDD000",
+     "entry_off": "0x37EF75F0"
+    },
+    {
+     "hash": "0x6847A370",
+     "name": null,
+     "wave_off": "0x151800",
+     "entry_off": "0x37EF7604"
+    },
+    {
+     "hash": "0x6853D4A0",
+     "name": "slap-shot_02",
+     "wave_off": "0xC07000",
+     "entry_off": "0x37EF7618"
+    },
+    {
+     "hash": "0x686F7B20",
+     "name": "pass-send_03",
+     "wave_off": "0xE71000",
+     "entry_off": "0x37EF762C"
+    },
+    {
+     "hash": "0x68E6CE6A",
+     "name": null,
+     "wave_off": "0xB84000",
+     "entry_off": "0x37EF7640"
+    },
+    {
+     "hash": "0x69CB9BC2",
+     "name": null,
+     "wave_off": "0xC000",
+     "entry_off": "0x37EF7654"
+    },
+    {
+     "hash": "0x69EBA029",
+     "name": "puck-post_02",
+     "wave_off": "0xD32000",
+     "entry_off": "0x37EF7668"
+    },
+    {
+     "hash": "0x6DEF16DD",
+     "name": null,
+     "wave_off": "0xDE000",
+     "entry_off": "0x37EF767C"
+    },
+    {
+     "hash": "0x6EEBD8D3",
+     "name": null,
+     "wave_off": "0x6CB800",
+     "entry_off": "0x37EF7690"
+    },
+    {
+     "hash": "0x6F136692",
+     "name": null,
+     "wave_off": "0x3000",
+     "entry_off": "0x37EF76A4"
+    },
+    {
+     "hash": "0x6F2A6769",
+     "name": null,
+     "wave_off": "0x146000",
+     "entry_off": "0x37EF76B8"
+    },
+    {
+     "hash": "0x700C0563",
+     "name": null,
+     "wave_off": "0xB35800",
+     "entry_off": "0x37EF76CC"
+    },
+    {
+     "hash": "0x71BED14D",
+     "name": null,
+     "wave_off": "0x361800",
+     "entry_off": "0x37EF76E0"
+    },
+    {
+     "hash": "0x71F8CAA2",
+     "name": null,
+     "wave_off": "0xD1000",
+     "entry_off": "0x37EF76F4"
+    },
+    {
+     "hash": "0x725EF897",
+     "name": null,
+     "wave_off": "0x4800",
+     "entry_off": "0x37EF7708"
+    },
+    {
+     "hash": "0x73772B60",
+     "name": "skate-carve-loop_02",
+     "wave_off": "0xCCA800",
+     "entry_off": "0x37EF771C"
+    },
+    {
+     "hash": "0x740C7623",
+     "name": "puck-goalie-blocker_00",
+     "wave_off": "0xDCD000",
+     "entry_off": "0x37EF7730"
+    },
+    {
+     "hash": "0x74599400",
+     "name": null,
+     "wave_off": "0x783000",
+     "entry_off": "0x37EF7744"
+    },
+    {
+     "hash": "0x750EAB8F",
+     "name": null,
+     "wave_off": "0xF07800",
+     "entry_off": "0x37EF7758"
+    },
+    {
+     "hash": "0x751CAFD8",
+     "name": null,
+     "wave_off": "0x329000",
+     "entry_off": "0x37EF776C"
+    },
+    {
+     "hash": "0x75B1493B",
+     "name": null,
+     "wave_off": "0x5BD000",
+     "entry_off": "0x37EF7780"
+    },
+    {
+     "hash": "0x78FF6EF7",
+     "name": "puck-glass_02",
+     "wave_off": "0xDED800",
+     "entry_off": "0x37EF7794"
+    },
+    {
+     "hash": "0x790961F7",
+     "name": null,
+     "wave_off": "0x486800",
+     "entry_off": "0x37EF77A8"
+    },
+    {
+     "hash": "0x7A7736E3",
+     "name": null,
+     "wave_off": "0xA61000",
+     "entry_off": "0x37EF77BC"
+    },
+    {
+     "hash": "0x7A9CD124",
+     "name": null,
+     "wave_off": "0xBDA000",
+     "entry_off": "0x37EF77D0"
+    },
+    {
+     "hash": "0x7B9FEBD8",
+     "name": null,
+     "wave_off": "0x66E000",
+     "entry_off": "0x37EF77E4"
+    },
+    {
+     "hash": "0x7C5EFD59",
+     "name": null,
+     "wave_off": "0x38000",
+     "entry_off": "0x37EF77F8"
+    },
+    {
+     "hash": "0x80E5B9FF",
+     "name": null,
+     "wave_off": "0x711800",
+     "entry_off": "0x37EF780C"
+    },
+    {
+     "hash": "0x81240645",
+     "name": null,
+     "wave_off": "0x14C000",
+     "entry_off": "0x37EF7820"
+    },
+    {
+     "hash": "0x834A8980",
+     "name": "skate-forward-loop_00",
+     "wave_off": "0xCA9000",
+     "entry_off": "0x37EF7834"
+    },
+    {
+     "hash": "0x8649C25C",
+     "name": null,
+     "wave_off": "0x156800",
+     "entry_off": "0x37EF7848"
+    },
+    {
+     "hash": "0x865DB58C",
+     "name": "slap-shot_00",
+     "wave_off": "0xBFB800",
+     "entry_off": "0x37EF785C"
+    },
+    {
+     "hash": "0x86611A0C",
+     "name": "pass-send_01",
+     "wave_off": "0xE65000",
+     "entry_off": "0x37EF7870"
+    },
+    {
+     "hash": "0x86E8AF46",
+     "name": null,
+     "wave_off": "0xB74800",
+     "entry_off": "0x37EF7884"
+    },
+    {
+     "hash": "0x87E5C105",
+     "name": "puck-post_00",
+     "wave_off": "0xD13800",
+     "entry_off": "0x37EF7898"
+    },
+    {
+     "hash": "0x8889C753",
+     "name": "menu-back_00",
+     "wave_off": "0x45000",
+     "entry_off": "0x37EF78AC"
+    },
+    {
+     "hash": "0x8A6EAED3",
+     "name": "player-fall_00",
+     "wave_off": "0xE51000",
+     "entry_off": "0x37EF78C0"
+    },
+    {
+     "hash": "0x8B836F3A",
+     "name": "puck-dropped_00",
+     "wave_off": "0xDFB000",
+     "entry_off": "0x37EF78D4"
+    },
+    {
+     "hash": "0x8BA607CF",
+     "name": null,
+     "wave_off": "0x60800",
+     "entry_off": "0x37EF78E8"
+    },
+    {
+     "hash": "0x8CA4526A",
+     "name": "punch_01",
+     "wave_off": "0xCE8000",
+     "entry_off": "0x37EF78FC"
+    },
+    {
+     "hash": "0x8DB73184",
+     "name": null,
+     "wave_off": "0x13A000",
+     "entry_off": "0x37EF7910"
+    },
+    {
+     "hash": "0x8EF48979",
+     "name": "puck-hit-board_02",
+     "wave_off": "0xD66800",
+     "entry_off": "0x37EF7924"
+    },
+    {
+     "hash": "0x9492B008",
+     "name": null,
+     "wave_off": "0xBD0000",
+     "entry_off": "0x37EF7938"
+    },
+    {
+     "hash": "0x95918AF4",
+     "name": null,
+     "wave_off": "0x644800",
+     "entry_off": "0x37EF794C"
+    },
+    {
+     "hash": "0x95FD67C4",
+     "name": "puck-bottom-bar_00",
+     "wave_off": "0xE10000",
+     "entry_off": "0x37EF7960"
+    },
+    {
+     "hash": "0x9671154A",
+     "name": "menu-forward_00",
+     "wave_off": "0x4E000",
+     "entry_off": "0x37EF7974"
+    },
+    {
+     "hash": "0x96F10FDB",
+     "name": "puck-glass_00",
+     "wave_off": "0xDE0800",
+     "entry_off": "0x37EF7988"
+    },
+    {
+     "hash": "0x9A57F52C",
+     "name": null,
+     "wave_off": "0x7CA000",
+     "entry_off": "0x37EF799C"
+    },
+    {
+     "hash": "0x9BBF2817",
+     "name": null,
+     "wave_off": "0x59E000",
+     "entry_off": "0x37EF79B0"
+    },
+    {
+     "hash": "0x9BC109DB",
+     "name": null,
+     "wave_off": "0x951000",
+     "entry_off": "0x37EF79C4"
+    },
+    {
+     "hash": "0x9D794A4C",
+     "name": "skate-carve-loop_00",
+     "wave_off": "0xCBD000",
+     "entry_off": "0x37EF79D8"
+    },
+    {
+     "hash": "0x9FF6AB8E",
+     "name": null,
+     "wave_off": "0xB8800",
+     "entry_off": "0x37EF79EC"
+    },
+    {
+     "hash": "0xA13EAF49",
+     "name": "wrist-shot_00",
+     "wave_off": "0xBA3800",
+     "entry_off": "0x37EF7A00"
+    },
+    {
+     "hash": "0xA268B5F2",
+     "name": null,
+     "wave_off": "0x15F000",
+     "entry_off": "0x37EF7A14"
+    },
+    {
+     "hash": "0xA3822F8C",
+     "name": null,
+     "wave_off": "0xAA000",
+     "entry_off": "0x37EF7A28"
+    },
+    {
+     "hash": "0xA48B9286",
+     "name": "stick-slide_00",
+     "wave_off": "0x11F800",
+     "entry_off": "0x37EF7A3C"
+    },
+    {
+     "hash": "0xA56A3341",
+     "name": "gm-puck-handling-l_03",
+     "wave_off": "0xEB5800",
+     "entry_off": "0x37EF7A50"
+    },
+    {
+     "hash": "0xA6A935A3",
+     "name": "puck-helmet_00",
+     "wave_off": "0xD79800",
+     "entry_off": "0x37EF7A64"
+    },
+    {
+     "hash": "0xA7F2E772",
+     "name": "stick-on-ice_00",
+     "wave_off": "0xBB8800",
+     "entry_off": "0x37EF7A78"
+    },
+    {
+     "hash": "0xA7FB5AF7",
+     "name": null,
+     "wave_off": "0x316000",
+     "entry_off": "0x37EF7A8C"
+    },
+    {
+     "hash": "0xA86D3499",
+     "name": null,
+     "wave_off": "0x600000",
+     "entry_off": "0x37EF7AA0"
+    },
+    {
+     "hash": "0xA8A757B9",
+     "name": null,
+     "wave_off": "0x15D800",
+     "entry_off": "0x37EF7AB4"
+    },
+    {
+     "hash": "0xA9363CDB",
+     "name": "snap-shot_01",
+     "wave_off": "0xBF1000",
+     "entry_off": "0x37EF7AC8"
+    },
+    {
+     "hash": "0xA9BF1BBE",
+     "name": "stick-hit-boards_00",
+     "wave_off": "0xBE0000",
+     "entry_off": "0x37EF7ADC"
+    },
+    {
+     "hash": "0xAA83728E",
+     "name": "skate-left_03",
+     "wave_off": "0xC76800",
+     "entry_off": "0x37EF7AF0"
+    },
+    {
+     "hash": "0xACF7DD2D",
+     "name": "skate-scrape-stop_01",
+     "wave_off": "0xC17800",
+     "entry_off": "0x37EF7B04"
+    },
+    {
+     "hash": "0xAD7DE7A3",
+     "name": "check-body_03",
+     "wave_off": "0xF21800",
+     "entry_off": "0x37EF7B18"
+    },
+    {
+     "hash": "0xADEEB697",
+     "name": "skate-left_07",
+     "wave_off": "0xC8A800",
+     "entry_off": "0x37EF7B2C"
+    },
+    {
+     "hash": "0xAE83FB2F",
+     "name": null,
+     "wave_off": "0x24000",
+     "entry_off": "0x37EF7B40"
+    },
+    {
+     "hash": "0xB11F5DB0",
+     "name": null,
+     "wave_off": "0x3D0000",
+     "entry_off": "0x37EF7B54"
+    },
+    {
+     "hash": "0xB1499734",
+     "name": null,
+     "wave_off": "0x889000",
+     "entry_off": "0x37EF7B68"
+    },
+    {
+     "hash": "0xB1EABAEF",
+     "name": null,
+     "wave_off": "0x341800",
+     "entry_off": "0x37EF7B7C"
+    },
+    {
+     "hash": "0xB2457517",
+     "name": null,
+     "wave_off": "0xF800",
+     "entry_off": "0x37EF7B90"
+    },
+    {
+     "hash": "0xB34984BD",
+     "name": null,
+     "wave_off": "0x588000",
+     "entry_off": "0x37EF7BA4"
+    },
+    {
+     "hash": "0xB39843CF",
+     "name": "skate-left_13",
+     "wave_off": "0xCA5000",
+     "entry_off": "0x37EF7BB8"
+    },
+    {
+     "hash": "0xB3D462FD",
+     "name": null,
+     "wave_off": "0x7F8800",
+     "entry_off": "0x37EF7BCC"
+    },
+    {
+     "hash": "0xB3E0E09C",
+     "name": null,
+     "wave_off": "0xB57000",
+     "entry_off": "0x37EF7BE0"
+    },
+    {
+     "hash": "0xB53CC266",
+     "name": null,
+     "wave_off": "0xD4D800",
+     "entry_off": "0x37EF7BF4"
+    },
+    {
+     "hash": "0xB54EF519",
+     "name": null,
+     "wave_off": "0x312800",
+     "entry_off": "0x37EF7C08"
+    },
+    {
+     "hash": "0xB59D87C5",
+     "name": null,
+     "wave_off": "0xB47800",
+     "entry_off": "0x37EF7C1C"
+    },
+    {
+     "hash": "0xB64E98FA",
+     "name": null,
+     "wave_off": "0xEEC000",
+     "entry_off": "0x37EF7C30"
+    },
+    {
+     "hash": "0xB696DA59",
+     "name": "pass-recieve_01",
+     "wave_off": "0xE7E800",
+     "entry_off": "0x37EF7C44"
+    },
+    {
+     "hash": "0xB7D8AC8E",
+     "name": "glass-bang_00",
+     "wave_off": "0xEB7800",
+     "entry_off": "0x37EF7C58"
+    },
+    {
+     "hash": "0xB830B464",
+     "name": "skate-right_03",
+     "wave_off": "0xC38800",
+     "entry_off": "0x37EF7C6C"
+    },
+    {
+     "hash": "0xB8EE67C8",
+     "name": null,
+     "wave_off": "0x2B7000",
+     "entry_off": "0x37EF7C80"
+    },
+    {
+     "hash": "0xB9266126",
+     "name": null,
+     "wave_off": "0x45C000",
+     "entry_off": "0x37EF7C94"
+    },
+    {
+     "hash": "0xBA26D986",
+     "name": "puck-stick_03",
+     "wave_off": "0xD09000",
+     "entry_off": "0x37EF7CA8"
+    },
+    {
+     "hash": "0xBAFEE792",
+     "name": null,
+     "wave_off": "0x319800",
+     "entry_off": "0x37EF7CBC"
+    },
+    {
+     "hash": "0xBB4A849C",
+     "name": null,
+     "wave_off": "0x35E000",
+     "entry_off": "0x37EF7CD0"
+    },
+    {
+     "hash": "0xBBCE9B41",
+     "name": "goalie-stop-scrape_01",
+     "wave_off": "0xE8D800",
+     "entry_off": "0x37EF7CE4"
+    },
+    {
+     "hash": "0xBC274085",
+     "name": null,
+     "wave_off": "0x34F800",
+     "entry_off": "0x37EF7CF8"
+    },
+    {
+     "hash": "0xBC69E3F2",
+     "name": "check-boards_03",
+     "wave_off": "0xF48800",
+     "entry_off": "0x37EF7D0C"
+    },
+    {
+     "hash": "0xBD0A6B2B",
+     "name": "poke-check_01",
+     "wave_off": "0xE3F800",
+     "entry_off": "0x37EF7D20"
+    },
+    {
+     "hash": "0xBDEB5121",
+     "name": "1nxv_0",
+     "wave_off": "0x12000",
+     "entry_off": "0x37EF7D34"
+    },
+    {
+     "hash": "0xBED36884",
+     "name": null,
+     "wave_off": "0xDC0000",
+     "entry_off": "0x37EF7D48"
+    },
+    {
+     "hash": "0xBF5D707D",
+     "name": "skate-right_07",
+     "wave_off": "0xC4C000",
+     "entry_off": "0x37EF7D5C"
+    },
+    {
+     "hash": "0xC0DF9C18",
+     "name": "glass-bang_01",
+     "wave_off": "0xEBE000",
+     "entry_off": "0x37EF7D70"
+    },
+    {
+     "hash": "0xC149A86C",
+     "name": null,
+     "wave_off": "0xEF2000",
+     "entry_off": "0x37EF7D84"
+    },
+    {
+     "hash": "0xC191EACF",
+     "name": "pass-recieve_00",
+     "wave_off": "0xE78000",
+     "entry_off": "0x37EF7D98"
+    },
+    {
+     "hash": "0xC29AB753",
+     "name": null,
+     "wave_off": "0xB43800",
+     "entry_off": "0x37EF7DAC"
+    },
+    {
+     "hash": "0xC44EB42B",
+     "name": null,
+     "wave_off": "0x575000",
+     "entry_off": "0x37EF7DC0"
+    },
+    {
+     "hash": "0xC49F7359",
+     "name": "skate-left_12",
+     "wave_off": "0xCA0800",
+     "entry_off": "0x37EF7DD4"
+    },
+    {
+     "hash": "0xC4D3526B",
+     "name": null,
+     "wave_off": "0x81C800",
+     "entry_off": "0x37EF7DE8"
+    },
+    {
+     "hash": "0xC4E7D00A",
+     "name": null,
+     "wave_off": "0xB5E800",
+     "entry_off": "0x37EF7DFC"
+    },
+    {
+     "hash": "0xC5F7734A",
+     "name": null,
+     "wave_off": "0xB53800",
+     "entry_off": "0x37EF7E10"
+    },
+    {
+     "hash": "0xC6186D26",
+     "name": null,
+     "wave_off": "0x400000",
+     "entry_off": "0x37EF7E24"
+    },
+    {
+     "hash": "0xC64EA7A2",
+     "name": null,
+     "wave_off": "0x862800",
+     "entry_off": "0x37EF7E38"
+    },
+    {
+     "hash": "0xC6ED8A79",
+     "name": null,
+     "wave_off": "0x348800",
+     "entry_off": "0x37EF7E4C"
+    },
+    {
+     "hash": "0xC85A40EB",
+     "name": "skate-right_06",
+     "wave_off": "0xC48000",
+     "entry_off": "0x37EF7E60"
+    },
+    {
+     "hash": "0xC996F652",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x37EF7E74"
+    },
+    {
+     "hash": "0xC9D45812",
+     "name": null,
+     "wave_off": "0xDB2800",
+     "entry_off": "0x37EF7E88"
+    },
+    {
+     "hash": "0xCA0D5BBD",
+     "name": "poke-check_00",
+     "wave_off": "0xE3A000",
+     "entry_off": "0x37EF7E9C"
+    },
+    {
+     "hash": "0xCAEC61B7",
+     "name": "1nxv_1",
+     "wave_off": "0x10800",
+     "entry_off": "0x37EF7EB0"
+    },
+    {
+     "hash": "0xCB207013",
+     "name": null,
+     "wave_off": "0x354000",
+     "entry_off": "0x37EF7EC4"
+    },
+    {
+     "hash": "0xCB6ED364",
+     "name": "check-boards_02",
+     "wave_off": "0xF3F000",
+     "entry_off": "0x37EF7ED8"
+    },
+    {
+     "hash": "0xCCC9ABD7",
+     "name": "goalie-stop-scrape_00",
+     "wave_off": "0xE86800",
+     "entry_off": "0x37EF7EEC"
+    },
+    {
+     "hash": "0xCD21E910",
+     "name": "puck-stick_02",
+     "wave_off": "0xD01000",
+     "entry_off": "0x37EF7F00"
+    },
+    {
+     "hash": "0xCDF9D704",
+     "name": null,
+     "wave_off": "0x320000",
+     "entry_off": "0x37EF7F14"
+    },
+    {
+     "hash": "0xCE2151B0",
+     "name": null,
+     "wave_off": "0x426800",
+     "entry_off": "0x37EF7F28"
+    },
+    {
+     "hash": "0xCF3784F2",
+     "name": "skate-right_02",
+     "wave_off": "0xC34800",
+     "entry_off": "0x37EF7F3C"
+    },
+    {
+     "hash": "0xD0CC105D",
+     "name": null,
+     "wave_off": "0x30F800",
+     "entry_off": "0x37EF7F50"
+    },
+    {
+     "hash": "0xD0F5D7E4",
+     "name": "stick-on-ice_01",
+     "wave_off": "0xBC0800",
+     "entry_off": "0x37EF7F64"
+    },
+    {
+     "hash": "0xD1AE0535",
+     "name": "puck-helmet_01",
+     "wave_off": "0xD8A000",
+     "entry_off": "0x37EF7F78"
+    },
+    {
+     "hash": "0xD26D03D7",
+     "name": "gm-puck-handling-l_02",
+     "wave_off": "0xEB4800",
+     "entry_off": "0x37EF7F8C"
+    },
+    {
+     "hash": "0xD38CA210",
+     "name": "stick-slide_01",
+     "wave_off": "0x122800",
+     "entry_off": "0x37EF7FA0"
+    },
+    {
+     "hash": "0xD4851F1A",
+     "name": null,
+     "wave_off": "0xA8800",
+     "entry_off": "0x37EF7FB4"
+    },
+    {
+     "hash": "0xD56F8564",
+     "name": null,
+     "wave_off": "0x1A9800",
+     "entry_off": "0x37EF7FC8"
+    },
+    {
+     "hash": "0xD5DCF35B",
+     "name": "fireworks-explode-soft_00",
+     "wave_off": "0xECA000",
+     "entry_off": "0x37EF7FDC"
+    },
+    {
+     "hash": "0xD62CB5B3",
+     "name": "skate-right_12",
+     "wave_off": "0xC63000",
+     "entry_off": "0x37EF7FF0"
+    },
+    {
+     "hash": "0xD6399FDF",
+     "name": "wrist-shot_01",
+     "wave_off": "0xBAC800",
+     "entry_off": "0x37EF8004"
+    },
+    {
+     "hash": "0xD94DB5E4",
+     "name": null,
+     "wave_off": "0xB9E800",
+     "entry_off": "0x37EF8018"
+    },
+    {
+     "hash": "0xDA7AD735",
+     "name": "check-body_02",
+     "wave_off": "0xF1D000",
+     "entry_off": "0x37EF802C"
+    },
+    {
+     "hash": "0xDAE98601",
+     "name": "skate-left_06",
+     "wave_off": "0xC86000",
+     "entry_off": "0x37EF8040"
+    },
+    {
+     "hash": "0xDBF0EDBB",
+     "name": "skate-scrape-stop_00",
+     "wave_off": "0xC12000",
+     "entry_off": "0x37EF8054"
+    },
+    {
+     "hash": "0xDD844218",
+     "name": "skate-left_02",
+     "wave_off": "0xC72800",
+     "entry_off": "0x37EF8068"
+    },
+    {
+     "hash": "0xDE310C4D",
+     "name": "snap-shot_00",
+     "wave_off": "0xBEB800",
+     "entry_off": "0x37EF807C"
+    },
+    {
+     "hash": "0xDEB82B28",
+     "name": "stick-hit-boards_01",
+     "wave_off": "0xBE5800",
+     "entry_off": "0x37EF8090"
+    },
+    {
+     "hash": "0xDF6A040F",
+     "name": null,
+     "wave_off": "0x5E2000",
+     "entry_off": "0x37EF80A4"
+    },
+    {
+     "hash": "0xDFA0672F",
+     "name": null,
+     "wave_off": "0x15C000",
+     "entry_off": "0x37EF80B8"
+    },
+    {
+     "hash": "0xE06F25EB",
+     "name": null,
+     "wave_off": "0x3B800",
+     "entry_off": "0x37EF80CC"
+    },
+    {
+     "hash": "0xE1F63F4D",
+     "name": "puck-glass_01",
+     "wave_off": "0xDE7800",
+     "entry_off": "0x37EF80E0"
+    },
+    {
+     "hash": "0xE296BA62",
+     "name": null,
+     "wave_off": "0x65C800",
+     "entry_off": "0x37EF80F4"
+    },
+    {
+     "hash": "0xE339A450",
+     "name": null,
+     "wave_off": "0x56000",
+     "entry_off": "0x37EF8108"
+    },
+    {
+     "hash": "0xE395809E",
+     "name": null,
+     "wave_off": "0xBC9800",
+     "entry_off": "0x37EF811C"
+    },
+    {
+     "hash": "0xE8F19B18",
+     "name": null,
+     "wave_off": "0xAC000",
+     "entry_off": "0x37EF8130"
+    },
+    {
+     "hash": "0xEA7E7ADA",
+     "name": "skate-carve-loop_01",
+     "wave_off": "0xCC3800",
+     "entry_off": "0x37EF8144"
+    },
+    {
+     "hash": "0xEBAE32EB",
+     "name": null,
+     "wave_off": "0x91800",
+     "entry_off": "0x37EF8158"
+    },
+    {
+     "hash": "0xECB81881",
+     "name": null,
+     "wave_off": "0x5AD800",
+     "entry_off": "0x37EF816C"
+    },
+    {
+     "hash": "0xECC6394D",
+     "name": null,
+     "wave_off": "0x8D1800",
+     "entry_off": "0x37EF8180"
+    },
+    {
+     "hash": "0xED50C5BA",
+     "name": null,
+     "wave_off": "0x7A6000",
+     "entry_off": "0x37EF8194"
+    },
+    {
+     "hash": "0xED8F744B",
+     "name": "skate-back-loop_00",
+     "wave_off": "0xCD2000",
+     "entry_off": "0x37EF81A8"
+    },
+    {
+     "hash": "0xF00DE765",
+     "name": "wipe_00",
+     "wave_off": "0x58800",
+     "entry_off": "0x37EF81BC"
+    },
+    {
+     "hash": "0xF0E2F193",
+     "name": "puck-post_01",
+     "wave_off": "0xD25800",
+     "entry_off": "0x37EF81D0"
+    },
+    {
+     "hash": "0xF14EF2CA",
+     "name": null,
+     "wave_off": "0x159000",
+     "entry_off": "0x37EF81E4"
+    },
+    {
+     "hash": "0xF15A851A",
+     "name": "slap-shot_01",
+     "wave_off": "0xC01000",
+     "entry_off": "0x37EF81F8"
+    },
+    {
+     "hash": "0xF1662A9A",
+     "name": "pass-send_00",
+     "wave_off": "0xE60000",
+     "entry_off": "0x37EF820C"
+    },
+    {
+     "hash": "0xF1EF9FD0",
+     "name": null,
+     "wave_off": "0xB7C000",
+     "entry_off": "0x37EF8220"
+    },
+    {
+     "hash": "0xF2F8D35E",
+     "name": "puck-pads_00",
+     "wave_off": "0xD41000",
+     "entry_off": "0x37EF8234"
+    },
+    {
+     "hash": "0xF3DEE40F",
+     "name": null,
+     "wave_off": "0x129800",
+     "entry_off": "0x37EF8248"
+    },
+    {
+     "hash": "0xF42AF12F",
+     "name": "pond-puck-hit-snow_00",
+     "wave_off": "0xE2E800",
+     "entry_off": "0x37EF825C"
+    },
+    {
+     "hash": "0xF44DB916",
+     "name": "skate-forward-loop_01",
+     "wave_off": "0xCB1000",
+     "entry_off": "0x37EF8270"
+    },
+    {
+     "hash": "0xF62336D3",
+     "name": null,
+     "wave_off": "0x14E800",
+     "entry_off": "0x37EF8284"
+    },
+    {
+     "hash": "0xF75B2225",
+     "name": null,
+     "wave_off": "0xB19000",
+     "entry_off": "0x37EF8298"
+    },
+    {
+     "hash": "0xF7E28969",
+     "name": null,
+     "wave_off": "0x6ED000",
+     "entry_off": "0x37EF82AC"
+    },
+    {
+     "hash": "0xF9F3B9EF",
+     "name": "puck-hit-board_03",
+     "wave_off": "0xD70000",
+     "entry_off": "0x37EF82C0"
+    },
+    {
+     "hash": "0xFAB00112",
+     "name": null,
+     "wave_off": "0x13D000",
+     "entry_off": "0x37EF82D4"
+    },
+    {
+     "hash": "0xFBA362FC",
+     "name": "punch_00",
+     "wave_off": "0xCE6800",
+     "entry_off": "0x37EF82E8"
+    },
+    {
+     "hash": "0xFBCCF340",
+     "name": null,
+     "wave_off": "0x64800",
+     "entry_off": "0x37EF82FC"
+    },
+    {
+     "hash": "0xFC845FAC",
+     "name": "puck-dropped_01",
+     "wave_off": "0xE06000",
+     "entry_off": "0x37EF8310"
+    },
+    {
+     "hash": "0xFCA13759",
+     "name": null,
+     "wave_off": "0x5F000",
+     "entry_off": "0x37EF8324"
+    },
+    {
+     "hash": "0xFCFD1D59",
+     "name": "ref-whistle_00",
+     "wave_off": "0xCDE800",
+     "entry_off": "0x37EF8338"
+    },
+    {
+     "hash": "0xFD699E45",
+     "name": "player-fall_01",
+     "wave_off": "0xE57800",
+     "entry_off": "0x37EF834C"
+    }
+   ]
+  },
+  "sfx_arena001.bnk": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x02099B19",
+     "name": null,
+     "wave_off": "0xECA800",
+     "entry_off": "0x38E4C4E0"
+    },
+    {
+     "hash": "0x021B9F4E",
+     "name": null,
+     "wave_off": "0x330000",
+     "entry_off": "0x38E4C4F4"
+    },
+    {
+     "hash": "0x02A722C4",
+     "name": "player-slide_00",
+     "wave_off": "0xE08800",
+     "entry_off": "0x38E4C508"
+    },
+    {
+     "hash": "0x02B679AD",
+     "name": null,
+     "wave_off": "0x5BB800",
+     "entry_off": "0x38E4C51C"
+    },
+    {
+     "hash": "0x030B46B5",
+     "name": "puck-goalie-blocker_01",
+     "wave_off": "0xD9C800",
+     "entry_off": "0x38E4C530"
+    },
+    {
+     "hash": "0x035EA496",
+     "name": null,
+     "wave_off": "0x716800",
+     "entry_off": "0x38E4C544"
+    },
+    {
+     "hash": "0x06FFFA34",
+     "name": null,
+     "wave_off": "0xC5800",
+     "entry_off": "0x38E4C558"
+    },
+    {
+     "hash": "0x070B35F5",
+     "name": null,
+     "wave_off": "0xAF9000",
+     "entry_off": "0x38E4C56C"
+    },
+    {
+     "hash": "0x07296DCD",
+     "name": null,
+     "wave_off": "0x55000",
+     "entry_off": "0x38E4C580"
+    },
+    {
+     "hash": "0x08D3F8D3",
+     "name": "2klogo_00",
+     "wave_off": "0x26800",
+     "entry_off": "0x38E4C594"
+    },
+    {
+     "hash": "0x09B8AC60",
+     "name": null,
+     "wave_off": "0x132000",
+     "entry_off": "0x38E4C5A8"
+    },
+    {
+     "hash": "0x0C98DB4E",
+     "name": null,
+     "wave_off": "0x65F000",
+     "entry_off": "0x38E4C5BC"
+    },
+    {
+     "hash": "0x0CB81A23",
+     "name": null,
+     "wave_off": "0xAD0800",
+     "entry_off": "0x38E4C5D0"
+    },
+    {
+     "hash": "0x0D700675",
+     "name": null,
+     "wave_off": "0x9CF800",
+     "entry_off": "0x38E4C5E4"
+    },
+    {
+     "hash": "0x0D9BE1B2",
+     "name": null,
+     "wave_off": "0xB9E800",
+     "entry_off": "0x38E4C5F8"
+    },
+    {
+     "hash": "0x0DED7E9D",
+     "name": null,
+     "wave_off": "0x3A3000",
+     "entry_off": "0x38E4C60C"
+    },
+    {
+     "hash": "0x0E0E5161",
+     "name": null,
+     "wave_off": "0x4B3000",
+     "entry_off": "0x38E4C620"
+    },
+    {
+     "hash": "0x0FEBBB5C",
+     "name": null,
+     "wave_off": "0xAC3000",
+     "entry_off": "0x38E4C634"
+    },
+    {
+     "hash": "0x0FF85E61",
+     "name": "puck-glass_03",
+     "wave_off": "0xDBB800",
+     "entry_off": "0x38E4C648"
+    },
+    {
+     "hash": "0x1169E998",
+     "name": "puck-glove_00",
+     "wave_off": "0xDA1000",
+     "entry_off": "0x38E4C65C"
+    },
+    {
+     "hash": "0x11A10813",
+     "name": null,
+     "wave_off": "0x109800",
+     "entry_off": "0x38E4C670"
+    },
+    {
+     "hash": "0x12AF5675",
+     "name": null,
+     "wave_off": "0x62000",
+     "entry_off": "0x38E4C684"
+    },
+    {
+     "hash": "0x141301BE",
+     "name": null,
+     "wave_off": "0xB0B800",
+     "entry_off": "0x38E4C698"
+    },
+    {
+     "hash": "0x146A6A70",
+     "name": null,
+     "wave_off": "0x41800",
+     "entry_off": "0x38E4C6AC"
+    },
+    {
+     "hash": "0x14BE603E",
+     "name": null,
+     "wave_off": "0x142000",
+     "entry_off": "0x38E4C6C0"
+    },
+    {
+     "hash": "0x15AD03D0",
+     "name": "punch_02",
+     "wave_off": "0xCBB000",
+     "entry_off": "0x38E4C6D4"
+    },
+    {
+     "hash": "0x17FDD8C3",
+     "name": "puck-hit-board_01",
+     "wave_off": "0xD29800",
+     "entry_off": "0x38E4C6E8"
+    },
+    {
+     "hash": "0x182D57FF",
+     "name": null,
+     "wave_off": "0x147800",
+     "entry_off": "0x38E4C6FC"
+    },
+    {
+     "hash": "0x19ECE845",
+     "name": null,
+     "wave_off": "0x670000",
+     "entry_off": "0x38E4C710"
+    },
+    {
+     "hash": "0x1EF39926",
+     "name": null,
+     "wave_off": "0xE6000",
+     "entry_off": "0x38E4C724"
+    },
+    {
+     "hash": "0x1F4093E6",
+     "name": null,
+     "wave_off": "0x152800",
+     "entry_off": "0x38E4C738"
+    },
+    {
+     "hash": "0x1F54E436",
+     "name": "slap-shot_03",
+     "wave_off": "0xBDA800",
+     "entry_off": "0x38E4C74C"
+    },
+    {
+     "hash": "0x1F684BB6",
+     "name": "pass-send_02",
+     "wave_off": "0xE2B000",
+     "entry_off": "0x38E4C760"
+    },
+    {
+     "hash": "0x1FE1FEFC",
+     "name": null,
+     "wave_off": "0xB5C800",
+     "entry_off": "0x38E4C774"
+    },
+    {
+     "hash": "0x2139E5DE",
+     "name": "skate-right_00",
+     "wave_off": "0xBF8000",
+     "entry_off": "0x38E4C788"
+    },
+    {
+     "hash": "0x21E73672",
+     "name": null,
+     "wave_off": "0x28D800",
+     "entry_off": "0x38E4C79C"
+    },
+    {
+     "hash": "0x22C7CAFB",
+     "name": "goalie-stop-scrape_02",
+     "wave_off": "0xE51800",
+     "entry_off": "0x38E4C7B0"
+    },
+    {
+     "hash": "0x232F883C",
+     "name": "puck-stick_00",
+     "wave_off": "0xCBE000",
+     "entry_off": "0x38E4C7C4"
+    },
+    {
+     "hash": "0x252E113F",
+     "name": null,
+     "wave_off": "0x35B800",
+     "entry_off": "0x38E4C7D8"
+    },
+    {
+     "hash": "0x2560B248",
+     "name": "check-boards_00",
+     "wave_off": "0xEE2000",
+     "entry_off": "0x38E4C7EC"
+    },
+    {
+     "hash": "0x265193BF",
+     "name": null,
+     "wave_off": "0x4DD000",
+     "entry_off": "0x38E4C800"
+    },
+    {
+     "hash": "0x265421C7",
+     "name": "skate-right_04",
+     "wave_off": "0xC0D000",
+     "entry_off": "0x38E4C814"
+    },
+    {
+     "hash": "0x2840C68E",
+     "name": null,
+     "wave_off": "0x8B3800",
+     "entry_off": "0x38E4C828"
+    },
+    {
+     "hash": "0x2A40D507",
+     "name": null,
+     "wave_off": "0x52C800",
+     "entry_off": "0x38E4C83C"
+    },
+    {
+     "hash": "0x2A61A060",
+     "name": null,
+     "wave_off": "0x77000",
+     "entry_off": "0x38E4C850"
+    },
+    {
+     "hash": "0x2A911275",
+     "name": "skate-left_10",
+     "wave_off": "0xC65800",
+     "entry_off": "0x38E4C864"
+    },
+    {
+     "hash": "0x2AE9B126",
+     "name": null,
+     "wave_off": "0xB3B000",
+     "entry_off": "0x38E4C878"
+    },
+    {
+     "hash": "0x2B407576",
+     "name": null,
+     "wave_off": "0x337800",
+     "entry_off": "0x38E4C88C"
+    },
+    {
+     "hash": "0x2C94D67F",
+     "name": null,
+     "wave_off": "0xB19800",
+     "entry_off": "0x38E4C8A0"
+    },
+    {
+     "hash": "0x2E3E40DD",
+     "name": null,
+     "wave_off": "0x15A000",
+     "entry_off": "0x38E4C8B4"
+    },
+    {
+     "hash": "0x2F47C940",
+     "name": null,
+     "wave_off": "0xEBD800",
+     "entry_off": "0x38E4C8C8"
+    },
+    {
+     "hash": "0x2F9A9403",
+     "name": null,
+     "wave_off": "0x66000",
+     "entry_off": "0x38E4C8DC"
+    },
+    {
+     "hash": "0x2F9F8BE3",
+     "name": "pass-recieve_02",
+     "wave_off": "0xE3F800",
+     "entry_off": "0x38E4C8F0"
+    },
+    {
+     "hash": "0x2FE26DEC",
+     "name": "skate-right_08",
+     "wave_off": "0xC1F800",
+     "entry_off": "0x38E4C904"
+    },
+    {
+     "hash": "0x303F6D61",
+     "name": "snap-shot_02",
+     "wave_off": "0xBC3800",
+     "entry_off": "0x38E4C918"
+    },
+    {
+     "hash": "0x31646523",
+     "name": null,
+     "wave_off": "0x5F6800",
+     "entry_off": "0x38E4C92C"
+    },
+    {
+     "hash": "0x31ED4788",
+     "name": null,
+     "wave_off": "0xEB800",
+     "entry_off": "0x38E4C940"
+    },
+    {
+     "hash": "0x326ED339",
+     "name": "faceoff-sticks_01",
+     "wave_off": "0xE9E800",
+     "entry_off": "0x38E4C954"
+    },
+    {
+     "hash": "0x338A2334",
+     "name": "skate-left_00",
+     "wave_off": "0xC36000",
+     "entry_off": "0x38E4C968"
+    },
+    {
+     "hash": "0x34345709",
+     "name": null,
+     "wave_off": "0x9C800",
+     "entry_off": "0x38E4C97C"
+    },
+    {
+     "hash": "0x3474B619",
+     "name": "check-body_00",
+     "wave_off": "0xED1000",
+     "entry_off": "0x38E4C990"
+    },
+    {
+     "hash": "0x34E7E72D",
+     "name": "skate-left_04",
+     "wave_off": "0xC4A800",
+     "entry_off": "0x38E4C9A4"
+    },
+    {
+     "hash": "0x35368EA5",
+     "name": null,
+     "wave_off": "0x30E800",
+     "entry_off": "0x38E4C9B8"
+    },
+    {
+     "hash": "0x35FE8C97",
+     "name": "skate-scrape-stop_02",
+     "wave_off": "0xBEC800",
+     "entry_off": "0x38E4C9CC"
+    },
+    {
+     "hash": "0x3743D4C8",
+     "name": null,
+     "wave_off": "0xB65000",
+     "entry_off": "0x38E4C9E0"
+    },
+    {
+     "hash": "0x37B5AE4D",
+     "name": "puck-goalie-skate_00",
+     "wave_off": "0xD69000",
+     "entry_off": "0x38E4C9F4"
+    },
+    {
+     "hash": "0x37C68ABA",
+     "name": "menu-misc_00",
+     "wave_off": "0x54000",
+     "entry_off": "0x38E4CA08"
+    },
+    {
+     "hash": "0x3822D49F",
+     "name": "skate-right_10",
+     "wave_off": "0xC28000",
+     "entry_off": "0x38E4CA1C"
+    },
+    {
+     "hash": "0x3B0EA6E2",
+     "name": "gm-puck-handling-l_04",
+     "wave_off": "0xE74000",
+     "entry_off": "0x38E4CA30"
+    },
+    {
+     "hash": "0x3C6362FB",
+     "name": "gm-puck-handling-l_00",
+     "wave_off": "0xE70000",
+     "entry_off": "0x38E4CA44"
+    },
+    {
+     "hash": "0x3D51AB06",
+     "name": "skate-left_08",
+     "wave_off": "0xC5E000",
+     "entry_off": "0x38E4CA58"
+    },
+    {
+     "hash": "0x3DAE6430",
+     "name": null,
+     "wave_off": "0x13800",
+     "entry_off": "0x38E4CA6C"
+    },
+    {
+     "hash": "0x3FC5E253",
+     "name": "goalie-stick-hit-ice_00",
+     "wave_off": "0xE63000",
+     "entry_off": "0x38E4CA80"
+    },
+    {
+     "hash": "0x4044E45E",
+     "name": null,
+     "wave_off": "0xB6A000",
+     "entry_off": "0x38E4CA94"
+    },
+    {
+     "hash": "0x41F9F387",
+     "name": null,
+     "wave_off": "0xAC6800",
+     "entry_off": "0x38E4CAA8"
+    },
+    {
+     "hash": "0x42F9BC01",
+     "name": "skate-scrape-stop_03",
+     "wave_off": "0xBF2000",
+     "entry_off": "0x38E4CABC"
+    },
+    {
+     "hash": "0x4373868F",
+     "name": "check-body_01",
+     "wave_off": "0xED6000",
+     "entry_off": "0x38E4CAD0"
+    },
+    {
+     "hash": "0x43E0D7BB",
+     "name": "skate-left_05",
+     "wave_off": "0xC50000",
+     "entry_off": "0x38E4CAE4"
+    },
+    {
+     "hash": "0x448D13A2",
+     "name": "skate-left_01",
+     "wave_off": "0xC3C800",
+     "entry_off": "0x38E4CAF8"
+    },
+    {
+     "hash": "0x45007575",
+     "name": null,
+     "wave_off": "0x6800",
+     "entry_off": "0x38E4CB0C"
+    },
+    {
+     "hash": "0x454A8E4A",
+     "name": null,
+     "wave_off": "0x3E800",
+     "entry_off": "0x38E4CB20"
+    },
+    {
+     "hash": "0x4569E3AF",
+     "name": "faceoff-sticks_00",
+     "wave_off": "0xE91800",
+     "entry_off": "0x38E4CB34"
+    },
+    {
+     "hash": "0x466355B5",
+     "name": null,
+     "wave_off": "0x60B000",
+     "entry_off": "0x38E4CB48"
+    },
+    {
+     "hash": "0x48C2D2C5",
+     "name": "goalie-stick-hit-ice_01",
+     "wave_off": "0xE6A000",
+     "entry_off": "0x38E4CB5C"
+    },
+    {
+     "hash": "0x4A569B90",
+     "name": "skate-left_09",
+     "wave_off": "0xC62000",
+     "entry_off": "0x38E4CB70"
+    },
+    {
+     "hash": "0x4A85F3AA",
+     "name": "stick-slide_02",
+     "wave_off": "0x126000",
+     "entry_off": "0x38E4CB84"
+    },
+    {
+     "hash": "0x4B64526D",
+     "name": "gm-puck-handling-l_01",
+     "wave_off": "0xE71000",
+     "entry_off": "0x38E4CB98"
+    },
+    {
+     "hash": "0x4C66D4DE",
+     "name": null,
+     "wave_off": "0x1EA000",
+     "entry_off": "0x38E4CBAC"
+    },
+    {
+     "hash": "0x4F25E409",
+     "name": "skate-right_11",
+     "wave_off": "0xC2D800",
+     "entry_off": "0x38E4CBC0"
+    },
+    {
+     "hash": "0x51531151",
+     "name": "skate-right_05",
+     "wave_off": "0xC12000",
+     "entry_off": "0x38E4CBD4"
+    },
+    {
+     "hash": "0x5156A329",
+     "name": null,
+     "wave_off": "0x503800",
+     "entry_off": "0x38E4CBE8"
+    },
+    {
+     "hash": "0x522921A9",
+     "name": null,
+     "wave_off": "0x358000",
+     "entry_off": "0x38E4CBFC"
+    },
+    {
+     "hash": "0x526782DE",
+     "name": "check-boards_01",
+     "wave_off": "0xEEA800",
+     "entry_off": "0x38E4CC10"
+    },
+    {
+     "hash": "0x5428B8AA",
+     "name": "puck-stick_01",
+     "wave_off": "0xCC7800",
+     "entry_off": "0x38E4CC24"
+    },
+    {
+     "hash": "0x55C0FA6D",
+     "name": "goalie-stop-scrape_03",
+     "wave_off": "0xE5A800",
+     "entry_off": "0x38E4CC38"
+    },
+    {
+     "hash": "0x563ED548",
+     "name": "skate-right_01",
+     "wave_off": "0xBFF000",
+     "entry_off": "0x38E4CC4C"
+    },
+    {
+     "hash": "0x56E006E4",
+     "name": null,
+     "wave_off": "0x22B800",
+     "entry_off": "0x38E4CC60"
+    },
+    {
+     "hash": "0x578307A7",
+     "name": null,
+     "wave_off": "0xAC9800",
+     "entry_off": "0x38E4CC74"
+    },
+    {
+     "hash": "0x5840F9D6",
+     "name": null,
+     "wave_off": "0xEB6800",
+     "entry_off": "0x38E4CC88"
+    },
+    {
+     "hash": "0x586F3F50",
+     "name": null,
+     "wave_off": "0x53800",
+     "entry_off": "0x38E4CC9C"
+    },
+    {
+     "hash": "0x58E55D7A",
+     "name": "skate-right_09",
+     "wave_off": "0xC23000",
+     "entry_off": "0x38E4CCB0"
+    },
+    {
+     "hash": "0x597E5AA3",
+     "name": null,
+     "wave_off": "0x19800",
+     "entry_off": "0x38E4CCC4"
+    },
+    {
+     "hash": "0x59D6CDA2",
+     "name": "glass-bang_02",
+     "wave_off": "0xE83800",
+     "entry_off": "0x38E4CCD8"
+    },
+    {
+     "hash": "0x5B93E6E9",
+     "name": null,
+     "wave_off": "0xB1D800",
+     "entry_off": "0x38E4CCEC"
+    },
+    {
+     "hash": "0x5C4745E0",
+     "name": null,
+     "wave_off": "0x33D000",
+     "entry_off": "0x38E4CD00"
+    },
+    {
+     "hash": "0x5D47E591",
+     "name": null,
+     "wave_off": "0x53D800",
+     "entry_off": "0x38E4CD14"
+    },
+    {
+     "hash": "0x5D9622E3",
+     "name": "skate-left_11",
+     "wave_off": "0xC6A800",
+     "entry_off": "0x38E4CD28"
+    },
+    {
+     "hash": "0x5DDA03D1",
+     "name": null,
+     "wave_off": "0x81A800",
+     "entry_off": "0x38E4CD3C"
+    },
+    {
+     "hash": "0x5DEE81B0",
+     "name": null,
+     "wave_off": "0xB33800",
+     "entry_off": "0x38E4CD50"
+    },
+    {
+     "hash": "0x5F47415C",
+     "name": null,
+     "wave_off": "0x39800",
+     "entry_off": "0x38E4CD64"
+    },
+    {
+     "hash": "0x60FAE855",
+     "name": "puck-hit-board_00",
+     "wave_off": "0xD21800",
+     "entry_off": "0x38E4CD78"
+    },
+    {
+     "hash": "0x62AA3346",
+     "name": "punch_03",
+     "wave_off": "0xCBC800",
+     "entry_off": "0x38E4CD8C"
+    },
+    {
+     "hash": "0x63143128",
+     "name": null,
+     "wave_off": "0xB0E800",
+     "entry_off": "0x38E4CDA0"
+    },
+    {
+     "hash": "0x63B950A8",
+     "name": null,
+     "wave_off": "0x13F800",
+     "entry_off": "0x38E4CDB4"
+    },
+    {
+     "hash": "0x6460CFFF",
+     "name": "player-fall_02",
+     "wave_off": "0xE1C000",
+     "entry_off": "0x38E4CDC8"
+    },
+    {
+     "hash": "0x65A866E3",
+     "name": null,
+     "wave_off": "0x63000",
+     "entry_off": "0x38E4CDDC"
+    },
+    {
+     "hash": "0x666ED90E",
+     "name": "puck-glove_01",
+     "wave_off": "0xDA5800",
+     "entry_off": "0x38E4CDF0"
+    },
+    {
+     "hash": "0x6847A370",
+     "name": null,
+     "wave_off": "0x150000",
+     "entry_off": "0x38E4CE04"
+    },
+    {
+     "hash": "0x6853D4A0",
+     "name": "slap-shot_02",
+     "wave_off": "0xBD5000",
+     "entry_off": "0x38E4CE18"
+    },
+    {
+     "hash": "0x686F7B20",
+     "name": "pass-send_03",
+     "wave_off": "0xE31800",
+     "entry_off": "0x38E4CE2C"
+    },
+    {
+     "hash": "0x68E6CE6A",
+     "name": null,
+     "wave_off": "0xB54800",
+     "entry_off": "0x38E4CE40"
+    },
+    {
+     "hash": "0x69CB9BC2",
+     "name": null,
+     "wave_off": "0xC000",
+     "entry_off": "0x38E4CE54"
+    },
+    {
+     "hash": "0x69EBA029",
+     "name": "puck-post_02",
+     "wave_off": "0xD03000",
+     "entry_off": "0x38E4CE68"
+    },
+    {
+     "hash": "0x6DEF16DD",
+     "name": null,
+     "wave_off": "0xDE000",
+     "entry_off": "0x38E4CE7C"
+    },
+    {
+     "hash": "0x6EEBD8D3",
+     "name": null,
+     "wave_off": "0x69F800",
+     "entry_off": "0x38E4CE90"
+    },
+    {
+     "hash": "0x6F136692",
+     "name": null,
+     "wave_off": "0x3000",
+     "entry_off": "0x38E4CEA4"
+    },
+    {
+     "hash": "0x6F2A6769",
+     "name": null,
+     "wave_off": "0x144800",
+     "entry_off": "0x38E4CEB8"
+    },
+    {
+     "hash": "0x700C0563",
+     "name": null,
+     "wave_off": "0xB02800",
+     "entry_off": "0x38E4CECC"
+    },
+    {
+     "hash": "0x71BED14D",
+     "name": null,
+     "wave_off": "0x363000",
+     "entry_off": "0x38E4CEE0"
+    },
+    {
+     "hash": "0x71F8CAA2",
+     "name": null,
+     "wave_off": "0xD1000",
+     "entry_off": "0x38E4CEF4"
+    },
+    {
+     "hash": "0x725EF897",
+     "name": null,
+     "wave_off": "0x4800",
+     "entry_off": "0x38E4CF08"
+    },
+    {
+     "hash": "0x73772B60",
+     "name": "skate-carve-loop_02",
+     "wave_off": "0xC9C000",
+     "entry_off": "0x38E4CF1C"
+    },
+    {
+     "hash": "0x740C7623",
+     "name": "puck-goalie-blocker_00",
+     "wave_off": "0xD97800",
+     "entry_off": "0x38E4CF30"
+    },
+    {
+     "hash": "0x74599400",
+     "name": null,
+     "wave_off": "0x745800",
+     "entry_off": "0x38E4CF44"
+    },
+    {
+     "hash": "0x750EAB8F",
+     "name": null,
+     "wave_off": "0xEC5800",
+     "entry_off": "0x38E4CF58"
+    },
+    {
+     "hash": "0x751CAFD8",
+     "name": null,
+     "wave_off": "0x328800",
+     "entry_off": "0x38E4CF6C"
+    },
+    {
+     "hash": "0x75B1493B",
+     "name": null,
+     "wave_off": "0x5A7000",
+     "entry_off": "0x38E4CF80"
+    },
+    {
+     "hash": "0x78FF6EF7",
+     "name": "puck-glass_02",
+     "wave_off": "0xDB5800",
+     "entry_off": "0x38E4CF94"
+    },
+    {
+     "hash": "0x790961F7",
+     "name": null,
+     "wave_off": "0x492000",
+     "entry_off": "0x38E4CFA8"
+    },
+    {
+     "hash": "0x7A7736E3",
+     "name": null,
+     "wave_off": "0xA26000",
+     "entry_off": "0x38E4CFBC"
+    },
+    {
+     "hash": "0x7A9CD124",
+     "name": null,
+     "wave_off": "0xBA4800",
+     "entry_off": "0x38E4CFD0"
+    },
+    {
+     "hash": "0x7B9FEBD8",
+     "name": null,
+     "wave_off": "0x64E000",
+     "entry_off": "0x38E4CFE4"
+    },
+    {
+     "hash": "0x7C5EFD59",
+     "name": null,
+     "wave_off": "0x38000",
+     "entry_off": "0x38E4CFF8"
+    },
+    {
+     "hash": "0x80E5B9FF",
+     "name": null,
+     "wave_off": "0x6E8800",
+     "entry_off": "0x38E4D00C"
+    },
+    {
+     "hash": "0x81240645",
+     "name": null,
+     "wave_off": "0x14A800",
+     "entry_off": "0x38E4D020"
+    },
+    {
+     "hash": "0x834A8980",
+     "name": "skate-forward-loop_00",
+     "wave_off": "0xC78000",
+     "entry_off": "0x38E4D034"
+    },
+    {
+     "hash": "0x8649C25C",
+     "name": null,
+     "wave_off": "0x155000",
+     "entry_off": "0x38E4D048"
+    },
+    {
+     "hash": "0x865DB58C",
+     "name": "slap-shot_00",
+     "wave_off": "0xBC9000",
+     "entry_off": "0x38E4D05C"
+    },
+    {
+     "hash": "0x86611A0C",
+     "name": "pass-send_01",
+     "wave_off": "0xE25800",
+     "entry_off": "0x38E4D070"
+    },
+    {
+     "hash": "0x86E8AF46",
+     "name": null,
+     "wave_off": "0xB43800",
+     "entry_off": "0x38E4D084"
+    },
+    {
+     "hash": "0x87E5C105",
+     "name": "puck-post_00",
+     "wave_off": "0xCE4800",
+     "entry_off": "0x38E4D098"
+    },
+    {
+     "hash": "0x8889C753",
+     "name": "menu-back_00",
+     "wave_off": "0x45000",
+     "entry_off": "0x38E4D0AC"
+    },
+    {
+     "hash": "0x8A6EAED3",
+     "name": "player-fall_00",
+     "wave_off": "0xE11800",
+     "entry_off": "0x38E4D0C0"
+    },
+    {
+     "hash": "0x8B836F3A",
+     "name": "puck-dropped_00",
+     "wave_off": "0xDC2800",
+     "entry_off": "0x38E4D0D4"
+    },
+    {
+     "hash": "0x8BA607CF",
+     "name": null,
+     "wave_off": "0x60800",
+     "entry_off": "0x38E4D0E8"
+    },
+    {
+     "hash": "0x8CA4526A",
+     "name": "punch_01",
+     "wave_off": "0xCB9000",
+     "entry_off": "0x38E4D0FC"
+    },
+    {
+     "hash": "0x8DB73184",
+     "name": null,
+     "wave_off": "0x13A000",
+     "entry_off": "0x38E4D110"
+    },
+    {
+     "hash": "0x8EF48979",
+     "name": "puck-hit-board_02",
+     "wave_off": "0xD33000",
+     "entry_off": "0x38E4D124"
+    },
+    {
+     "hash": "0x9492B008",
+     "name": null,
+     "wave_off": "0xB9A000",
+     "entry_off": "0x38E4D138"
+    },
+    {
+     "hash": "0x95918AF4",
+     "name": null,
+     "wave_off": "0x61F800",
+     "entry_off": "0x38E4D14C"
+    },
+    {
+     "hash": "0x95FD67C4",
+     "name": "puck-bottom-bar_00",
+     "wave_off": "0xDD2000",
+     "entry_off": "0x38E4D160"
+    },
+    {
+     "hash": "0x9671154A",
+     "name": "menu-forward_00",
+     "wave_off": "0x4E000",
+     "entry_off": "0x38E4D174"
+    },
+    {
+     "hash": "0x96F10FDB",
+     "name": "puck-glass_00",
+     "wave_off": "0xDAA000",
+     "entry_off": "0x38E4D188"
+    },
+    {
+     "hash": "0x9A57F52C",
+     "name": null,
+     "wave_off": "0x78D800",
+     "entry_off": "0x38E4D19C"
+    },
+    {
+     "hash": "0x9BBF2817",
+     "name": null,
+     "wave_off": "0x580000",
+     "entry_off": "0x38E4D1B0"
+    },
+    {
+     "hash": "0x9BC109DB",
+     "name": null,
+     "wave_off": "0x943800",
+     "entry_off": "0x38E4D1C4"
+    },
+    {
+     "hash": "0x9D794A4C",
+     "name": "skate-carve-loop_00",
+     "wave_off": "0xC8C000",
+     "entry_off": "0x38E4D1D8"
+    },
+    {
+     "hash": "0x9FF6AB8E",
+     "name": null,
+     "wave_off": "0xB8800",
+     "entry_off": "0x38E4D1EC"
+    },
+    {
+     "hash": "0xA13EAF49",
+     "name": "wrist-shot_00",
+     "wave_off": "0xB74800",
+     "entry_off": "0x38E4D200"
+    },
+    {
+     "hash": "0xA268B5F2",
+     "name": null,
+     "wave_off": "0x15D800",
+     "entry_off": "0x38E4D214"
+    },
+    {
+     "hash": "0xA3822F8C",
+     "name": null,
+     "wave_off": "0xAA800",
+     "entry_off": "0x38E4D228"
+    },
+    {
+     "hash": "0xA48B9286",
+     "name": "stick-slide_00",
+     "wave_off": "0x11F800",
+     "entry_off": "0x38E4D23C"
+    },
+    {
+     "hash": "0xA56A3341",
+     "name": "gm-puck-handling-l_03",
+     "wave_off": "0xE73000",
+     "entry_off": "0x38E4D250"
+    },
+    {
+     "hash": "0xA6A935A3",
+     "name": "puck-helmet_00",
+     "wave_off": "0xD44000",
+     "entry_off": "0x38E4D264"
+    },
+    {
+     "hash": "0xA7F2E772",
+     "name": "stick-on-ice_00",
+     "wave_off": "0xB86800",
+     "entry_off": "0x38E4D278"
+    },
+    {
+     "hash": "0xA7FB5AF7",
+     "name": null,
+     "wave_off": "0x315800",
+     "entry_off": "0x38E4D28C"
+    },
+    {
+     "hash": "0xA86D3499",
+     "name": null,
+     "wave_off": "0x5E1000",
+     "entry_off": "0x38E4D2A0"
+    },
+    {
+     "hash": "0xA8A757B9",
+     "name": null,
+     "wave_off": "0x15C000",
+     "entry_off": "0x38E4D2B4"
+    },
+    {
+     "hash": "0xA9363CDB",
+     "name": "snap-shot_01",
+     "wave_off": "0xBBD000",
+     "entry_off": "0x38E4D2C8"
+    },
+    {
+     "hash": "0xA9BF1BBE",
+     "name": "stick-hit-boards_00",
+     "wave_off": "0xBAC000",
+     "entry_off": "0x38E4D2DC"
+    },
+    {
+     "hash": "0xAA83728E",
+     "name": "skate-left_03",
+     "wave_off": "0xC45800",
+     "entry_off": "0x38E4D2F0"
+    },
+    {
+     "hash": "0xACF7DD2D",
+     "name": "skate-scrape-stop_01",
+     "wave_off": "0xBE6800",
+     "entry_off": "0x38E4D304"
+    },
+    {
+     "hash": "0xAD7DE7A3",
+     "name": "check-body_03",
+     "wave_off": "0xEDD800",
+     "entry_off": "0x38E4D318"
+    },
+    {
+     "hash": "0xADEEB697",
+     "name": "skate-left_07",
+     "wave_off": "0xC59800",
+     "entry_off": "0x38E4D32C"
+    },
+    {
+     "hash": "0xAE83FB2F",
+     "name": null,
+     "wave_off": "0x24000",
+     "entry_off": "0x38E4D340"
+    },
+    {
+     "hash": "0xB11F5DB0",
+     "name": null,
+     "wave_off": "0x3D9000",
+     "entry_off": "0x38E4D354"
+    },
+    {
+     "hash": "0xB1499734",
+     "name": null,
+     "wave_off": "0x884800",
+     "entry_off": "0x38E4D368"
+    },
+    {
+     "hash": "0xB1EABAEF",
+     "name": null,
+     "wave_off": "0x343800",
+     "entry_off": "0x38E4D37C"
+    },
+    {
+     "hash": "0xB2457517",
+     "name": null,
+     "wave_off": "0xF800",
+     "entry_off": "0x38E4D390"
+    },
+    {
+     "hash": "0xB34984BD",
+     "name": null,
+     "wave_off": "0x571000",
+     "entry_off": "0x38E4D3A4"
+    },
+    {
+     "hash": "0xB39843CF",
+     "name": "skate-left_13",
+     "wave_off": "0xC74000",
+     "entry_off": "0x38E4D3B8"
+    },
+    {
+     "hash": "0xB3D462FD",
+     "name": null,
+     "wave_off": "0x7BB800",
+     "entry_off": "0x38E4D3CC"
+    },
+    {
+     "hash": "0xB3E0E09C",
+     "name": null,
+     "wave_off": "0xB25800",
+     "entry_off": "0x38E4D3E0"
+    },
+    {
+     "hash": "0xB53CC266",
+     "name": null,
+     "wave_off": "0xD1A000",
+     "entry_off": "0x38E4D3F4"
+    },
+    {
+     "hash": "0xB54EF519",
+     "name": null,
+     "wave_off": "0x312000",
+     "entry_off": "0x38E4D408"
+    },
+    {
+     "hash": "0xB59D87C5",
+     "name": null,
+     "wave_off": "0xB15800",
+     "entry_off": "0x38E4D41C"
+    },
+    {
+     "hash": "0xB64E98FA",
+     "name": null,
+     "wave_off": "0xEA9000",
+     "entry_off": "0x38E4D430"
+    },
+    {
+     "hash": "0xB696DA59",
+     "name": "pass-recieve_01",
+     "wave_off": "0xE3B800",
+     "entry_off": "0x38E4D444"
+    },
+    {
+     "hash": "0xB7D8AC8E",
+     "name": "glass-bang_00",
+     "wave_off": "0xE75800",
+     "entry_off": "0x38E4D458"
+    },
+    {
+     "hash": "0xB830B464",
+     "name": "skate-right_03",
+     "wave_off": "0xC07800",
+     "entry_off": "0x38E4D46C"
+    },
+    {
+     "hash": "0xB8EE67C8",
+     "name": null,
+     "wave_off": "0x2C3800",
+     "entry_off": "0x38E4D480"
+    },
+    {
+     "hash": "0xB9266126",
+     "name": null,
+     "wave_off": "0x465000",
+     "entry_off": "0x38E4D494"
+    },
+    {
+     "hash": "0xBA26D986",
+     "name": "puck-stick_03",
+     "wave_off": "0xCDA000",
+     "entry_off": "0x38E4D4A8"
+    },
+    {
+     "hash": "0xBAFEE792",
+     "name": null,
+     "wave_off": "0x319000",
+     "entry_off": "0x38E4D4BC"
+    },
+    {
+     "hash": "0xBB4A849C",
+     "name": null,
+     "wave_off": "0x35F000",
+     "entry_off": "0x38E4D4D0"
+    },
+    {
+     "hash": "0xBBCE9B41",
+     "name": "goalie-stop-scrape_01",
+     "wave_off": "0xE4B000",
+     "entry_off": "0x38E4D4E4"
+    },
+    {
+     "hash": "0xBC274085",
+     "name": null,
+     "wave_off": "0x351800",
+     "entry_off": "0x38E4D4F8"
+    },
+    {
+     "hash": "0xBC69E3F2",
+     "name": "check-boards_03",
+     "wave_off": "0xF00000",
+     "entry_off": "0x38E4D50C"
+    },
+    {
+     "hash": "0xBD0A6B2B",
+     "name": "poke-check_01",
+     "wave_off": "0xE02800",
+     "entry_off": "0x38E4D520"
+    },
+    {
+     "hash": "0xBDEB5121",
+     "name": "1nxv_0",
+     "wave_off": "0x12000",
+     "entry_off": "0x38E4D534"
+    },
+    {
+     "hash": "0xBED36884",
+     "name": null,
+     "wave_off": "0xD8A000",
+     "entry_off": "0x38E4D548"
+    },
+    {
+     "hash": "0xBF5D707D",
+     "name": "skate-right_07",
+     "wave_off": "0xC1B000",
+     "entry_off": "0x38E4D55C"
+    },
+    {
+     "hash": "0xC0DF9C18",
+     "name": "glass-bang_01",
+     "wave_off": "0xE7C800",
+     "entry_off": "0x38E4D570"
+    },
+    {
+     "hash": "0xC149A86C",
+     "name": null,
+     "wave_off": "0xEB0800",
+     "entry_off": "0x38E4D584"
+    },
+    {
+     "hash": "0xC191EACF",
+     "name": "pass-recieve_00",
+     "wave_off": "0xE37000",
+     "entry_off": "0x38E4D598"
+    },
+    {
+     "hash": "0xC29AB753",
+     "name": null,
+     "wave_off": "0xB11800",
+     "entry_off": "0x38E4D5AC"
+    },
+    {
+     "hash": "0xC44EB42B",
+     "name": null,
+     "wave_off": "0x55C800",
+     "entry_off": "0x38E4D5C0"
+    },
+    {
+     "hash": "0xC49F7359",
+     "name": "skate-left_12",
+     "wave_off": "0xC6F800",
+     "entry_off": "0x38E4D5D4"
+    },
+    {
+     "hash": "0xC4D3526B",
+     "name": null,
+     "wave_off": "0x7EC000",
+     "entry_off": "0x38E4D5E8"
+    },
+    {
+     "hash": "0xC4E7D00A",
+     "name": null,
+     "wave_off": "0xB2D000",
+     "entry_off": "0x38E4D5FC"
+    },
+    {
+     "hash": "0xC5F7734A",
+     "name": null,
+     "wave_off": "0xB21800",
+     "entry_off": "0x38E4D610"
+    },
+    {
+     "hash": "0xC6186D26",
+     "name": null,
+     "wave_off": "0x409800",
+     "entry_off": "0x38E4D624"
+    },
+    {
+     "hash": "0xC64EA7A2",
+     "name": null,
+     "wave_off": "0x853000",
+     "entry_off": "0x38E4D638"
+    },
+    {
+     "hash": "0xC6ED8A79",
+     "name": null,
+     "wave_off": "0x34B800",
+     "entry_off": "0x38E4D64C"
+    },
+    {
+     "hash": "0xC85A40EB",
+     "name": "skate-right_06",
+     "wave_off": "0xC17000",
+     "entry_off": "0x38E4D660"
+    },
+    {
+     "hash": "0xC996F652",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x38E4D674"
+    },
+    {
+     "hash": "0xC9D45812",
+     "name": null,
+     "wave_off": "0xD7D000",
+     "entry_off": "0x38E4D688"
+    },
+    {
+     "hash": "0xCA0D5BBD",
+     "name": "poke-check_00",
+     "wave_off": "0xDFC000",
+     "entry_off": "0x38E4D69C"
+    },
+    {
+     "hash": "0xCAEC61B7",
+     "name": "1nxv_1",
+     "wave_off": "0x10800",
+     "entry_off": "0x38E4D6B0"
+    },
+    {
+     "hash": "0xCB207013",
+     "name": null,
+     "wave_off": "0x354800",
+     "entry_off": "0x38E4D6C4"
+    },
+    {
+     "hash": "0xCB6ED364",
+     "name": "check-boards_02",
+     "wave_off": "0xEF4000",
+     "entry_off": "0x38E4D6D8"
+    },
+    {
+     "hash": "0xCCC9ABD7",
+     "name": "goalie-stop-scrape_00",
+     "wave_off": "0xE44000",
+     "entry_off": "0x38E4D6EC"
+    },
+    {
+     "hash": "0xCD21E910",
+     "name": "puck-stick_02",
+     "wave_off": "0xCD2000",
+     "entry_off": "0x38E4D700"
+    },
+    {
+     "hash": "0xCDF9D704",
+     "name": null,
+     "wave_off": "0x31F800",
+     "entry_off": "0x38E4D714"
+    },
+    {
+     "hash": "0xCE2151B0",
+     "name": null,
+     "wave_off": "0x433800",
+     "entry_off": "0x38E4D728"
+    },
+    {
+     "hash": "0xCF3784F2",
+     "name": "skate-right_02",
+     "wave_off": "0xC03800",
+     "entry_off": "0x38E4D73C"
+    },
+    {
+     "hash": "0xD0CC105D",
+     "name": null,
+     "wave_off": "0x30F000",
+     "entry_off": "0x38E4D750"
+    },
+    {
+     "hash": "0xD0F5D7E4",
+     "name": "stick-on-ice_01",
+     "wave_off": "0xB8D000",
+     "entry_off": "0x38E4D764"
+    },
+    {
+     "hash": "0xD1AE0535",
+     "name": "puck-helmet_01",
+     "wave_off": "0xD54800",
+     "entry_off": "0x38E4D778"
+    },
+    {
+     "hash": "0xD26D03D7",
+     "name": "gm-puck-handling-l_02",
+     "wave_off": "0xE72000",
+     "entry_off": "0x38E4D78C"
+    },
+    {
+     "hash": "0xD38CA210",
+     "name": "stick-slide_01",
+     "wave_off": "0x122800",
+     "entry_off": "0x38E4D7A0"
+    },
+    {
+     "hash": "0xD4851F1A",
+     "name": null,
+     "wave_off": "0xA8800",
+     "entry_off": "0x38E4D7B4"
+    },
+    {
+     "hash": "0xD56F8564",
+     "name": null,
+     "wave_off": "0x1B5000",
+     "entry_off": "0x38E4D7C8"
+    },
+    {
+     "hash": "0xD5DCF35B",
+     "name": "fireworks-explode-soft_00",
+     "wave_off": "0xE8B000",
+     "entry_off": "0x38E4D7DC"
+    },
+    {
+     "hash": "0xD62CB5B3",
+     "name": "skate-right_12",
+     "wave_off": "0xC32000",
+     "entry_off": "0x38E4D7F0"
+    },
+    {
+     "hash": "0xD6399FDF",
+     "name": "wrist-shot_01",
+     "wave_off": "0xB7C800",
+     "entry_off": "0x38E4D804"
+    },
+    {
+     "hash": "0xD94DB5E4",
+     "name": null,
+     "wave_off": "0xB6F800",
+     "entry_off": "0x38E4D818"
+    },
+    {
+     "hash": "0xDA7AD735",
+     "name": "check-body_02",
+     "wave_off": "0xEDA800",
+     "entry_off": "0x38E4D82C"
+    },
+    {
+     "hash": "0xDAE98601",
+     "name": "skate-left_06",
+     "wave_off": "0xC55000",
+     "entry_off": "0x38E4D840"
+    },
+    {
+     "hash": "0xDBF0EDBB",
+     "name": "skate-scrape-stop_00",
+     "wave_off": "0xBE0000",
+     "entry_off": "0x38E4D854"
+    },
+    {
+     "hash": "0xDD844218",
+     "name": "skate-left_02",
+     "wave_off": "0xC41800",
+     "entry_off": "0x38E4D868"
+    },
+    {
+     "hash": "0xDE310C4D",
+     "name": "snap-shot_00",
+     "wave_off": "0xBB7800",
+     "entry_off": "0x38E4D87C"
+    },
+    {
+     "hash": "0xDEB82B28",
+     "name": "stick-hit-boards_01",
+     "wave_off": "0xBB1800",
+     "entry_off": "0x38E4D890"
+    },
+    {
+     "hash": "0xDF6A040F",
+     "name": null,
+     "wave_off": "0x5CB000",
+     "entry_off": "0x38E4D8A4"
+    },
+    {
+     "hash": "0xDFA0672F",
+     "name": null,
+     "wave_off": "0x15A800",
+     "entry_off": "0x38E4D8B8"
+    },
+    {
+     "hash": "0xE06F25EB",
+     "name": null,
+     "wave_off": "0x3B800",
+     "entry_off": "0x38E4D8CC"
+    },
+    {
+     "hash": "0xE1F63F4D",
+     "name": "puck-glass_01",
+     "wave_off": "0xDAF800",
+     "entry_off": "0x38E4D8E0"
+    },
+    {
+     "hash": "0xE296BA62",
+     "name": null,
+     "wave_off": "0x63D000",
+     "entry_off": "0x38E4D8F4"
+    },
+    {
+     "hash": "0xE339A450",
+     "name": null,
+     "wave_off": "0x56000",
+     "entry_off": "0x38E4D908"
+    },
+    {
+     "hash": "0xE395809E",
+     "name": null,
+     "wave_off": "0xB95000",
+     "entry_off": "0x38E4D91C"
+    },
+    {
+     "hash": "0xE8F19B18",
+     "name": null,
+     "wave_off": "0xAC000",
+     "entry_off": "0x38E4D930"
+    },
+    {
+     "hash": "0xEA7E7ADA",
+     "name": "skate-carve-loop_01",
+     "wave_off": "0xC95000",
+     "entry_off": "0x38E4D944"
+    },
+    {
+     "hash": "0xEBAE32EB",
+     "name": null,
+     "wave_off": "0x91800",
+     "entry_off": "0x38E4D958"
+    },
+    {
+     "hash": "0xECB81881",
+     "name": null,
+     "wave_off": "0x58E000",
+     "entry_off": "0x38E4D96C"
+    },
+    {
+     "hash": "0xECC6394D",
+     "name": null,
+     "wave_off": "0x8EE800",
+     "entry_off": "0x38E4D980"
+    },
+    {
+     "hash": "0xED50C5BA",
+     "name": null,
+     "wave_off": "0x769800",
+     "entry_off": "0x38E4D994"
+    },
+    {
+     "hash": "0xED8F744B",
+     "name": "skate-back-loop_00",
+     "wave_off": "0xCA3800",
+     "entry_off": "0x38E4D9A8"
+    },
+    {
+     "hash": "0xF00DE765",
+     "name": "wipe_00",
+     "wave_off": "0x58800",
+     "entry_off": "0x38E4D9BC"
+    },
+    {
+     "hash": "0xF0E2F193",
+     "name": "puck-post_01",
+     "wave_off": "0xCF5000",
+     "entry_off": "0x38E4D9D0"
+    },
+    {
+     "hash": "0xF14EF2CA",
+     "name": null,
+     "wave_off": "0x157800",
+     "entry_off": "0x38E4D9E4"
+    },
+    {
+     "hash": "0xF15A851A",
+     "name": "slap-shot_01",
+     "wave_off": "0xBCF000",
+     "entry_off": "0x38E4D9F8"
+    },
+    {
+     "hash": "0xF1662A9A",
+     "name": "pass-send_00",
+     "wave_off": "0xE20000",
+     "entry_off": "0x38E4DA0C"
+    },
+    {
+     "hash": "0xF1EF9FD0",
+     "name": null,
+     "wave_off": "0xB4D000",
+     "entry_off": "0x38E4DA20"
+    },
+    {
+     "hash": "0xF2F8D35E",
+     "name": "puck-pads_00",
+     "wave_off": "0xD15000",
+     "entry_off": "0x38E4DA34"
+    },
+    {
+     "hash": "0xF3DEE40F",
+     "name": null,
+     "wave_off": "0x129800",
+     "entry_off": "0x38E4DA48"
+    },
+    {
+     "hash": "0xF42AF12F",
+     "name": "pond-puck-hit-snow_00",
+     "wave_off": "0xDF0800",
+     "entry_off": "0x38E4DA5C"
+    },
+    {
+     "hash": "0xF44DB916",
+     "name": "skate-forward-loop_01",
+     "wave_off": "0xC80000",
+     "entry_off": "0x38E4DA70"
+    },
+    {
+     "hash": "0xF62336D3",
+     "name": null,
+     "wave_off": "0x14D000",
+     "entry_off": "0x38E4DA84"
+    },
+    {
+     "hash": "0xF75B2225",
+     "name": null,
+     "wave_off": "0xAE5800",
+     "entry_off": "0x38E4DA98"
+    },
+    {
+     "hash": "0xF7E28969",
+     "name": null,
+     "wave_off": "0x6C4000",
+     "entry_off": "0x38E4DAAC"
+    },
+    {
+     "hash": "0xF9F3B9EF",
+     "name": "puck-hit-board_03",
+     "wave_off": "0xD3B800",
+     "entry_off": "0x38E4DAC0"
+    },
+    {
+     "hash": "0xFAB00112",
+     "name": null,
+     "wave_off": "0x13D000",
+     "entry_off": "0x38E4DAD4"
+    },
+    {
+     "hash": "0xFBA362FC",
+     "name": "punch_00",
+     "wave_off": "0xCB7000",
+     "entry_off": "0x38E4DAE8"
+    },
+    {
+     "hash": "0xFBCCF340",
+     "name": null,
+     "wave_off": "0x64800",
+     "entry_off": "0x38E4DAFC"
+    },
+    {
+     "hash": "0xFC845FAC",
+     "name": "puck-dropped_01",
+     "wave_off": "0xDCA800",
+     "entry_off": "0x38E4DB10"
+    },
+    {
+     "hash": "0xFCA13759",
+     "name": null,
+     "wave_off": "0x5F000",
+     "entry_off": "0x38E4DB24"
+    },
+    {
+     "hash": "0xFCFD1D59",
+     "name": "ref-whistle_00",
+     "wave_off": "0xCB0000",
+     "entry_off": "0x38E4DB38"
+    },
+    {
+     "hash": "0xFD699E45",
+     "name": "player-fall_01",
+     "wave_off": "0xE15800",
+     "entry_off": "0x38E4DB4C"
+    }
+   ]
+  },
+  "sfx_arena002.bnk": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x02099B19",
+     "name": null,
+     "wave_off": "0xF5A000",
+     "entry_off": "0x39D594E0"
+    },
+    {
+     "hash": "0x021B9F4E",
+     "name": null,
+     "wave_off": "0x348800",
+     "entry_off": "0x39D594F4"
+    },
+    {
+     "hash": "0x02A722C4",
+     "name": "player-slide_00",
+     "wave_off": "0xE8E800",
+     "entry_off": "0x39D59508"
+    },
+    {
+     "hash": "0x02B679AD",
+     "name": null,
+     "wave_off": "0x5EC000",
+     "entry_off": "0x39D5951C"
+    },
+    {
+     "hash": "0x030B46B5",
+     "name": "puck-goalie-blocker_01",
+     "wave_off": "0xE18800",
+     "entry_off": "0x39D59530"
+    },
+    {
+     "hash": "0x035EA496",
+     "name": null,
+     "wave_off": "0x7AB800",
+     "entry_off": "0x39D59544"
+    },
+    {
+     "hash": "0x06FFFA34",
+     "name": null,
+     "wave_off": "0xC6000",
+     "entry_off": "0x39D59558"
+    },
+    {
+     "hash": "0x070B35F5",
+     "name": null,
+     "wave_off": "0xB7E000",
+     "entry_off": "0x39D5956C"
+    },
+    {
+     "hash": "0x07296DCD",
+     "name": null,
+     "wave_off": "0x55000",
+     "entry_off": "0x39D59580"
+    },
+    {
+     "hash": "0x08D3F8D3",
+     "name": "2klogo_00",
+     "wave_off": "0x26800",
+     "entry_off": "0x39D59594"
+    },
+    {
+     "hash": "0x09B8AC60",
+     "name": null,
+     "wave_off": "0x130800",
+     "entry_off": "0x39D595A8"
+    },
+    {
+     "hash": "0x0C98DB4E",
+     "name": null,
+     "wave_off": "0x6B8000",
+     "entry_off": "0x39D595BC"
+    },
+    {
+     "hash": "0x0CB81A23",
+     "name": null,
+     "wave_off": "0xB55800",
+     "entry_off": "0x39D595D0"
+    },
+    {
+     "hash": "0x0D700675",
+     "name": null,
+     "wave_off": "0xA67800",
+     "entry_off": "0x39D595E4"
+    },
+    {
+     "hash": "0x0D9BE1B2",
+     "name": null,
+     "wave_off": "0xC1D800",
+     "entry_off": "0x39D595F8"
+    },
+    {
+     "hash": "0x0DED7E9D",
+     "name": null,
+     "wave_off": "0x3AF000",
+     "entry_off": "0x39D5960C"
+    },
+    {
+     "hash": "0x0E0E5161",
+     "name": null,
+     "wave_off": "0x505000",
+     "entry_off": "0x39D59620"
+    },
+    {
+     "hash": "0x0FEBBB5C",
+     "name": null,
+     "wave_off": "0xB48000",
+     "entry_off": "0x39D59634"
+    },
+    {
+     "hash": "0x0FF85E61",
+     "name": "puck-glass_03",
+     "wave_off": "0xE3D000",
+     "entry_off": "0x39D59648"
+    },
+    {
+     "hash": "0x1169E998",
+     "name": "puck-glove_00",
+     "wave_off": "0xE1E000",
+     "entry_off": "0x39D5965C"
+    },
+    {
+     "hash": "0x11A10813",
+     "name": null,
+     "wave_off": "0x10A000",
+     "entry_off": "0x39D59670"
+    },
+    {
+     "hash": "0x12AF5675",
+     "name": null,
+     "wave_off": "0x62000",
+     "entry_off": "0x39D59684"
+    },
+    {
+     "hash": "0x141301BE",
+     "name": null,
+     "wave_off": "0xB90800",
+     "entry_off": "0x39D59698"
+    },
+    {
+     "hash": "0x146A6A70",
+     "name": null,
+     "wave_off": "0x41800",
+     "entry_off": "0x39D596AC"
+    },
+    {
+     "hash": "0x14BE603E",
+     "name": null,
+     "wave_off": "0x140000",
+     "entry_off": "0x39D596C0"
+    },
+    {
+     "hash": "0x15AD03D0",
+     "name": "punch_02",
+     "wave_off": "0xD36000",
+     "entry_off": "0x39D596D4"
+    },
+    {
+     "hash": "0x17FDD8C3",
+     "name": "puck-hit-board_01",
+     "wave_off": "0xDA2000",
+     "entry_off": "0x39D596E8"
+    },
+    {
+     "hash": "0x182D57FF",
+     "name": null,
+     "wave_off": "0x146000",
+     "entry_off": "0x39D596FC"
+    },
+    {
+     "hash": "0x19ECE845",
+     "name": null,
+     "wave_off": "0x6C7800",
+     "entry_off": "0x39D59710"
+    },
+    {
+     "hash": "0x1EF39926",
+     "name": null,
+     "wave_off": "0xE6800",
+     "entry_off": "0x39D59724"
+    },
+    {
+     "hash": "0x1F4093E6",
+     "name": null,
+     "wave_off": "0x151000",
+     "entry_off": "0x39D59738"
+    },
+    {
+     "hash": "0x1F54E436",
+     "name": "slap-shot_03",
+     "wave_off": "0xC55000",
+     "entry_off": "0x39D5974C"
+    },
+    {
+     "hash": "0x1F684BB6",
+     "name": "pass-send_02",
+     "wave_off": "0xEB2000",
+     "entry_off": "0x39D59760"
+    },
+    {
+     "hash": "0x1FE1FEFC",
+     "name": null,
+     "wave_off": "0xBDD000",
+     "entry_off": "0x39D59774"
+    },
+    {
+     "hash": "0x2139E5DE",
+     "name": "skate-right_00",
+     "wave_off": "0xC72800",
+     "entry_off": "0x39D59788"
+    },
+    {
+     "hash": "0x21E73672",
+     "name": null,
+     "wave_off": "0x29D000",
+     "entry_off": "0x39D5979C"
+    },
+    {
+     "hash": "0x22C7CAFB",
+     "name": "goalie-stop-scrape_02",
+     "wave_off": "0xED8800",
+     "entry_off": "0x39D597B0"
+    },
+    {
+     "hash": "0x232F883C",
+     "name": "puck-stick_00",
+     "wave_off": "0xD3A000",
+     "entry_off": "0x39D597C4"
+    },
+    {
+     "hash": "0x252E113F",
+     "name": null,
+     "wave_off": "0x371800",
+     "entry_off": "0x39D597D8"
+    },
+    {
+     "hash": "0x2560B248",
+     "name": "check-boards_00",
+     "wave_off": "0xF72800",
+     "entry_off": "0x39D597EC"
+    },
+    {
+     "hash": "0x265193BF",
+     "name": null,
+     "wave_off": "0x51D800",
+     "entry_off": "0x39D59800"
+    },
+    {
+     "hash": "0x265421C7",
+     "name": "skate-right_04",
+     "wave_off": "0xC87800",
+     "entry_off": "0x39D59814"
+    },
+    {
+     "hash": "0x2840C68E",
+     "name": null,
+     "wave_off": "0x973800",
+     "entry_off": "0x39D59828"
+    },
+    {
+     "hash": "0x2A40D507",
+     "name": null,
+     "wave_off": "0x56A000",
+     "entry_off": "0x39D5983C"
+    },
+    {
+     "hash": "0x2A61A060",
+     "name": null,
+     "wave_off": "0x77000",
+     "entry_off": "0x39D59850"
+    },
+    {
+     "hash": "0x2A911275",
+     "name": "skate-left_10",
+     "wave_off": "0xCE0000",
+     "entry_off": "0x39D59864"
+    },
+    {
+     "hash": "0x2AE9B126",
+     "name": null,
+     "wave_off": "0xBBC800",
+     "entry_off": "0x39D59878"
+    },
+    {
+     "hash": "0x2B407576",
+     "name": null,
+     "wave_off": "0x34E800",
+     "entry_off": "0x39D5988C"
+    },
+    {
+     "hash": "0x2C94D67F",
+     "name": null,
+     "wave_off": "0xB9D800",
+     "entry_off": "0x39D598A0"
+    },
+    {
+     "hash": "0x2E3E40DD",
+     "name": null,
+     "wave_off": "0x158800",
+     "entry_off": "0x39D598B4"
+    },
+    {
+     "hash": "0x2F47C940",
+     "name": null,
+     "wave_off": "0xF4E000",
+     "entry_off": "0x39D598C8"
+    },
+    {
+     "hash": "0x2F9A9403",
+     "name": null,
+     "wave_off": "0x66000",
+     "entry_off": "0x39D598DC"
+    },
+    {
+     "hash": "0x2F9F8BE3",
+     "name": "pass-recieve_02",
+     "wave_off": "0xEC4800",
+     "entry_off": "0x39D598F0"
+    },
+    {
+     "hash": "0x2FE26DEC",
+     "name": "skate-right_08",
+     "wave_off": "0xC9A000",
+     "entry_off": "0x39D59904"
+    },
+    {
+     "hash": "0x303F6D61",
+     "name": "snap-shot_02",
+     "wave_off": "0xC3E800",
+     "entry_off": "0x39D59918"
+    },
+    {
+     "hash": "0x31646523",
+     "name": null,
+     "wave_off": "0x660000",
+     "entry_off": "0x39D5992C"
+    },
+    {
+     "hash": "0x31ED4788",
+     "name": null,
+     "wave_off": "0xEC000",
+     "entry_off": "0x39D59940"
+    },
+    {
+     "hash": "0x326ED339",
+     "name": "faceoff-sticks_01",
+     "wave_off": "0xF2B800",
+     "entry_off": "0x39D59954"
+    },
+    {
+     "hash": "0x338A2334",
+     "name": "skate-left_00",
+     "wave_off": "0xCB0800",
+     "entry_off": "0x39D59968"
+    },
+    {
+     "hash": "0x34345709",
+     "name": null,
+     "wave_off": "0x9C800",
+     "entry_off": "0x39D5997C"
+    },
+    {
+     "hash": "0x3474B619",
+     "name": "check-body_00",
+     "wave_off": "0xF60800",
+     "entry_off": "0x39D59990"
+    },
+    {
+     "hash": "0x34E7E72D",
+     "name": "skate-left_04",
+     "wave_off": "0xCC5000",
+     "entry_off": "0x39D599A4"
+    },
+    {
+     "hash": "0x35368EA5",
+     "name": null,
+     "wave_off": "0x328000",
+     "entry_off": "0x39D599B8"
+    },
+    {
+     "hash": "0x35FE8C97",
+     "name": "skate-scrape-stop_02",
+     "wave_off": "0xC67000",
+     "entry_off": "0x39D599CC"
+    },
+    {
+     "hash": "0x3743D4C8",
+     "name": null,
+     "wave_off": "0xBE5000",
+     "entry_off": "0x39D599E0"
+    },
+    {
+     "hash": "0x37B5AE4D",
+     "name": "puck-goalie-skate_00",
+     "wave_off": "0xDE4800",
+     "entry_off": "0x39D599F4"
+    },
+    {
+     "hash": "0x37C68ABA",
+     "name": "menu-misc_00",
+     "wave_off": "0x54000",
+     "entry_off": "0x39D59A08"
+    },
+    {
+     "hash": "0x3822D49F",
+     "name": "skate-right_10",
+     "wave_off": "0xCA2800",
+     "entry_off": "0x39D59A1C"
+    },
+    {
+     "hash": "0x3B0EA6E2",
+     "name": "gm-puck-handling-l_04",
+     "wave_off": "0xEFC000",
+     "entry_off": "0x39D59A30"
+    },
+    {
+     "hash": "0x3C6362FB",
+     "name": "gm-puck-handling-l_00",
+     "wave_off": "0xEF7000",
+     "entry_off": "0x39D59A44"
+    },
+    {
+     "hash": "0x3D51AB06",
+     "name": "skate-left_08",
+     "wave_off": "0xCD8800",
+     "entry_off": "0x39D59A58"
+    },
+    {
+     "hash": "0x3DAE6430",
+     "name": null,
+     "wave_off": "0x13800",
+     "entry_off": "0x39D59A6C"
+    },
+    {
+     "hash": "0x3FC5E253",
+     "name": "goalie-stick-hit-ice_00",
+     "wave_off": "0xEEA000",
+     "entry_off": "0x39D59A80"
+    },
+    {
+     "hash": "0x4044E45E",
+     "name": null,
+     "wave_off": "0xBE9800",
+     "entry_off": "0x39D59A94"
+    },
+    {
+     "hash": "0x41F9F387",
+     "name": null,
+     "wave_off": "0xB4B800",
+     "entry_off": "0x39D59AA8"
+    },
+    {
+     "hash": "0x42F9BC01",
+     "name": "skate-scrape-stop_03",
+     "wave_off": "0xC6C800",
+     "entry_off": "0x39D59ABC"
+    },
+    {
+     "hash": "0x4373868F",
+     "name": "check-body_01",
+     "wave_off": "0xF64000",
+     "entry_off": "0x39D59AD0"
+    },
+    {
+     "hash": "0x43E0D7BB",
+     "name": "skate-left_05",
+     "wave_off": "0xCCA800",
+     "entry_off": "0x39D59AE4"
+    },
+    {
+     "hash": "0x448D13A2",
+     "name": "skate-left_01",
+     "wave_off": "0xCB7000",
+     "entry_off": "0x39D59AF8"
+    },
+    {
+     "hash": "0x45007575",
+     "name": null,
+     "wave_off": "0x6800",
+     "entry_off": "0x39D59B0C"
+    },
+    {
+     "hash": "0x454A8E4A",
+     "name": null,
+     "wave_off": "0x3E800",
+     "entry_off": "0x39D59B20"
+    },
+    {
+     "hash": "0x4569E3AF",
+     "name": "faceoff-sticks_00",
+     "wave_off": "0xF22000",
+     "entry_off": "0x39D59B34"
+    },
+    {
+     "hash": "0x466355B5",
+     "name": null,
+     "wave_off": "0x674000",
+     "entry_off": "0x39D59B48"
+    },
+    {
+     "hash": "0x48C2D2C5",
+     "name": "goalie-stick-hit-ice_01",
+     "wave_off": "0xEF1000",
+     "entry_off": "0x39D59B5C"
+    },
+    {
+     "hash": "0x4A569B90",
+     "name": "skate-left_09",
+     "wave_off": "0xCDC800",
+     "entry_off": "0x39D59B70"
+    },
+    {
+     "hash": "0x4A85F3AA",
+     "name": "stick-slide_02",
+     "wave_off": "0x126800",
+     "entry_off": "0x39D59B84"
+    },
+    {
+     "hash": "0x4B64526D",
+     "name": "gm-puck-handling-l_01",
+     "wave_off": "0xEF8000",
+     "entry_off": "0x39D59B98"
+    },
+    {
+     "hash": "0x4C66D4DE",
+     "name": null,
+     "wave_off": "0x202000",
+     "entry_off": "0x39D59BAC"
+    },
+    {
+     "hash": "0x4F25E409",
+     "name": "skate-right_11",
+     "wave_off": "0xCA8000",
+     "entry_off": "0x39D59BC0"
+    },
+    {
+     "hash": "0x51531151",
+     "name": "skate-right_05",
+     "wave_off": "0xC8C800",
+     "entry_off": "0x39D59BD4"
+    },
+    {
+     "hash": "0x5156A329",
+     "name": null,
+     "wave_off": "0x54F800",
+     "entry_off": "0x39D59BE8"
+    },
+    {
+     "hash": "0x522921A9",
+     "name": null,
+     "wave_off": "0x36E000",
+     "entry_off": "0x39D59BFC"
+    },
+    {
+     "hash": "0x526782DE",
+     "name": "check-boards_01",
+     "wave_off": "0xF7C000",
+     "entry_off": "0x39D59C10"
+    },
+    {
+     "hash": "0x5428B8AA",
+     "name": "puck-stick_01",
+     "wave_off": "0xD43800",
+     "entry_off": "0x39D59C24"
+    },
+    {
+     "hash": "0x55C0FA6D",
+     "name": "goalie-stop-scrape_03",
+     "wave_off": "0xEE1800",
+     "entry_off": "0x39D59C38"
+    },
+    {
+     "hash": "0x563ED548",
+     "name": "skate-right_01",
+     "wave_off": "0xC79800",
+     "entry_off": "0x39D59C4C"
+    },
+    {
+     "hash": "0x56E006E4",
+     "name": null,
+     "wave_off": "0x237000",
+     "entry_off": "0x39D59C60"
+    },
+    {
+     "hash": "0x578307A7",
+     "name": null,
+     "wave_off": "0xB4E800",
+     "entry_off": "0x39D59C74"
+    },
+    {
+     "hash": "0x5840F9D6",
+     "name": null,
+     "wave_off": "0xF48000",
+     "entry_off": "0x39D59C88"
+    },
+    {
+     "hash": "0x586F3F50",
+     "name": null,
+     "wave_off": "0x53800",
+     "entry_off": "0x39D59C9C"
+    },
+    {
+     "hash": "0x58E55D7A",
+     "name": "skate-right_09",
+     "wave_off": "0xC9D800",
+     "entry_off": "0x39D59CB0"
+    },
+    {
+     "hash": "0x597E5AA3",
+     "name": null,
+     "wave_off": "0x19800",
+     "entry_off": "0x39D59CC4"
+    },
+    {
+     "hash": "0x59D6CDA2",
+     "name": "glass-bang_02",
+     "wave_off": "0xF0A800",
+     "entry_off": "0x39D59CD8"
+    },
+    {
+     "hash": "0x5B93E6E9",
+     "name": null,
+     "wave_off": "0xBA1000",
+     "entry_off": "0x39D59CEC"
+    },
+    {
+     "hash": "0x5C4745E0",
+     "name": null,
+     "wave_off": "0x355800",
+     "entry_off": "0x39D59D00"
+    },
+    {
+     "hash": "0x5D47E591",
+     "name": null,
+     "wave_off": "0x57D800",
+     "entry_off": "0x39D59D14"
+    },
+    {
+     "hash": "0x5D9622E3",
+     "name": "skate-left_11",
+     "wave_off": "0xCE5000",
+     "entry_off": "0x39D59D28"
+    },
+    {
+     "hash": "0x5DDA03D1",
+     "name": null,
+     "wave_off": "0x8EC800",
+     "entry_off": "0x39D59D3C"
+    },
+    {
+     "hash": "0x5DEE81B0",
+     "name": null,
+     "wave_off": "0xBB5000",
+     "entry_off": "0x39D59D50"
+    },
+    {
+     "hash": "0x5F47415C",
+     "name": null,
+     "wave_off": "0x39800",
+     "entry_off": "0x39D59D64"
+    },
+    {
+     "hash": "0x60FAE855",
+     "name": "puck-hit-board_00",
+     "wave_off": "0xD99000",
+     "entry_off": "0x39D59D78"
+    },
+    {
+     "hash": "0x62AA3346",
+     "name": "punch_03",
+     "wave_off": "0xD38000",
+     "entry_off": "0x39D59D8C"
+    },
+    {
+     "hash": "0x63143128",
+     "name": null,
+     "wave_off": "0xB93000",
+     "entry_off": "0x39D59DA0"
+    },
+    {
+     "hash": "0x63B950A8",
+     "name": null,
+     "wave_off": "0x13D000",
+     "entry_off": "0x39D59DB4"
+    },
+    {
+     "hash": "0x6460CFFF",
+     "name": "player-fall_02",
+     "wave_off": "0xE9E800",
+     "entry_off": "0x39D59DC8"
+    },
+    {
+     "hash": "0x65A866E3",
+     "name": null,
+     "wave_off": "0x63000",
+     "entry_off": "0x39D59DDC"
+    },
+    {
+     "hash": "0x666ED90E",
+     "name": "puck-glove_01",
+     "wave_off": "0xE23000",
+     "entry_off": "0x39D59DF0"
+    },
+    {
+     "hash": "0x6847A370",
+     "name": null,
+     "wave_off": "0x14E800",
+     "entry_off": "0x39D59E04"
+    },
+    {
+     "hash": "0x6853D4A0",
+     "name": "slap-shot_02",
+     "wave_off": "0xC4F800",
+     "entry_off": "0x39D59E18"
+    },
+    {
+     "hash": "0x686F7B20",
+     "name": "pass-send_03",
+     "wave_off": "0xEB7000",
+     "entry_off": "0x39D59E2C"
+    },
+    {
+     "hash": "0x68E6CE6A",
+     "name": null,
+     "wave_off": "0xBD5800",
+     "entry_off": "0x39D59E40"
+    },
+    {
+     "hash": "0x69CB9BC2",
+     "name": null,
+     "wave_off": "0xC000",
+     "entry_off": "0x39D59E54"
+    },
+    {
+     "hash": "0x69EBA029",
+     "name": "puck-post_02",
+     "wave_off": "0xD7C000",
+     "entry_off": "0x39D59E68"
+    },
+    {
+     "hash": "0x6DEF16DD",
+     "name": null,
+     "wave_off": "0xDE800",
+     "entry_off": "0x39D59E7C"
+    },
+    {
+     "hash": "0x6EEBD8D3",
+     "name": null,
+     "wave_off": "0x6F8000",
+     "entry_off": "0x39D59E90"
+    },
+    {
+     "hash": "0x6F136692",
+     "name": null,
+     "wave_off": "0x3000",
+     "entry_off": "0x39D59EA4"
+    },
+    {
+     "hash": "0x6F2A6769",
+     "name": null,
+     "wave_off": "0x143000",
+     "entry_off": "0x39D59EB8"
+    },
+    {
+     "hash": "0x700C0563",
+     "name": null,
+     "wave_off": "0xB87000",
+     "entry_off": "0x39D59ECC"
+    },
+    {
+     "hash": "0x71BED14D",
+     "name": null,
+     "wave_off": "0x378800",
+     "entry_off": "0x39D59EE0"
+    },
+    {
+     "hash": "0x71F8CAA2",
+     "name": null,
+     "wave_off": "0xD1800",
+     "entry_off": "0x39D59EF4"
+    },
+    {
+     "hash": "0x725EF897",
+     "name": null,
+     "wave_off": "0x4800",
+     "entry_off": "0x39D59F08"
+    },
+    {
+     "hash": "0x73772B60",
+     "name": "skate-carve-loop_02",
+     "wave_off": "0xD14000",
+     "entry_off": "0x39D59F1C"
+    },
+    {
+     "hash": "0x740C7623",
+     "name": "puck-goalie-blocker_00",
+     "wave_off": "0xE13000",
+     "entry_off": "0x39D59F30"
+    },
+    {
+     "hash": "0x74599400",
+     "name": null,
+     "wave_off": "0x7DB800",
+     "entry_off": "0x39D59F44"
+    },
+    {
+     "hash": "0x750EAB8F",
+     "name": null,
+     "wave_off": "0xF55000",
+     "entry_off": "0x39D59F58"
+    },
+    {
+     "hash": "0x751CAFD8",
+     "name": null,
+     "wave_off": "0x342000",
+     "entry_off": "0x39D59F6C"
+    },
+    {
+     "hash": "0x75B1493B",
+     "name": null,
+     "wave_off": "0x5D6800",
+     "entry_off": "0x39D59F80"
+    },
+    {
+     "hash": "0x78FF6EF7",
+     "name": "puck-glass_02",
+     "wave_off": "0xE35000",
+     "entry_off": "0x39D59F94"
+    },
+    {
+     "hash": "0x790961F7",
+     "name": null,
+     "wave_off": "0x4DB000",
+     "entry_off": "0x39D59FA8"
+    },
+    {
+     "hash": "0x7A7736E3",
+     "name": null,
+     "wave_off": "0xAF3000",
+     "entry_off": "0x39D59FBC"
+    },
+    {
+     "hash": "0x7A9CD124",
+     "name": null,
+     "wave_off": "0xC24000",
+     "entry_off": "0x39D59FD0"
+    },
+    {
+     "hash": "0x7B9FEBD8",
+     "name": null,
+     "wave_off": "0x6A9000",
+     "entry_off": "0x39D59FE4"
+    },
+    {
+     "hash": "0x7C5EFD59",
+     "name": null,
+     "wave_off": "0x38000",
+     "entry_off": "0x39D59FF8"
+    },
+    {
+     "hash": "0x80E5B9FF",
+     "name": null,
+     "wave_off": "0x76B000",
+     "entry_off": "0x39D5A00C"
+    },
+    {
+     "hash": "0x81240645",
+     "name": null,
+     "wave_off": "0x149000",
+     "entry_off": "0x39D5A020"
+    },
+    {
+     "hash": "0x834A8980",
+     "name": "skate-forward-loop_00",
+     "wave_off": "0xCF2800",
+     "entry_off": "0x39D5A034"
+    },
+    {
+     "hash": "0x8649C25C",
+     "name": null,
+     "wave_off": "0x153800",
+     "entry_off": "0x39D5A048"
+    },
+    {
+     "hash": "0x865DB58C",
+     "name": "slap-shot_00",
+     "wave_off": "0xC44000",
+     "entry_off": "0x39D5A05C"
+    },
+    {
+     "hash": "0x86611A0C",
+     "name": "pass-send_01",
+     "wave_off": "0xEAB800",
+     "entry_off": "0x39D5A070"
+    },
+    {
+     "hash": "0x86E8AF46",
+     "name": null,
+     "wave_off": "0xBC3000",
+     "entry_off": "0x39D5A084"
+    },
+    {
+     "hash": "0x87E5C105",
+     "name": "puck-post_00",
+     "wave_off": "0xD60800",
+     "entry_off": "0x39D5A098"
+    },
+    {
+     "hash": "0x8889C753",
+     "name": "menu-back_00",
+     "wave_off": "0x45000",
+     "entry_off": "0x39D5A0AC"
+    },
+    {
+     "hash": "0x8A6EAED3",
+     "name": "player-fall_00",
+     "wave_off": "0xE96000",
+     "entry_off": "0x39D5A0C0"
+    },
+    {
+     "hash": "0x8B836F3A",
+     "name": "puck-dropped_00",
+     "wave_off": "0xE44800",
+     "entry_off": "0x39D5A0D4"
+    },
+    {
+     "hash": "0x8BA607CF",
+     "name": null,
+     "wave_off": "0x60800",
+     "entry_off": "0x39D5A0E8"
+    },
+    {
+     "hash": "0x8CA4526A",
+     "name": "punch_01",
+     "wave_off": "0xD34000",
+     "entry_off": "0x39D5A0FC"
+    },
+    {
+     "hash": "0x8DB73184",
+     "name": null,
+     "wave_off": "0x137800",
+     "entry_off": "0x39D5A110"
+    },
+    {
+     "hash": "0x8EF48979",
+     "name": "puck-hit-board_02",
+     "wave_off": "0xDAC000",
+     "entry_off": "0x39D5A124"
+    },
+    {
+     "hash": "0x9492B008",
+     "name": null,
+     "wave_off": "0xC18000",
+     "entry_off": "0x39D5A138"
+    },
+    {
+     "hash": "0x95918AF4",
+     "name": null,
+     "wave_off": "0x689800",
+     "entry_off": "0x39D5A14C"
+    },
+    {
+     "hash": "0x95FD67C4",
+     "name": "puck-bottom-bar_00",
+     "wave_off": "0xE58000",
+     "entry_off": "0x39D5A160"
+    },
+    {
+     "hash": "0x9671154A",
+     "name": "menu-forward_00",
+     "wave_off": "0x4E000",
+     "entry_off": "0x39D5A174"
+    },
+    {
+     "hash": "0x96F10FDB",
+     "name": "puck-glass_00",
+     "wave_off": "0xE27800",
+     "entry_off": "0x39D5A188"
+    },
+    {
+     "hash": "0x9A57F52C",
+     "name": null,
+     "wave_off": "0x852000",
+     "entry_off": "0x39D5A19C"
+    },
+    {
+     "hash": "0x9BBF2817",
+     "name": null,
+     "wave_off": "0x5B7800",
+     "entry_off": "0x39D5A1B0"
+    },
+    {
+     "hash": "0x9BC109DB",
+     "name": null,
+     "wave_off": "0xA21000",
+     "entry_off": "0x39D5A1C4"
+    },
+    {
+     "hash": "0x9D794A4C",
+     "name": "skate-carve-loop_00",
+     "wave_off": "0xD06800",
+     "entry_off": "0x39D5A1D8"
+    },
+    {
+     "hash": "0x9FF6AB8E",
+     "name": null,
+     "wave_off": "0xB9000",
+     "entry_off": "0x39D5A1EC"
+    },
+    {
+     "hash": "0xA13EAF49",
+     "name": "wrist-shot_00",
+     "wave_off": "0xBF3000",
+     "entry_off": "0x39D5A200"
+    },
+    {
+     "hash": "0xA268B5F2",
+     "name": null,
+     "wave_off": "0x15C000",
+     "entry_off": "0x39D5A214"
+    },
+    {
+     "hash": "0xA3822F8C",
+     "name": null,
+     "wave_off": "0xAA800",
+     "entry_off": "0x39D5A228"
+    },
+    {
+     "hash": "0xA48B9286",
+     "name": "stick-slide_00",
+     "wave_off": "0x120000",
+     "entry_off": "0x39D5A23C"
+    },
+    {
+     "hash": "0xA56A3341",
+     "name": "gm-puck-handling-l_03",
+     "wave_off": "0xEFB000",
+     "entry_off": "0x39D5A250"
+    },
+    {
+     "hash": "0xA6A935A3",
+     "name": "puck-helmet_00",
+     "wave_off": "0xDBF800",
+     "entry_off": "0x39D5A264"
+    },
+    {
+     "hash": "0xA7F2E772",
+     "name": "stick-on-ice_00",
+     "wave_off": "0xC04000",
+     "entry_off": "0x39D5A278"
+    },
+    {
+     "hash": "0xA7FB5AF7",
+     "name": null,
+     "wave_off": "0x32F000",
+     "entry_off": "0x39D5A28C"
+    },
+    {
+     "hash": "0xA86D3499",
+     "name": null,
+     "wave_off": "0x64A800",
+     "entry_off": "0x39D5A2A0"
+    },
+    {
+     "hash": "0xA8A757B9",
+     "name": null,
+     "wave_off": "0x15A800",
+     "entry_off": "0x39D5A2B4"
+    },
+    {
+     "hash": "0xA9363CDB",
+     "name": "snap-shot_01",
+     "wave_off": "0xC39000",
+     "entry_off": "0x39D5A2C8"
+    },
+    {
+     "hash": "0xA9BF1BBE",
+     "name": "stick-hit-boards_00",
+     "wave_off": "0xC28800",
+     "entry_off": "0x39D5A2DC"
+    },
+    {
+     "hash": "0xAA83728E",
+     "name": "skate-left_03",
+     "wave_off": "0xCC0000",
+     "entry_off": "0x39D5A2F0"
+    },
+    {
+     "hash": "0xACF7DD2D",
+     "name": "skate-scrape-stop_01",
+     "wave_off": "0xC60800",
+     "entry_off": "0x39D5A304"
+    },
+    {
+     "hash": "0xAD7DE7A3",
+     "name": "check-body_03",
+     "wave_off": "0xF6E000",
+     "entry_off": "0x39D5A318"
+    },
+    {
+     "hash": "0xADEEB697",
+     "name": "skate-left_07",
+     "wave_off": "0xCD4000",
+     "entry_off": "0x39D5A32C"
+    },
+    {
+     "hash": "0xAE83FB2F",
+     "name": null,
+     "wave_off": "0x24000",
+     "entry_off": "0x39D5A340"
+    },
+    {
+     "hash": "0xB11F5DB0",
+     "name": null,
+     "wave_off": "0x3EC000",
+     "entry_off": "0x39D5A354"
+    },
+    {
+     "hash": "0xB1499734",
+     "name": null,
+     "wave_off": "0x943800",
+     "entry_off": "0x39D5A368"
+    },
+    {
+     "hash": "0xB1EABAEF",
+     "name": null,
+     "wave_off": "0x35B000",
+     "entry_off": "0x39D5A37C"
+    },
+    {
+     "hash": "0xB2457517",
+     "name": null,
+     "wave_off": "0xF800",
+     "entry_off": "0x39D5A390"
+    },
+    {
+     "hash": "0xB34984BD",
+     "name": null,
+     "wave_off": "0x5A6800",
+     "entry_off": "0x39D5A3A4"
+    },
+    {
+     "hash": "0xB39843CF",
+     "name": "skate-left_13",
+     "wave_off": "0xCEE800",
+     "entry_off": "0x39D5A3B8"
+    },
+    {
+     "hash": "0xB3D462FD",
+     "name": null,
+     "wave_off": "0x894800",
+     "entry_off": "0x39D5A3CC"
+    },
+    {
+     "hash": "0xB3E0E09C",
+     "name": null,
+     "wave_off": "0xBA7800",
+     "entry_off": "0x39D5A3E0"
+    },
+    {
+     "hash": "0xB53CC266",
+     "name": null,
+     "wave_off": "0xD91800",
+     "entry_off": "0x39D5A3F4"
+    },
+    {
+     "hash": "0xB54EF519",
+     "name": null,
+     "wave_off": "0x32B800",
+     "entry_off": "0x39D5A408"
+    },
+    {
+     "hash": "0xB59D87C5",
+     "name": null,
+     "wave_off": "0xB99800",
+     "entry_off": "0x39D5A41C"
+    },
+    {
+     "hash": "0xB64E98FA",
+     "name": null,
+     "wave_off": "0xF3A000",
+     "entry_off": "0x39D5A430"
+    },
+    {
+     "hash": "0xB696DA59",
+     "name": "pass-recieve_01",
+     "wave_off": "0xEC0800",
+     "entry_off": "0x39D5A444"
+    },
+    {
+     "hash": "0xB7D8AC8E",
+     "name": "glass-bang_00",
+     "wave_off": "0xEFD000",
+     "entry_off": "0x39D5A458"
+    },
+    {
+     "hash": "0xB830B464",
+     "name": "skate-right_03",
+     "wave_off": "0xC82000",
+     "entry_off": "0x39D5A46C"
+    },
+    {
+     "hash": "0xB8EE67C8",
+     "name": null,
+     "wave_off": "0x2F2800",
+     "entry_off": "0x39D5A480"
+    },
+    {
+     "hash": "0xB9266126",
+     "name": null,
+     "wave_off": "0x495000",
+     "entry_off": "0x39D5A494"
+    },
+    {
+     "hash": "0xBA26D986",
+     "name": "puck-stick_03",
+     "wave_off": "0xD56000",
+     "entry_off": "0x39D5A4A8"
+    },
+    {
+     "hash": "0xBAFEE792",
+     "name": null,
+     "wave_off": "0x332800",
+     "entry_off": "0x39D5A4BC"
+    },
+    {
+     "hash": "0xBB4A849C",
+     "name": null,
+     "wave_off": "0x375000",
+     "entry_off": "0x39D5A4D0"
+    },
+    {
+     "hash": "0xBBCE9B41",
+     "name": "goalie-stop-scrape_01",
+     "wave_off": "0xED2000",
+     "entry_off": "0x39D5A4E4"
+    },
+    {
+     "hash": "0xBC274085",
+     "name": null,
+     "wave_off": "0x367000",
+     "entry_off": "0x39D5A4F8"
+    },
+    {
+     "hash": "0xBC69E3F2",
+     "name": "check-boards_03",
+     "wave_off": "0xF8C000",
+     "entry_off": "0x39D5A50C"
+    },
+    {
+     "hash": "0xBD0A6B2B",
+     "name": "poke-check_01",
+     "wave_off": "0xE87800",
+     "entry_off": "0x39D5A520"
+    },
+    {
+     "hash": "0xBDEB5121",
+     "name": "1nxv_0",
+     "wave_off": "0x12000",
+     "entry_off": "0x39D5A534"
+    },
+    {
+     "hash": "0xBED36884",
+     "name": null,
+     "wave_off": "0xE06000",
+     "entry_off": "0x39D5A548"
+    },
+    {
+     "hash": "0xBF5D707D",
+     "name": "skate-right_07",
+     "wave_off": "0xC95800",
+     "entry_off": "0x39D5A55C"
+    },
+    {
+     "hash": "0xC0DF9C18",
+     "name": "glass-bang_01",
+     "wave_off": "0xF04000",
+     "entry_off": "0x39D5A570"
+    },
+    {
+     "hash": "0xC149A86C",
+     "name": null,
+     "wave_off": "0xF40800",
+     "entry_off": "0x39D5A584"
+    },
+    {
+     "hash": "0xC191EACF",
+     "name": "pass-recieve_00",
+     "wave_off": "0xEBC800",
+     "entry_off": "0x39D5A598"
+    },
+    {
+     "hash": "0xC29AB753",
+     "name": null,
+     "wave_off": "0xB95800",
+     "entry_off": "0x39D5A5AC"
+    },
+    {
+     "hash": "0xC44EB42B",
+     "name": null,
+     "wave_off": "0x590800",
+     "entry_off": "0x39D5A5C0"
+    },
+    {
+     "hash": "0xC49F7359",
+     "name": "skate-left_12",
+     "wave_off": "0xCEA000",
+     "entry_off": "0x39D5A5D4"
+    },
+    {
+     "hash": "0xC4D3526B",
+     "name": null,
+     "wave_off": "0x8BD800",
+     "entry_off": "0x39D5A5E8"
+    },
+    {
+     "hash": "0xC4E7D00A",
+     "name": null,
+     "wave_off": "0xBAE800",
+     "entry_off": "0x39D5A5FC"
+    },
+    {
+     "hash": "0xC5F7734A",
+     "name": null,
+     "wave_off": "0xBA4000",
+     "entry_off": "0x39D5A610"
+    },
+    {
+     "hash": "0xC6186D26",
+     "name": null,
+     "wave_off": "0x41C000",
+     "entry_off": "0x39D5A624"
+    },
+    {
+     "hash": "0xC64EA7A2",
+     "name": null,
+     "wave_off": "0x91B800",
+     "entry_off": "0x39D5A638"
+    },
+    {
+     "hash": "0xC6ED8A79",
+     "name": null,
+     "wave_off": "0x361000",
+     "entry_off": "0x39D5A64C"
+    },
+    {
+     "hash": "0xC85A40EB",
+     "name": "skate-right_06",
+     "wave_off": "0xC91800",
+     "entry_off": "0x39D5A660"
+    },
+    {
+     "hash": "0xC996F652",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x39D5A674"
+    },
+    {
+     "hash": "0xC9D45812",
+     "name": null,
+     "wave_off": "0xDF8800",
+     "entry_off": "0x39D5A688"
+    },
+    {
+     "hash": "0xCA0D5BBD",
+     "name": "poke-check_00",
+     "wave_off": "0xE82000",
+     "entry_off": "0x39D5A69C"
+    },
+    {
+     "hash": "0xCAEC61B7",
+     "name": "1nxv_1",
+     "wave_off": "0x10800",
+     "entry_off": "0x39D5A6B0"
+    },
+    {
+     "hash": "0xCB207013",
+     "name": null,
+     "wave_off": "0x36A800",
+     "entry_off": "0x39D5A6C4"
+    },
+    {
+     "hash": "0xCB6ED364",
+     "name": "check-boards_02",
+     "wave_off": "0xF84800",
+     "entry_off": "0x39D5A6D8"
+    },
+    {
+     "hash": "0xCCC9ABD7",
+     "name": "goalie-stop-scrape_00",
+     "wave_off": "0xECB000",
+     "entry_off": "0x39D5A6EC"
+    },
+    {
+     "hash": "0xCD21E910",
+     "name": "puck-stick_02",
+     "wave_off": "0xD4E000",
+     "entry_off": "0x39D5A700"
+    },
+    {
+     "hash": "0xCDF9D704",
+     "name": null,
+     "wave_off": "0x339000",
+     "entry_off": "0x39D5A714"
+    },
+    {
+     "hash": "0xCE2151B0",
+     "name": null,
+     "wave_off": "0x461000",
+     "entry_off": "0x39D5A728"
+    },
+    {
+     "hash": "0xCF3784F2",
+     "name": "skate-right_02",
+     "wave_off": "0xC7E000",
+     "entry_off": "0x39D5A73C"
+    },
+    {
+     "hash": "0xD0CC105D",
+     "name": null,
+     "wave_off": "0x328800",
+     "entry_off": "0x39D5A750"
+    },
+    {
+     "hash": "0xD0F5D7E4",
+     "name": "stick-on-ice_01",
+     "wave_off": "0xC0D000",
+     "entry_off": "0x39D5A764"
+    },
+    {
+     "hash": "0xD1AE0535",
+     "name": "puck-helmet_01",
+     "wave_off": "0xDD0000",
+     "entry_off": "0x39D5A778"
+    },
+    {
+     "hash": "0xD26D03D7",
+     "name": "gm-puck-handling-l_02",
+     "wave_off": "0xEF9800",
+     "entry_off": "0x39D5A78C"
+    },
+    {
+     "hash": "0xD38CA210",
+     "name": "stick-slide_01",
+     "wave_off": "0x123000",
+     "entry_off": "0x39D5A7A0"
+    },
+    {
+     "hash": "0xD4851F1A",
+     "name": null,
+     "wave_off": "0xA8800",
+     "entry_off": "0x39D5A7B4"
+    },
+    {
+     "hash": "0xD56F8564",
+     "name": null,
+     "wave_off": "0x1B7800",
+     "entry_off": "0x39D5A7C8"
+    },
+    {
+     "hash": "0xD5DCF35B",
+     "name": "fireworks-explode-soft_00",
+     "wave_off": "0xF11800",
+     "entry_off": "0x39D5A7DC"
+    },
+    {
+     "hash": "0xD62CB5B3",
+     "name": "skate-right_12",
+     "wave_off": "0xCAC800",
+     "entry_off": "0x39D5A7F0"
+    },
+    {
+     "hash": "0xD6399FDF",
+     "name": "wrist-shot_01",
+     "wave_off": "0xBFB000",
+     "entry_off": "0x39D5A804"
+    },
+    {
+     "hash": "0xD94DB5E4",
+     "name": null,
+     "wave_off": "0xBEE800",
+     "entry_off": "0x39D5A818"
+    },
+    {
+     "hash": "0xDA7AD735",
+     "name": "check-body_02",
+     "wave_off": "0xF6A000",
+     "entry_off": "0x39D5A82C"
+    },
+    {
+     "hash": "0xDAE98601",
+     "name": "skate-left_06",
+     "wave_off": "0xCCF800",
+     "entry_off": "0x39D5A840"
+    },
+    {
+     "hash": "0xDBF0EDBB",
+     "name": "skate-scrape-stop_00",
+     "wave_off": "0xC5B000",
+     "entry_off": "0x39D5A854"
+    },
+    {
+     "hash": "0xDD844218",
+     "name": "skate-left_02",
+     "wave_off": "0xCBC000",
+     "entry_off": "0x39D5A868"
+    },
+    {
+     "hash": "0xDE310C4D",
+     "name": "snap-shot_00",
+     "wave_off": "0xC34000",
+     "entry_off": "0x39D5A87C"
+    },
+    {
+     "hash": "0xDEB82B28",
+     "name": "stick-hit-boards_01",
+     "wave_off": "0xC2E000",
+     "entry_off": "0x39D5A890"
+    },
+    {
+     "hash": "0xDF6A040F",
+     "name": null,
+     "wave_off": "0x5FA000",
+     "entry_off": "0x39D5A8A4"
+    },
+    {
+     "hash": "0xDFA0672F",
+     "name": null,
+     "wave_off": "0x159000",
+     "entry_off": "0x39D5A8B8"
+    },
+    {
+     "hash": "0xE06F25EB",
+     "name": null,
+     "wave_off": "0x3B800",
+     "entry_off": "0x39D5A8CC"
+    },
+    {
+     "hash": "0xE1F63F4D",
+     "name": "puck-glass_01",
+     "wave_off": "0xE2E800",
+     "entry_off": "0x39D5A8E0"
+    },
+    {
+     "hash": "0xE296BA62",
+     "name": null,
+     "wave_off": "0x699000",
+     "entry_off": "0x39D5A8F4"
+    },
+    {
+     "hash": "0xE339A450",
+     "name": null,
+     "wave_off": "0x56000",
+     "entry_off": "0x39D5A908"
+    },
+    {
+     "hash": "0xE395809E",
+     "name": null,
+     "wave_off": "0xC13800",
+     "entry_off": "0x39D5A91C"
+    },
+    {
+     "hash": "0xE8F19B18",
+     "name": null,
+     "wave_off": "0xAC800",
+     "entry_off": "0x39D5A930"
+    },
+    {
+     "hash": "0xEA7E7ADA",
+     "name": "skate-carve-loop_01",
+     "wave_off": "0xD0D000",
+     "entry_off": "0x39D5A944"
+    },
+    {
+     "hash": "0xEBAE32EB",
+     "name": null,
+     "wave_off": "0x91800",
+     "entry_off": "0x39D5A958"
+    },
+    {
+     "hash": "0xECB81881",
+     "name": null,
+     "wave_off": "0x5C7000",
+     "entry_off": "0x39D5A96C"
+    },
+    {
+     "hash": "0xECC6394D",
+     "name": null,
+     "wave_off": "0x9A5000",
+     "entry_off": "0x39D5A980"
+    },
+    {
+     "hash": "0xED50C5BA",
+     "name": null,
+     "wave_off": "0x815800",
+     "entry_off": "0x39D5A994"
+    },
+    {
+     "hash": "0xED8F744B",
+     "name": "skate-back-loop_00",
+     "wave_off": "0xD1B800",
+     "entry_off": "0x39D5A9A8"
+    },
+    {
+     "hash": "0xF00DE765",
+     "name": "wipe_00",
+     "wave_off": "0x58800",
+     "entry_off": "0x39D5A9BC"
+    },
+    {
+     "hash": "0xF0E2F193",
+     "name": "puck-post_01",
+     "wave_off": "0xD6D000",
+     "entry_off": "0x39D5A9D0"
+    },
+    {
+     "hash": "0xF14EF2CA",
+     "name": null,
+     "wave_off": "0x156000",
+     "entry_off": "0x39D5A9E4"
+    },
+    {
+     "hash": "0xF15A851A",
+     "name": "slap-shot_01",
+     "wave_off": "0xC4A000",
+     "entry_off": "0x39D5A9F8"
+    },
+    {
+     "hash": "0xF1662A9A",
+     "name": "pass-send_00",
+     "wave_off": "0xEA5000",
+     "entry_off": "0x39D5AA0C"
+    },
+    {
+     "hash": "0xF1EF9FD0",
+     "name": null,
+     "wave_off": "0xBCC000",
+     "entry_off": "0x39D5AA20"
+    },
+    {
+     "hash": "0xF2F8D35E",
+     "name": "puck-pads_00",
+     "wave_off": "0xD8C800",
+     "entry_off": "0x39D5AA34"
+    },
+    {
+     "hash": "0xF3DEE40F",
+     "name": null,
+     "wave_off": "0x12A000",
+     "entry_off": "0x39D5AA48"
+    },
+    {
+     "hash": "0xF42AF12F",
+     "name": "pond-puck-hit-snow_00",
+     "wave_off": "0xE76800",
+     "entry_off": "0x39D5AA5C"
+    },
+    {
+     "hash": "0xF44DB916",
+     "name": "skate-forward-loop_01",
+     "wave_off": "0xCFA800",
+     "entry_off": "0x39D5AA70"
+    },
+    {
+     "hash": "0xF62336D3",
+     "name": null,
+     "wave_off": "0x14B800",
+     "entry_off": "0x39D5AA84"
+    },
+    {
+     "hash": "0xF75B2225",
+     "name": null,
+     "wave_off": "0xB6A800",
+     "entry_off": "0x39D5AA98"
+    },
+    {
+     "hash": "0xF7E28969",
+     "name": null,
+     "wave_off": "0x730000",
+     "entry_off": "0x39D5AAAC"
+    },
+    {
+     "hash": "0xF9F3B9EF",
+     "name": "puck-hit-board_03",
+     "wave_off": "0xDB6800",
+     "entry_off": "0x39D5AAC0"
+    },
+    {
+     "hash": "0xFAB00112",
+     "name": null,
+     "wave_off": "0x13A000",
+     "entry_off": "0x39D5AAD4"
+    },
+    {
+     "hash": "0xFBA362FC",
+     "name": "punch_00",
+     "wave_off": "0xD32800",
+     "entry_off": "0x39D5AAE8"
+    },
+    {
+     "hash": "0xFBCCF340",
+     "name": null,
+     "wave_off": "0x64800",
+     "entry_off": "0x39D5AAFC"
+    },
+    {
+     "hash": "0xFC845FAC",
+     "name": "puck-dropped_01",
+     "wave_off": "0xE4F800",
+     "entry_off": "0x39D5AB10"
+    },
+    {
+     "hash": "0xFCA13759",
+     "name": null,
+     "wave_off": "0x5F000",
+     "entry_off": "0x39D5AB24"
+    },
+    {
+     "hash": "0xFCFD1D59",
+     "name": "ref-whistle_00",
+     "wave_off": "0xD28000",
+     "entry_off": "0x39D5AB38"
+    },
+    {
+     "hash": "0xFD699E45",
+     "name": "player-fall_01",
+     "wave_off": "0xE9A800",
+     "entry_off": "0x39D5AB4C"
+    }
+   ]
+  },
+  "sfx_arena003.bnk": {
+   "arc": "0B",
+   "sounds": [
+    {
+     "hash": "0x02099B19",
+     "name": null,
+     "wave_off": "0xEFE800",
+     "entry_off": "0x3ACF1CE0"
+    },
+    {
+     "hash": "0x021B9F4E",
+     "name": null,
+     "wave_off": "0x349800",
+     "entry_off": "0x3ACF1CF4"
+    },
+    {
+     "hash": "0x02A722C4",
+     "name": "player-slide_00",
+     "wave_off": "0xE3B800",
+     "entry_off": "0x3ACF1D08"
+    },
+    {
+     "hash": "0x02B679AD",
+     "name": null,
+     "wave_off": "0x5FE800",
+     "entry_off": "0x3ACF1D1C"
+    },
+    {
+     "hash": "0x030B46B5",
+     "name": "puck-goalie-blocker_01",
+     "wave_off": "0xDC6800",
+     "entry_off": "0x3ACF1D30"
+    },
+    {
+     "hash": "0x035EA496",
+     "name": null,
+     "wave_off": "0x79F000",
+     "entry_off": "0x3ACF1D44"
+    },
+    {
+     "hash": "0x06FFFA34",
+     "name": null,
+     "wave_off": "0xC5800",
+     "entry_off": "0x3ACF1D58"
+    },
+    {
+     "hash": "0x070B35F5",
+     "name": null,
+     "wave_off": "0xB2E000",
+     "entry_off": "0x3ACF1D6C"
+    },
+    {
+     "hash": "0x07296DCD",
+     "name": null,
+     "wave_off": "0x55000",
+     "entry_off": "0x3ACF1D80"
+    },
+    {
+     "hash": "0x08D3F8D3",
+     "name": "2klogo_00",
+     "wave_off": "0x26800",
+     "entry_off": "0x3ACF1D94"
+    },
+    {
+     "hash": "0x09B8AC60",
+     "name": null,
+     "wave_off": "0x131800",
+     "entry_off": "0x3ACF1DA8"
+    },
+    {
+     "hash": "0x0C98DB4E",
+     "name": null,
+     "wave_off": "0x6B0000",
+     "entry_off": "0x3ACF1DBC"
+    },
+    {
+     "hash": "0x0CB81A23",
+     "name": null,
+     "wave_off": "0xB05800",
+     "entry_off": "0x3ACF1DD0"
+    },
+    {
+     "hash": "0x0D700675",
+     "name": null,
+     "wave_off": "0xA37800",
+     "entry_off": "0x3ACF1DE4"
+    },
+    {
+     "hash": "0x0D9BE1B2",
+     "name": null,
+     "wave_off": "0xBD4800",
+     "entry_off": "0x3ACF1DF8"
+    },
+    {
+     "hash": "0x0DED7E9D",
+     "name": null,
+     "wave_off": "0x3B1000",
+     "entry_off": "0x3ACF1E0C"
+    },
+    {
+     "hash": "0x0E0E5161",
+     "name": null,
+     "wave_off": "0x4E1800",
+     "entry_off": "0x3ACF1E20"
+    },
+    {
+     "hash": "0x0FEBBB5C",
+     "name": null,
+     "wave_off": "0xAF8000",
+     "entry_off": "0x3ACF1E34"
+    },
+    {
+     "hash": "0x0FF85E61",
+     "name": "puck-glass_03",
+     "wave_off": "0xDE9000",
+     "entry_off": "0x3ACF1E48"
+    },
+    {
+     "hash": "0x1169E998",
+     "name": "puck-glove_00",
+     "wave_off": "0xDCC800",
+     "entry_off": "0x3ACF1E5C"
+    },
+    {
+     "hash": "0x11A10813",
+     "name": null,
+     "wave_off": "0x109800",
+     "entry_off": "0x3ACF1E70"
+    },
+    {
+     "hash": "0x12AF5675",
+     "name": null,
+     "wave_off": "0x62000",
+     "entry_off": "0x3ACF1E84"
+    },
+    {
+     "hash": "0x141301BE",
+     "name": null,
+     "wave_off": "0xB40000",
+     "entry_off": "0x3ACF1E98"
+    },
+    {
+     "hash": "0x146A6A70",
+     "name": null,
+     "wave_off": "0x41800",
+     "entry_off": "0x3ACF1EAC"
+    },
+    {
+     "hash": "0x14BE603E",
+     "name": null,
+     "wave_off": "0x142800",
+     "entry_off": "0x3ACF1EC0"
+    },
+    {
+     "hash": "0x15AD03D0",
+     "name": "punch_02",
+     "wave_off": "0xCEA000",
+     "entry_off": "0x3ACF1ED4"
+    },
+    {
+     "hash": "0x17FDD8C3",
+     "name": "puck-hit-board_01",
+     "wave_off": "0xD56000",
+     "entry_off": "0x3ACF1EE8"
+    },
+    {
+     "hash": "0x182D57FF",
+     "name": null,
+     "wave_off": "0x148000",
+     "entry_off": "0x3ACF1EFC"
+    },
+    {
+     "hash": "0x19ECE845",
+     "name": null,
+     "wave_off": "0x6C8000",
+     "entry_off": "0x3ACF1F10"
+    },
+    {
+     "hash": "0x1EF39926",
+     "name": null,
+     "wave_off": "0xE6000",
+     "entry_off": "0x3ACF1F24"
+    },
+    {
+     "hash": "0x1F4093E6",
+     "name": null,
+     "wave_off": "0x153000",
+     "entry_off": "0x3ACF1F38"
+    },
+    {
+     "hash": "0x1F54E436",
+     "name": "slap-shot_03",
+     "wave_off": "0xC0B800",
+     "entry_off": "0x3ACF1F4C"
+    },
+    {
+     "hash": "0x1F684BB6",
+     "name": "pass-send_02",
+     "wave_off": "0xE5F000",
+     "entry_off": "0x3ACF1F60"
+    },
+    {
+     "hash": "0x1FE1FEFC",
+     "name": null,
+     "wave_off": "0xB90800",
+     "entry_off": "0x3ACF1F74"
+    },
+    {
+     "hash": "0x2139E5DE",
+     "name": "skate-right_00",
+     "wave_off": "0xC27000",
+     "entry_off": "0x3ACF1F88"
+    },
+    {
+     "hash": "0x21E73672",
+     "name": null,
+     "wave_off": "0x290000",
+     "entry_off": "0x3ACF1F9C"
+    },
+    {
+     "hash": "0x22C7CAFB",
+     "name": "goalie-stop-scrape_02",
+     "wave_off": "0xE84000",
+     "entry_off": "0x3ACF1FB0"
+    },
+    {
+     "hash": "0x232F883C",
+     "name": "puck-stick_00",
+     "wave_off": "0xCED800",
+     "entry_off": "0x3ACF1FC4"
+    },
+    {
+     "hash": "0x252E113F",
+     "name": null,
+     "wave_off": "0x376000",
+     "entry_off": "0x3ACF1FD8"
+    },
+    {
+     "hash": "0x2560B248",
+     "name": "check-boards_00",
+     "wave_off": "0xF17000",
+     "entry_off": "0x3ACF1FEC"
+    },
+    {
+     "hash": "0x265193BF",
+     "name": null,
+     "wave_off": "0x50F000",
+     "entry_off": "0x3ACF2000"
+    },
+    {
+     "hash": "0x265421C7",
+     "name": "skate-right_04",
+     "wave_off": "0xC3C000",
+     "entry_off": "0x3ACF2014"
+    },
+    {
+     "hash": "0x2840C68E",
+     "name": null,
+     "wave_off": "0x969000",
+     "entry_off": "0x3ACF2028"
+    },
+    {
+     "hash": "0x2A40D507",
+     "name": null,
+     "wave_off": "0x56B800",
+     "entry_off": "0x3ACF203C"
+    },
+    {
+     "hash": "0x2A61A060",
+     "name": null,
+     "wave_off": "0x77000",
+     "entry_off": "0x3ACF2050"
+    },
+    {
+     "hash": "0x2A911275",
+     "name": "skate-left_10",
+     "wave_off": "0xC94800",
+     "entry_off": "0x3ACF2064"
+    },
+    {
+     "hash": "0x2AE9B126",
+     "name": null,
+     "wave_off": "0xB6F000",
+     "entry_off": "0x3ACF2078"
+    },
+    {
+     "hash": "0x2B407576",
+     "name": null,
+     "wave_off": "0x351000",
+     "entry_off": "0x3ACF208C"
+    },
+    {
+     "hash": "0x2C94D67F",
+     "name": null,
+     "wave_off": "0xB4C800",
+     "entry_off": "0x3ACF20A0"
+    },
+    {
+     "hash": "0x2E3E40DD",
+     "name": null,
+     "wave_off": "0x15A800",
+     "entry_off": "0x3ACF20B4"
+    },
+    {
+     "hash": "0x2F47C940",
+     "name": null,
+     "wave_off": "0xEF3800",
+     "entry_off": "0x3ACF20C8"
+    },
+    {
+     "hash": "0x2F9A9403",
+     "name": null,
+     "wave_off": "0x66000",
+     "entry_off": "0x3ACF20DC"
+    },
+    {
+     "hash": "0x2F9F8BE3",
+     "name": "pass-recieve_02",
+     "wave_off": "0xE72000",
+     "entry_off": "0x3ACF20F0"
+    },
+    {
+     "hash": "0x2FE26DEC",
+     "name": "skate-right_08",
+     "wave_off": "0xC4E800",
+     "entry_off": "0x3ACF2104"
+    },
+    {
+     "hash": "0x303F6D61",
+     "name": "snap-shot_02",
+     "wave_off": "0xBF5800",
+     "entry_off": "0x3ACF2118"
+    },
+    {
+     "hash": "0x31646523",
+     "name": null,
+     "wave_off": "0x643800",
+     "entry_off": "0x3ACF212C"
+    },
+    {
+     "hash": "0x31ED4788",
+     "name": null,
+     "wave_off": "0xEB800",
+     "entry_off": "0x3ACF2140"
+    },
+    {
+     "hash": "0x326ED339",
+     "name": "faceoff-sticks_01",
+     "wave_off": "0xED4000",
+     "entry_off": "0x3ACF2154"
+    },
+    {
+     "hash": "0x338A2334",
+     "name": "skate-left_00",
+     "wave_off": "0xC65000",
+     "entry_off": "0x3ACF2168"
+    },
+    {
+     "hash": "0x34345709",
+     "name": null,
+     "wave_off": "0x9C800",
+     "entry_off": "0x3ACF217C"
+    },
+    {
+     "hash": "0x3474B619",
+     "name": "check-body_00",
+     "wave_off": "0xF05000",
+     "entry_off": "0x3ACF2190"
+    },
+    {
+     "hash": "0x34E7E72D",
+     "name": "skate-left_04",
+     "wave_off": "0xC79800",
+     "entry_off": "0x3ACF21A4"
+    },
+    {
+     "hash": "0x35368EA5",
+     "name": null,
+     "wave_off": "0x328000",
+     "entry_off": "0x3ACF21B8"
+    },
+    {
+     "hash": "0x35FE8C97",
+     "name": "skate-scrape-stop_02",
+     "wave_off": "0xC1C800",
+     "entry_off": "0x3ACF21CC"
+    },
+    {
+     "hash": "0x3743D4C8",
+     "name": null,
+     "wave_off": "0xB98000",
+     "entry_off": "0x3ACF21E0"
+    },
+    {
+     "hash": "0x37B5AE4D",
+     "name": "puck-goalie-skate_00",
+     "wave_off": "0xD94000",
+     "entry_off": "0x3ACF21F4"
+    },
+    {
+     "hash": "0x37C68ABA",
+     "name": "menu-misc_00",
+     "wave_off": "0x54000",
+     "entry_off": "0x3ACF2208"
+    },
+    {
+     "hash": "0x3822D49F",
+     "name": "skate-right_10",
+     "wave_off": "0xC57000",
+     "entry_off": "0x3ACF221C"
+    },
+    {
+     "hash": "0x3B0EA6E2",
+     "name": "gm-puck-handling-l_04",
+     "wave_off": "0xEA6800",
+     "entry_off": "0x3ACF2230"
+    },
+    {
+     "hash": "0x3C6362FB",
+     "name": "gm-puck-handling-l_00",
+     "wave_off": "0xEA2800",
+     "entry_off": "0x3ACF2244"
+    },
+    {
+     "hash": "0x3D51AB06",
+     "name": "skate-left_08",
+     "wave_off": "0xC8D000",
+     "entry_off": "0x3ACF2258"
+    },
+    {
+     "hash": "0x3DAE6430",
+     "name": null,
+     "wave_off": "0x13800",
+     "entry_off": "0x3ACF226C"
+    },
+    {
+     "hash": "0x3FC5E253",
+     "name": "goalie-stick-hit-ice_00",
+     "wave_off": "0xE95800",
+     "entry_off": "0x3ACF2280"
+    },
+    {
+     "hash": "0x4044E45E",
+     "name": null,
+     "wave_off": "0xB9C800",
+     "entry_off": "0x3ACF2294"
+    },
+    {
+     "hash": "0x41F9F387",
+     "name": null,
+     "wave_off": "0xAFB800",
+     "entry_off": "0x3ACF22A8"
+    },
+    {
+     "hash": "0x42F9BC01",
+     "name": "skate-scrape-stop_03",
+     "wave_off": "0xC21800",
+     "entry_off": "0x3ACF22BC"
+    },
+    {
+     "hash": "0x4373868F",
+     "name": "check-body_01",
+     "wave_off": "0xF0A800",
+     "entry_off": "0x3ACF22D0"
+    },
+    {
+     "hash": "0x43E0D7BB",
+     "name": "skate-left_05",
+     "wave_off": "0xC7F000",
+     "entry_off": "0x3ACF22E4"
+    },
+    {
+     "hash": "0x448D13A2",
+     "name": "skate-left_01",
+     "wave_off": "0xC6B800",
+     "entry_off": "0x3ACF22F8"
+    },
+    {
+     "hash": "0x45007575",
+     "name": null,
+     "wave_off": "0x6800",
+     "entry_off": "0x3ACF230C"
+    },
+    {
+     "hash": "0x454A8E4A",
+     "name": null,
+     "wave_off": "0x3E800",
+     "entry_off": "0x3ACF2320"
+    },
+    {
+     "hash": "0x4569E3AF",
+     "name": "faceoff-sticks_00",
+     "wave_off": "0xEC9000",
+     "entry_off": "0x3ACF2334"
+    },
+    {
+     "hash": "0x466355B5",
+     "name": null,
+     "wave_off": "0x658000",
+     "entry_off": "0x3ACF2348"
+    },
+    {
+     "hash": "0x48C2D2C5",
+     "name": "goalie-stick-hit-ice_01",
+     "wave_off": "0xE9C800",
+     "entry_off": "0x3ACF235C"
+    },
+    {
+     "hash": "0x4A569B90",
+     "name": "skate-left_09",
+     "wave_off": "0xC91000",
+     "entry_off": "0x3ACF2370"
+    },
+    {
+     "hash": "0x4A85F3AA",
+     "name": "stick-slide_02",
+     "wave_off": "0x126000",
+     "entry_off": "0x3ACF2384"
+    },
+    {
+     "hash": "0x4B64526D",
+     "name": "gm-puck-handling-l_01",
+     "wave_off": "0xEA3800",
+     "entry_off": "0x3ACF2398"
+    },
+    {
+     "hash": "0x4C66D4DE",
+     "name": null,
+     "wave_off": "0x203000",
+     "entry_off": "0x3ACF23AC"
+    },
+    {
+     "hash": "0x4F25E409",
+     "name": "skate-right_11",
+     "wave_off": "0xC5C800",
+     "entry_off": "0x3ACF23C0"
+    },
+    {
+     "hash": "0x51531151",
+     "name": "skate-right_05",
+     "wave_off": "0xC41000",
+     "entry_off": "0x3ACF23D4"
+    },
+    {
+     "hash": "0x5156A329",
+     "name": null,
+     "wave_off": "0x537000",
+     "entry_off": "0x3ACF23E8"
+    },
+    {
+     "hash": "0x522921A9",
+     "name": null,
+     "wave_off": "0x371800",
+     "entry_off": "0x3ACF23FC"
+    },
+    {
+     "hash": "0x526782DE",
+     "name": "check-boards_01",
+     "wave_off": "0xF1D800",
+     "entry_off": "0x3ACF2410"
+    },
+    {
+     "hash": "0x5428B8AA",
+     "name": "puck-stick_01",
+     "wave_off": "0xCF7000",
+     "entry_off": "0x3ACF2424"
+    },
+    {
+     "hash": "0x55C0FA6D",
+     "name": "goalie-stop-scrape_03",
+     "wave_off": "0xE8D000",
+     "entry_off": "0x3ACF2438"
+    },
+    {
+     "hash": "0x563ED548",
+     "name": "skate-right_01",
+     "wave_off": "0xC2E000",
+     "entry_off": "0x3ACF244C"
+    },
+    {
+     "hash": "0x56E006E4",
+     "name": null,
+     "wave_off": "0x238000",
+     "entry_off": "0x3ACF2460"
+    },
+    {
+     "hash": "0x578307A7",
+     "name": null,
+     "wave_off": "0xAFE800",
+     "entry_off": "0x3ACF2474"
+    },
+    {
+     "hash": "0x5840F9D6",
+     "name": null,
+     "wave_off": "0xEEC000",
+     "entry_off": "0x3ACF2488"
+    },
+    {
+     "hash": "0x586F3F50",
+     "name": null,
+     "wave_off": "0x53800",
+     "entry_off": "0x3ACF249C"
+    },
+    {
+     "hash": "0x58E55D7A",
+     "name": "skate-right_09",
+     "wave_off": "0xC52000",
+     "entry_off": "0x3ACF24B0"
+    },
+    {
+     "hash": "0x597E5AA3",
+     "name": null,
+     "wave_off": "0x19800",
+     "entry_off": "0x3ACF24C4"
+    },
+    {
+     "hash": "0x59D6CDA2",
+     "name": "glass-bang_02",
+     "wave_off": "0xEB3800",
+     "entry_off": "0x3ACF24D8"
+    },
+    {
+     "hash": "0x5B93E6E9",
+     "name": null,
+     "wave_off": "0xB50800",
+     "entry_off": "0x3ACF24EC"
+    },
+    {
+     "hash": "0x5C4745E0",
+     "name": null,
+     "wave_off": "0x357800",
+     "entry_off": "0x3ACF2500"
+    },
+    {
+     "hash": "0x5D47E591",
+     "name": null,
+     "wave_off": "0x58A800",
+     "entry_off": "0x3ACF2514"
+    },
+    {
+     "hash": "0x5D9622E3",
+     "name": "skate-left_11",
+     "wave_off": "0xC99800",
+     "entry_off": "0x3ACF2528"
+    },
+    {
+     "hash": "0x5DDA03D1",
+     "name": null,
+     "wave_off": "0x8E5000",
+     "entry_off": "0x3ACF253C"
+    },
+    {
+     "hash": "0x5DEE81B0",
+     "name": null,
+     "wave_off": "0xB68000",
+     "entry_off": "0x3ACF2550"
+    },
+    {
+     "hash": "0x5F47415C",
+     "name": null,
+     "wave_off": "0x39800",
+     "entry_off": "0x3ACF2564"
+    },
+    {
+     "hash": "0x60FAE855",
+     "name": "puck-hit-board_00",
+     "wave_off": "0xD4D000",
+     "entry_off": "0x3ACF2578"
+    },
+    {
+     "hash": "0x62AA3346",
+     "name": "punch_03",
+     "wave_off": "0xCEB800",
+     "entry_off": "0x3ACF258C"
+    },
+    {
+     "hash": "0x63143128",
+     "name": null,
+     "wave_off": "0xB42800",
+     "entry_off": "0x3ACF25A0"
+    },
+    {
+     "hash": "0x63B950A8",
+     "name": null,
+     "wave_off": "0x140000",
+     "entry_off": "0x3ACF25B4"
+    },
+    {
+     "hash": "0x6460CFFF",
+     "name": "player-fall_02",
+     "wave_off": "0xE4D800",
+     "entry_off": "0x3ACF25C8"
+    },
+    {
+     "hash": "0x65A866E3",
+     "name": null,
+     "wave_off": "0x63000",
+     "entry_off": "0x3ACF25DC"
+    },
+    {
+     "hash": "0x666ED90E",
+     "name": "puck-glove_01",
+     "wave_off": "0xDD1800",
+     "entry_off": "0x3ACF25F0"
+    },
+    {
+     "hash": "0x6847A370",
+     "name": null,
+     "wave_off": "0x150800",
+     "entry_off": "0x3ACF2604"
+    },
+    {
+     "hash": "0x6853D4A0",
+     "name": "slap-shot_02",
+     "wave_off": "0xC06000",
+     "entry_off": "0x3ACF2618"
+    },
+    {
+     "hash": "0x686F7B20",
+     "name": "pass-send_03",
+     "wave_off": "0xE64800",
+     "entry_off": "0x3ACF262C"
+    },
+    {
+     "hash": "0x68E6CE6A",
+     "name": null,
+     "wave_off": "0xB87000",
+     "entry_off": "0x3ACF2640"
+    },
+    {
+     "hash": "0x69CB9BC2",
+     "name": null,
+     "wave_off": "0xC000",
+     "entry_off": "0x3ACF2654"
+    },
+    {
+     "hash": "0x69EBA029",
+     "name": "puck-post_02",
+     "wave_off": "0xD34000",
+     "entry_off": "0x3ACF2668"
+    },
+    {
+     "hash": "0x6DEF16DD",
+     "name": null,
+     "wave_off": "0xDE000",
+     "entry_off": "0x3ACF267C"
+    },
+    {
+     "hash": "0x6EEBD8D3",
+     "name": null,
+     "wave_off": "0x6FB800",
+     "entry_off": "0x3ACF2690"
+    },
+    {
+     "hash": "0x6F136692",
+     "name": null,
+     "wave_off": "0x3000",
+     "entry_off": "0x3ACF26A4"
+    },
+    {
+     "hash": "0x6F2A6769",
+     "name": null,
+     "wave_off": "0x145000",
+     "entry_off": "0x3ACF26B8"
+    },
+    {
+     "hash": "0x700C0563",
+     "name": null,
+     "wave_off": "0xB37000",
+     "entry_off": "0x3ACF26CC"
+    },
+    {
+     "hash": "0x71BED14D",
+     "name": null,
+     "wave_off": "0x37C800",
+     "entry_off": "0x3ACF26E0"
+    },
+    {
+     "hash": "0x71F8CAA2",
+     "name": null,
+     "wave_off": "0xD1000",
+     "entry_off": "0x3ACF26F4"
+    },
+    {
+     "hash": "0x725EF897",
+     "name": null,
+     "wave_off": "0x4800",
+     "entry_off": "0x3ACF2708"
+    },
+    {
+     "hash": "0x73772B60",
+     "name": "skate-carve-loop_02",
+     "wave_off": "0xCCB000",
+     "entry_off": "0x3ACF271C"
+    },
+    {
+     "hash": "0x740C7623",
+     "name": "puck-goalie-blocker_00",
+     "wave_off": "0xDC2800",
+     "entry_off": "0x3ACF2730"
+    },
+    {
+     "hash": "0x74599400",
+     "name": null,
+     "wave_off": "0x7D3800",
+     "entry_off": "0x3ACF2744"
+    },
+    {
+     "hash": "0x750EAB8F",
+     "name": null,
+     "wave_off": "0xEF9800",
+     "entry_off": "0x3ACF2758"
+    },
+    {
+     "hash": "0x751CAFD8",
+     "name": null,
+     "wave_off": "0x342000",
+     "entry_off": "0x3ACF276C"
+    },
+    {
+     "hash": "0x75B1493B",
+     "name": null,
+     "wave_off": "0x5EF000",
+     "entry_off": "0x3ACF2780"
+    },
+    {
+     "hash": "0x78FF6EF7",
+     "name": "puck-glass_02",
+     "wave_off": "0xDE3000",
+     "entry_off": "0x3ACF2794"
+    },
+    {
+     "hash": "0x790961F7",
+     "name": null,
+     "wave_off": "0x4BF800",
+     "entry_off": "0x3ACF27A8"
+    },
+    {
+     "hash": "0x7A7736E3",
+     "name": null,
+     "wave_off": "0xA9B800",
+     "entry_off": "0x3ACF27BC"
+    },
+    {
+     "hash": "0x7A9CD124",
+     "name": null,
+     "wave_off": "0xBD9800",
+     "entry_off": "0x3ACF27D0"
+    },
+    {
+     "hash": "0x7B9FEBD8",
+     "name": null,
+     "wave_off": "0x69F800",
+     "entry_off": "0x3ACF27E4"
+    },
+    {
+     "hash": "0x7C5EFD59",
+     "name": null,
+     "wave_off": "0x38000",
+     "entry_off": "0x3ACF27F8"
+    },
+    {
+     "hash": "0x80E5B9FF",
+     "name": null,
+     "wave_off": "0x760000",
+     "entry_off": "0x3ACF280C"
+    },
+    {
+     "hash": "0x81240645",
+     "name": null,
+     "wave_off": "0x14B000",
+     "entry_off": "0x3ACF2820"
+    },
+    {
+     "hash": "0x834A8980",
+     "name": "skate-forward-loop_00",
+     "wave_off": "0xCA7000",
+     "entry_off": "0x3ACF2834"
+    },
+    {
+     "hash": "0x8649C25C",
+     "name": null,
+     "wave_off": "0x155800",
+     "entry_off": "0x3ACF2848"
+    },
+    {
+     "hash": "0x865DB58C",
+     "name": "slap-shot_00",
+     "wave_off": "0xBFA800",
+     "entry_off": "0x3ACF285C"
+    },
+    {
+     "hash": "0x86611A0C",
+     "name": "pass-send_01",
+     "wave_off": "0xE58000",
+     "entry_off": "0x3ACF2870"
+    },
+    {
+     "hash": "0x86E8AF46",
+     "name": null,
+     "wave_off": "0xB75800",
+     "entry_off": "0x3ACF2884"
+    },
+    {
+     "hash": "0x87E5C105",
+     "name": "puck-post_00",
+     "wave_off": "0xD14000",
+     "entry_off": "0x3ACF2898"
+    },
+    {
+     "hash": "0x8889C753",
+     "name": "menu-back_00",
+     "wave_off": "0x45000",
+     "entry_off": "0x3ACF28AC"
+    },
+    {
+     "hash": "0x8A6EAED3",
+     "name": "player-fall_00",
+     "wave_off": "0xE45000",
+     "entry_off": "0x3ACF28C0"
+    },
+    {
+     "hash": "0x8B836F3A",
+     "name": "puck-dropped_00",
+     "wave_off": "0xDF0000",
+     "entry_off": "0x3ACF28D4"
+    },
+    {
+     "hash": "0x8BA607CF",
+     "name": null,
+     "wave_off": "0x60800",
+     "entry_off": "0x3ACF28E8"
+    },
+    {
+     "hash": "0x8CA4526A",
+     "name": "punch_01",
+     "wave_off": "0xCE8800",
+     "entry_off": "0x3ACF28FC"
+    },
+    {
+     "hash": "0x8DB73184",
+     "name": null,
+     "wave_off": "0x13A000",
+     "entry_off": "0x3ACF2910"
+    },
+    {
+     "hash": "0x8EF48979",
+     "name": "puck-hit-board_02",
+     "wave_off": "0xD5F800",
+     "entry_off": "0x3ACF2924"
+    },
+    {
+     "hash": "0x9492B008",
+     "name": null,
+     "wave_off": "0xBCE800",
+     "entry_off": "0x3ACF2938"
+    },
+    {
+     "hash": "0x95918AF4",
+     "name": null,
+     "wave_off": "0x676000",
+     "entry_off": "0x3ACF294C"
+    },
+    {
+     "hash": "0x95FD67C4",
+     "name": "puck-bottom-bar_00",
+     "wave_off": "0xE05000",
+     "entry_off": "0x3ACF2960"
+    },
+    {
+     "hash": "0x9671154A",
+     "name": "menu-forward_00",
+     "wave_off": "0x4E000",
+     "entry_off": "0x3ACF2974"
+    },
+    {
+     "hash": "0x96F10FDB",
+     "name": "puck-glass_00",
+     "wave_off": "0xDD5000",
+     "entry_off": "0x3ACF2988"
+    },
+    {
+     "hash": "0x9A57F52C",
+     "name": null,
+     "wave_off": "0x840000",
+     "entry_off": "0x3ACF299C"
+    },
+    {
+     "hash": "0x9BBF2817",
+     "name": null,
+     "wave_off": "0x5C1800",
+     "entry_off": "0x3ACF29B0"
+    },
+    {
+     "hash": "0x9BC109DB",
+     "name": null,
+     "wave_off": "0x9E5800",
+     "entry_off": "0x3ACF29C4"
+    },
+    {
+     "hash": "0x9D794A4C",
+     "name": "skate-carve-loop_00",
+     "wave_off": "0xCBB000",
+     "entry_off": "0x3ACF29D8"
+    },
+    {
+     "hash": "0x9FF6AB8E",
+     "name": null,
+     "wave_off": "0xB8800",
+     "entry_off": "0x3ACF29EC"
+    },
+    {
+     "hash": "0xA13EAF49",
+     "name": "wrist-shot_00",
+     "wave_off": "0xBA6800",
+     "entry_off": "0x3ACF2A00"
+    },
+    {
+     "hash": "0xA268B5F2",
+     "name": null,
+     "wave_off": "0x15E000",
+     "entry_off": "0x3ACF2A14"
+    },
+    {
+     "hash": "0xA3822F8C",
+     "name": null,
+     "wave_off": "0xAA000",
+     "entry_off": "0x3ACF2A28"
+    },
+    {
+     "hash": "0xA48B9286",
+     "name": "stick-slide_00",
+     "wave_off": "0x11F800",
+     "entry_off": "0x3ACF2A3C"
+    },
+    {
+     "hash": "0xA56A3341",
+     "name": "gm-puck-handling-l_03",
+     "wave_off": "0xEA5800",
+     "entry_off": "0x3ACF2A50"
+    },
+    {
+     "hash": "0xA6A935A3",
+     "name": "puck-helmet_00",
+     "wave_off": "0xD6F000",
+     "entry_off": "0x3ACF2A64"
+    },
+    {
+     "hash": "0xA7F2E772",
+     "name": "stick-on-ice_00",
+     "wave_off": "0xBB8000",
+     "entry_off": "0x3ACF2A78"
+    },
+    {
+     "hash": "0xA7FB5AF7",
+     "name": null,
+     "wave_off": "0x32F000",
+     "entry_off": "0x3ACF2A8C"
+    },
+    {
+     "hash": "0xA86D3499",
+     "name": null,
+     "wave_off": "0x626000",
+     "entry_off": "0x3ACF2AA0"
+    },
+    {
+     "hash": "0xA8A757B9",
+     "name": null,
+     "wave_off": "0x15C800",
+     "entry_off": "0x3ACF2AB4"
+    },
+    {
+     "hash": "0xA9363CDB",
+     "name": "snap-shot_01",
+     "wave_off": "0xBF0000",
+     "entry_off": "0x3ACF2AC8"
+    },
+    {
+     "hash": "0xA9BF1BBE",
+     "name": "stick-hit-boards_00",
+     "wave_off": "0xBDE000",
+     "entry_off": "0x3ACF2ADC"
+    },
+    {
+     "hash": "0xAA83728E",
+     "name": "skate-left_03",
+     "wave_off": "0xC74800",
+     "entry_off": "0x3ACF2AF0"
+    },
+    {
+     "hash": "0xACF7DD2D",
+     "name": "skate-scrape-stop_01",
+     "wave_off": "0xC17000",
+     "entry_off": "0x3ACF2B04"
+    },
+    {
+     "hash": "0xAD7DE7A3",
+     "name": "check-body_03",
+     "wave_off": "0xF14000",
+     "entry_off": "0x3ACF2B18"
+    },
+    {
+     "hash": "0xADEEB697",
+     "name": "skate-left_07",
+     "wave_off": "0xC88800",
+     "entry_off": "0x3ACF2B2C"
+    },
+    {
+     "hash": "0xAE83FB2F",
+     "name": null,
+     "wave_off": "0x24000",
+     "entry_off": "0x3ACF2B40"
+    },
+    {
+     "hash": "0xB11F5DB0",
+     "name": null,
+     "wave_off": "0x3E6800",
+     "entry_off": "0x3ACF2B54"
+    },
+    {
+     "hash": "0xB1499734",
+     "name": null,
+     "wave_off": "0x92F800",
+     "entry_off": "0x3ACF2B68"
+    },
+    {
+     "hash": "0xB1EABAEF",
+     "name": null,
+     "wave_off": "0x35E000",
+     "entry_off": "0x3ACF2B7C"
+    },
+    {
+     "hash": "0xB2457517",
+     "name": null,
+     "wave_off": "0xF800",
+     "entry_off": "0x3ACF2B90"
+    },
+    {
+     "hash": "0xB34984BD",
+     "name": null,
+     "wave_off": "0x5AE000",
+     "entry_off": "0x3ACF2BA4"
+    },
+    {
+     "hash": "0xB39843CF",
+     "name": "skate-left_13",
+     "wave_off": "0xCA3000",
+     "entry_off": "0x3ACF2BB8"
+    },
+    {
+     "hash": "0xB3D462FD",
+     "name": null,
+     "wave_off": "0x886800",
+     "entry_off": "0x3ACF2BCC"
+    },
+    {
+     "hash": "0xB3E0E09C",
+     "name": null,
+     "wave_off": "0xB58000",
+     "entry_off": "0x3ACF2BE0"
+    },
+    {
+     "hash": "0xB53CC266",
+     "name": null,
+     "wave_off": "0xD45800",
+     "entry_off": "0x3ACF2BF4"
+    },
+    {
+     "hash": "0xB54EF519",
+     "name": null,
+     "wave_off": "0x32B800",
+     "entry_off": "0x3ACF2C08"
+    },
+    {
+     "hash": "0xB59D87C5",
+     "name": null,
+     "wave_off": "0xB48800",
+     "entry_off": "0x3ACF2C1C"
+    },
+    {
+     "hash": "0xB64E98FA",
+     "name": null,
+     "wave_off": "0xEDD800",
+     "entry_off": "0x3ACF2C30"
+    },
+    {
+     "hash": "0xB696DA59",
+     "name": "pass-recieve_01",
+     "wave_off": "0xE6E000",
+     "entry_off": "0x3ACF2C44"
+    },
+    {
+     "hash": "0xB7D8AC8E",
+     "name": "glass-bang_00",
+     "wave_off": "0xEA7800",
+     "entry_off": "0x3ACF2C58"
+    },
+    {
+     "hash": "0xB830B464",
+     "name": "skate-right_03",
+     "wave_off": "0xC36800",
+     "entry_off": "0x3ACF2C6C"
+    },
+    {
+     "hash": "0xB8EE67C8",
+     "name": null,
+     "wave_off": "0x2F2000",
+     "entry_off": "0x3ACF2C80"
+    },
+    {
+     "hash": "0xB9266126",
+     "name": null,
+     "wave_off": "0x486800",
+     "entry_off": "0x3ACF2C94"
+    },
+    {
+     "hash": "0xBA26D986",
+     "name": "puck-stick_03",
+     "wave_off": "0xD09800",
+     "entry_off": "0x3ACF2CA8"
+    },
+    {
+     "hash": "0xBAFEE792",
+     "name": null,
+     "wave_off": "0x332800",
+     "entry_off": "0x3ACF2CBC"
+    },
+    {
+     "hash": "0xBB4A849C",
+     "name": null,
+     "wave_off": "0x379800",
+     "entry_off": "0x3ACF2CD0"
+    },
+    {
+     "hash": "0xBBCE9B41",
+     "name": "goalie-stop-scrape_01",
+     "wave_off": "0xE7D800",
+     "entry_off": "0x3ACF2CE4"
+    },
+    {
+     "hash": "0xBC274085",
+     "name": null,
+     "wave_off": "0x36A000",
+     "entry_off": "0x3ACF2CF8"
+    },
+    {
+     "hash": "0xBC69E3F2",
+     "name": "check-boards_03",
+     "wave_off": "0xF32000",
+     "entry_off": "0x3ACF2D0C"
+    },
+    {
+     "hash": "0xBD0A6B2B",
+     "name": "poke-check_01",
+     "wave_off": "0xE35800",
+     "entry_off": "0x3ACF2D20"
+    },
+    {
+     "hash": "0xBDEB5121",
+     "name": "1nxv_0",
+     "wave_off": "0x12000",
+     "entry_off": "0x3ACF2D34"
+    },
+    {
+     "hash": "0xBED36884",
+     "name": null,
+     "wave_off": "0xDB5000",
+     "entry_off": "0x3ACF2D48"
+    },
+    {
+     "hash": "0xBF5D707D",
+     "name": "skate-right_07",
+     "wave_off": "0xC4A000",
+     "entry_off": "0x3ACF2D5C"
+    },
+    {
+     "hash": "0xC0DF9C18",
+     "name": "glass-bang_01",
+     "wave_off": "0xEAC800",
+     "entry_off": "0x3ACF2D70"
+    },
+    {
+     "hash": "0xC149A86C",
+     "name": null,
+     "wave_off": "0xEE5800",
+     "entry_off": "0x3ACF2D84"
+    },
+    {
+     "hash": "0xC191EACF",
+     "name": "pass-recieve_00",
+     "wave_off": "0xE6A000",
+     "entry_off": "0x3ACF2D98"
+    },
+    {
+     "hash": "0xC29AB753",
+     "name": null,
+     "wave_off": "0xB45000",
+     "entry_off": "0x3ACF2DAC"
+    },
+    {
+     "hash": "0xC44EB42B",
+     "name": null,
+     "wave_off": "0x59F000",
+     "entry_off": "0x3ACF2DC0"
+    },
+    {
+     "hash": "0xC49F7359",
+     "name": "skate-left_12",
+     "wave_off": "0xC9E800",
+     "entry_off": "0x3ACF2DD4"
+    },
+    {
+     "hash": "0xC4D3526B",
+     "name": null,
+     "wave_off": "0x8AD800",
+     "entry_off": "0x3ACF2DE8"
+    },
+    {
+     "hash": "0xC4E7D00A",
+     "name": null,
+     "wave_off": "0xB5F800",
+     "entry_off": "0x3ACF2DFC"
+    },
+    {
+     "hash": "0xC5F7734A",
+     "name": null,
+     "wave_off": "0xB54800",
+     "entry_off": "0x3ACF2E10"
+    },
+    {
+     "hash": "0xC6186D26",
+     "name": null,
+     "wave_off": "0x41A800",
+     "entry_off": "0x3ACF2E24"
+    },
+    {
+     "hash": "0xC64EA7A2",
+     "name": null,
+     "wave_off": "0x908800",
+     "entry_off": "0x3ACF2E38"
+    },
+    {
+     "hash": "0xC6ED8A79",
+     "name": null,
+     "wave_off": "0x364000",
+     "entry_off": "0x3ACF2E4C"
+    },
+    {
+     "hash": "0xC85A40EB",
+     "name": "skate-right_06",
+     "wave_off": "0xC46000",
+     "entry_off": "0x3ACF2E60"
+    },
+    {
+     "hash": "0xC996F652",
+     "name": null,
+     "wave_off": "0x0",
+     "entry_off": "0x3ACF2E74"
+    },
+    {
+     "hash": "0xC9D45812",
+     "name": null,
+     "wave_off": "0xDA8000",
+     "entry_off": "0x3ACF2E88"
+    },
+    {
+     "hash": "0xCA0D5BBD",
+     "name": "poke-check_00",
+     "wave_off": "0xE2F000",
+     "entry_off": "0x3ACF2E9C"
+    },
+    {
+     "hash": "0xCAEC61B7",
+     "name": "1nxv_1",
+     "wave_off": "0x10800",
+     "entry_off": "0x3ACF2EB0"
+    },
+    {
+     "hash": "0xCB207013",
+     "name": null,
+     "wave_off": "0x36E000",
+     "entry_off": "0x3ACF2EC4"
+    },
+    {
+     "hash": "0xCB6ED364",
+     "name": "check-boards_02",
+     "wave_off": "0xF27000",
+     "entry_off": "0x3ACF2ED8"
+    },
+    {
+     "hash": "0xCCC9ABD7",
+     "name": "goalie-stop-scrape_00",
+     "wave_off": "0xE76800",
+     "entry_off": "0x3ACF2EEC"
+    },
+    {
+     "hash": "0xCD21E910",
+     "name": "puck-stick_02",
+     "wave_off": "0xD01800",
+     "entry_off": "0x3ACF2F00"
+    },
+    {
+     "hash": "0xCDF9D704",
+     "name": null,
+     "wave_off": "0x339000",
+     "entry_off": "0x3ACF2F14"
+    },
+    {
+     "hash": "0xCE2151B0",
+     "name": null,
+     "wave_off": "0x44D800",
+     "entry_off": "0x3ACF2F28"
+    },
+    {
+     "hash": "0xCF3784F2",
+     "name": "skate-right_02",
+     "wave_off": "0xC32800",
+     "entry_off": "0x3ACF2F3C"
+    },
+    {
+     "hash": "0xD0CC105D",
+     "name": null,
+     "wave_off": "0x328800",
+     "entry_off": "0x3ACF2F50"
+    },
+    {
+     "hash": "0xD0F5D7E4",
+     "name": "stick-on-ice_01",
+     "wave_off": "0xBC0000",
+     "entry_off": "0x3ACF2F64"
+    },
+    {
+     "hash": "0xD1AE0535",
+     "name": "puck-helmet_01",
+     "wave_off": "0xD7F800",
+     "entry_off": "0x3ACF2F78"
+    },
+    {
+     "hash": "0xD26D03D7",
+     "name": "gm-puck-handling-l_02",
+     "wave_off": "0xEA4800",
+     "entry_off": "0x3ACF2F8C"
+    },
+    {
+     "hash": "0xD38CA210",
+     "name": "stick-slide_01",
+     "wave_off": "0x122800",
+     "entry_off": "0x3ACF2FA0"
+    },
+    {
+     "hash": "0xD4851F1A",
+     "name": null,
+     "wave_off": "0xA8800",
+     "entry_off": "0x3ACF2FB4"
+    },
+    {
+     "hash": "0xD56F8564",
+     "name": null,
+     "wave_off": "0x1AB800",
+     "entry_off": "0x3ACF2FC8"
+    },
+    {
+     "hash": "0xD5DCF35B",
+     "name": "fireworks-explode-soft_00",
+     "wave_off": "0xEBA800",
+     "entry_off": "0x3ACF2FDC"
+    },
+    {
+     "hash": "0xD62CB5B3",
+     "name": "skate-right_12",
+     "wave_off": "0xC61000",
+     "entry_off": "0x3ACF2FF0"
+    },
+    {
+     "hash": "0xD6399FDF",
+     "name": "wrist-shot_01",
+     "wave_off": "0xBB0000",
+     "entry_off": "0x3ACF3004"
+    },
+    {
+     "hash": "0xD94DB5E4",
+     "name": null,
+     "wave_off": "0xBA1800",
+     "entry_off": "0x3ACF3018"
+    },
+    {
+     "hash": "0xDA7AD735",
+     "name": "check-body_02",
+     "wave_off": "0xF0F800",
+     "entry_off": "0x3ACF302C"
+    },
+    {
+     "hash": "0xDAE98601",
+     "name": "skate-left_06",
+     "wave_off": "0xC84000",
+     "entry_off": "0x3ACF3040"
+    },
+    {
+     "hash": "0xDBF0EDBB",
+     "name": "skate-scrape-stop_00",
+     "wave_off": "0xC11800",
+     "entry_off": "0x3ACF3054"
+    },
+    {
+     "hash": "0xDD844218",
+     "name": "skate-left_02",
+     "wave_off": "0xC70800",
+     "entry_off": "0x3ACF3068"
+    },
+    {
+     "hash": "0xDE310C4D",
+     "name": "snap-shot_00",
+     "wave_off": "0xBE9800",
+     "entry_off": "0x3ACF307C"
+    },
+    {
+     "hash": "0xDEB82B28",
+     "name": "stick-hit-boards_01",
+     "wave_off": "0xBE3800",
+     "entry_off": "0x3ACF3090"
+    },
+    {
+     "hash": "0xDF6A040F",
+     "name": null,
+     "wave_off": "0x60E000",
+     "entry_off": "0x3ACF30A4"
+    },
+    {
+     "hash": "0xDFA0672F",
+     "name": null,
+     "wave_off": "0x15B000",
+     "entry_off": "0x3ACF30B8"
+    },
+    {
+     "hash": "0xE06F25EB",
+     "name": null,
+     "wave_off": "0x3B800",
+     "entry_off": "0x3ACF30CC"
+    },
+    {
+     "hash": "0xE1F63F4D",
+     "name": "puck-glass_01",
+     "wave_off": "0xDDC000",
+     "entry_off": "0x3ACF30E0"
+    },
+    {
+     "hash": "0xE296BA62",
+     "name": null,
+     "wave_off": "0x689000",
+     "entry_off": "0x3ACF30F4"
+    },
+    {
+     "hash": "0xE339A450",
+     "name": null,
+     "wave_off": "0x56000",
+     "entry_off": "0x3ACF3108"
+    },
+    {
+     "hash": "0xE395809E",
+     "name": null,
+     "wave_off": "0xBC9000",
+     "entry_off": "0x3ACF311C"
+    },
+    {
+     "hash": "0xE8F19B18",
+     "name": null,
+     "wave_off": "0xAC000",
+     "entry_off": "0x3ACF3130"
+    },
+    {
+     "hash": "0xEA7E7ADA",
+     "name": "skate-carve-loop_01",
+     "wave_off": "0xCC4000",
+     "entry_off": "0x3ACF3144"
+    },
+    {
+     "hash": "0xEBAE32EB",
+     "name": null,
+     "wave_off": "0x91800",
+     "entry_off": "0x3ACF3158"
+    },
+    {
+     "hash": "0xECB81881",
+     "name": null,
+     "wave_off": "0x5DA800",
+     "entry_off": "0x3ACF316C"
+    },
+    {
+     "hash": "0xECC6394D",
+     "name": null,
+     "wave_off": "0x98C800",
+     "entry_off": "0x3ACF3180"
+    },
+    {
+     "hash": "0xED50C5BA",
+     "name": null,
+     "wave_off": "0x807000",
+     "entry_off": "0x3ACF3194"
+    },
+    {
+     "hash": "0xED8F744B",
+     "name": "skate-back-loop_00",
+     "wave_off": "0xCD2800",
+     "entry_off": "0x3ACF31A8"
+    },
+    {
+     "hash": "0xF00DE765",
+     "name": "wipe_00",
+     "wave_off": "0x58800",
+     "entry_off": "0x3ACF31BC"
+    },
+    {
+     "hash": "0xF0E2F193",
+     "name": "puck-post_01",
+     "wave_off": "0xD22000",
+     "entry_off": "0x3ACF31D0"
+    },
+    {
+     "hash": "0xF14EF2CA",
+     "name": null,
+     "wave_off": "0x158000",
+     "entry_off": "0x3ACF31E4"
+    },
+    {
+     "hash": "0xF15A851A",
+     "name": "slap-shot_01",
+     "wave_off": "0xC00800",
+     "entry_off": "0x3ACF31F8"
+    },
+    {
+     "hash": "0xF1662A9A",
+     "name": "pass-send_00",
+     "wave_off": "0xE51800",
+     "entry_off": "0x3ACF320C"
+    },
+    {
+     "hash": "0xF1EF9FD0",
+     "name": null,
+     "wave_off": "0xB7E000",
+     "entry_off": "0x3ACF3220"
+    },
+    {
+     "hash": "0xF2F8D35E",
+     "name": "puck-pads_00",
+     "wave_off": "0xD40800",
+     "entry_off": "0x3ACF3234"
+    },
+    {
+     "hash": "0xF3DEE40F",
+     "name": null,
+     "wave_off": "0x129800",
+     "entry_off": "0x3ACF3248"
+    },
+    {
+     "hash": "0xF42AF12F",
+     "name": "pond-puck-hit-snow_00",
+     "wave_off": "0xE23800",
+     "entry_off": "0x3ACF325C"
+    },
+    {
+     "hash": "0xF44DB916",
+     "name": "skate-forward-loop_01",
+     "wave_off": "0xCAF000",
+     "entry_off": "0x3ACF3270"
+    },
+    {
+     "hash": "0xF62336D3",
+     "name": null,
+     "wave_off": "0x14D800",
+     "entry_off": "0x3ACF3284"
+    },
+    {
+     "hash": "0xF75B2225",
+     "name": null,
+     "wave_off": "0xB1A800",
+     "entry_off": "0x3ACF3298"
+    },
+    {
+     "hash": "0xF7E28969",
+     "name": null,
+     "wave_off": "0x72B000",
+     "entry_off": "0x3ACF32AC"
+    },
+    {
+     "hash": "0xF9F3B9EF",
+     "name": "puck-hit-board_03",
+     "wave_off": "0xD67800",
+     "entry_off": "0x3ACF32C0"
+    },
+    {
+     "hash": "0xFAB00112",
+     "name": null,
+     "wave_off": "0x13D000",
+     "entry_off": "0x3ACF32D4"
+    },
+    {
+     "hash": "0xFBA362FC",
+     "name": "punch_00",
+     "wave_off": "0xCE7000",
+     "entry_off": "0x3ACF32E8"
+    },
+    {
+     "hash": "0xFBCCF340",
+     "name": null,
+     "wave_off": "0x64800",
+     "entry_off": "0x3ACF32FC"
+    },
+    {
+     "hash": "0xFC845FAC",
+     "name": "puck-dropped_01",
+     "wave_off": "0xDFB000",
+     "entry_off": "0x3ACF3310"
+    },
+    {
+     "hash": "0xFCA13759",
+     "name": null,
+     "wave_off": "0x5F000",
+     "entry_off": "0x3ACF3324"
+    },
+    {
+     "hash": "0xFCFD1D59",
+     "name": "ref-whistle_00",
+     "wave_off": "0xCDF000",
+     "entry_off": "0x3ACF3338"
+    },
+    {
+     "hash": "0xFD699E45",
+     "name": "player-fall_01",
+     "wave_off": "0xE49000",
+     "entry_off": "0x3ACF334C"
+    }
+   ]
+  }
+ }
+}

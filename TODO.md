@@ -1,0 +1,78 @@
+# NHL 2K10 Mod Launcher — TODO / roadmap
+
+Open work and ideas, grouped by system. This is the living wish-list — good places for new
+contributors to jump in. For *how* each system currently works, see `findings/`.
+
+## Portraits
+- Conflicts could be resolved by player's number?
+- When I search for Elias Pettersson in the Portraits "filter players", only one shows up,
+  but there are two — so I can't even see duplicate players!
+- Jersey swap is still not seamless. More effort needs to go into the ML model to better
+  wrap the jersey around the neck with no gaps. Maybe let users adjust the head/jersey
+  before the model splices them together.
+
+## IFF Textures
+- Can we split up `global.iff` (or all IFF files)? Applying changes while looking at 446
+  textures takes a long time.
+- Could we **generate our normal maps**? We can see how the existing normal was set up, and
+  we can see our base where the stitching should be. Applies to Uniforms (jersey base +
+  stamps) specifically, but could extend to heads/etc.
+- Discover the remaining IFF files that aren't found (multi-texture packs that don't show up,
+  or any in the game files we haven't discovered yet).
+  - `led_{team}.iff` is pretty bare — I wonder if there's more to discover there.
+  - Not textures specifically, but can we identify the remaining data in these IFF files to
+    see what else we can modify? Probably scale, positioning, etc.
+
+## Overlays / Scorebug
+- Can we modify more overlays like we did the scorebug?
+- I've gotten close to adding "shots" on the scorebug. We need a way to safely **add elements**
+  to the widget and bind the tracked shots to a text element so they update.
+- When the scorebug is moved to the top, the in-game team-change elements (lines, strategy,
+  picture-in-picture) crash — they need to auto-switch to the bottom anchor. Leave the
+  top-center anchor alone for now.
+- Can we move the Powerplay / Offside / Icing warnings? Would love to attach them to the
+  scorebug.
+
+## Audio
+- We need a way to **name these files** — at minimum categorize them better. Right now 80,000+
+  files are hand-named/categorized, which takes too long. Identify a pattern in the offsets,
+  or read the TOC while the game is live for authored names / audio banks they pull from.
+- Still possibly some undiscovered assets — ones I haven't noticed yet: Whistles, Posts,
+  Referee Voice, Crowd Team Chants.
+
+## Commentary (Play-by-Play, Color, PA)
+With new rosters, player names don't match (e.g. DeBrusk overwrote a player named Adams, so
+he's always called "Adams"). Fix this in bulk, like we did portraits. Multi-part:
+- Identify the commentary name bank / how it's assigned.
+- Replace all variations of the name (there are multiple).
+- Can we use AI/ML to generate the name? We have full access to the Play-by-Play AND Color
+  commentators (two different voices), plus the PA announcer. Could we build 3 voice models
+  to synthesize names? (e.g. no "DeBrusk" line exists → find the pronunciation, run it through
+  the model, replace the lines with the new name.)
+
+## Mod Packs
+- When I download someone's custom roster, I lose a lot of my own work. Can we include roster
+  edits in mod packs — so if I change all the primary/secondary team colors, I can save it as
+  a pack, use a new ROS file, then apply the team-color mod pack?
+
+## Models
+- I extracted a goalie mask into Substance Painter. We need to do this with **all** models
+  (uniforms, jumbotrons, boards, heads, crowd… everything!).
+- Can we modify and replace models without breaking the game?
+
+## Rosters
+- Lots left to discover in the roster editor.
+- Can we save the roster through the tool when we make changes?
+- Can we show the player portrait when we select them?
+- Find any audio ID / binding for teams and players.
+- Identify more team colors (fonts, helmet colors, arena dashers) — only primary and
+  secondary discovered so far.
+
+## Unanswered questions
+- The **boot screen** isn't solved. There are NHL logos that aren't the ones we apply — find
+  where they live and update them alongside our team logos.
+- We haven't found **all** the rink textures. There are jumbotron assets, seats, and specific
+  rink textures still undiscovered — we see boards/glass displays/etc., but are missing some
+  important pieces.
+- Find a way to change the **dasher color** per arena/team. This seems to be a recolor value,
+  not a texture asset (most teams red; some black, blue, or yellow).
