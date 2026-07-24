@@ -178,13 +178,6 @@ MIP_CHAINS = {
 
 
 # ── paths (root = launcher's …/NHL2k10_Extracted_Files) ─────────────────────
-def original_root(root):
-    return Path(root) / "Textures" / "Original"
-
-def modified_root(root):
-    return Path(root) / "Textures" / "Modified"
-
-
 def extracted_root(root):
     """The single extract+edit folder (grouped: Logos/, Uniform/<TEAM>/<KIT>/, …). Replaces the
     old Original/ + Modified/ split — you extract here and edit in place; a hash manifest records
