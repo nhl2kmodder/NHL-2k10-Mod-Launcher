@@ -51,9 +51,7 @@ he's always called "Adams"). Fix this in bulk, like we did portraits. Multi-part
   the model, replace the lines with the new name.)
 
 ## Mod Packs
-- When I download someone's custom roster, I lose a lot of my own work. Can we include roster
-  edits in mod packs — so if I change all the primary/secondary team colors, I can save it as
-  a pack, use a new ROS file, then apply the team-color mod pack?
+- Test and verify that it all works.
 
 ## Models
 - I extracted a goalie mask into Substance Painter. We need to do this with **all** models
@@ -67,6 +65,7 @@ he's always called "Adams"). Fix this in bulk, like we did portraits. Multi-part
 - Find any audio ID / binding for teams and players.
 - Identify more team colors (fonts, helmet colors, arena dashers) — only primary and
   secondary discovered so far.
+- Allow us to re-name strings with longer names (ex - "Atlanta" (7 characters) -> "Winnipeg" (8 characters). This was attempted before in a quick/dirty manner, and did not work (the entire file got read incorrectly after - everything shifted with the change). We either have to investigate how to replace in-place or we have to figure out how we can re-direct like we do with textures.
 
 ## Unanswered questions
 - The **boot screen** isn't solved. There are NHL logos that aren't the ones we apply — find
