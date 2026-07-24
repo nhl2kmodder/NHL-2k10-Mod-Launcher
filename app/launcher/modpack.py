@@ -9,7 +9,7 @@ user-chosen name, so two people's naming differences never break the merge):
 
 Identity keys:
   audio stream  ->  "<fid>:0x<OFFSET8>"   (resolved through the catalog, robust to renames)
-  texture       ->  its relative path under Textures/Modified/  (deterministic filename)
+  texture       ->  its relative path under Textures/Extracted/  (deterministic filename)
 
 Merge model per item: NEW (recipient lacks it) -> add; SAME (identical) -> skip;
 CONFLICT (present but different) -> caller decides keep-mine / keep-theirs.
@@ -93,7 +93,7 @@ def load_audio_wavs(root):
 def load_textures(root):
     """{relpath: Path} for Modified texture files (deterministic filenames)."""
     out = {}
-    base = AT.modified_root(root)
+    base = AT.extracted_root(root)
     if base.exists():
         for p in base.rglob("*"):
             if p.is_file():
@@ -287,11 +287,11 @@ def _apply_wav(z, item, root, off2entry, log):
     log(f"  audio  -> Modified/Audio/{dest.parent.name}/{dest.name}")
 
 def _apply_tex(z, item, root, log):
-    dest = AT.modified_root(root) / item["key"]
+    dest = AT.extracted_root(root) / item["key"]
     dest.parent.mkdir(parents=True, exist_ok=True)
     with z.open(item["arc"]) as src, open(dest, "wb") as out:
         shutil.copyfileobj(src, out)
-    log(f"  texture-> Textures/Modified/{item['key']}")
+    log(f"  texture-> Textures/Extracted/{item['key']}")
 
 def apply_items(root, items, decisions, zip_path=None, log=print):
     """Apply a resolved item list. meta -> names JSON; audio/tex -> Modified/ staging
