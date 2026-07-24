@@ -63,6 +63,130 @@ try:
 except Exception:
     pass
 
+import os
+import re
+import tkinter as tk
+from tkinter import messagebox
+
+def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, parent=None):
+    """
+    Checks xenia-canary.config.toml for draw_resolution_scale_x and y.
+    
+    :param xenia_exe_path: Full path to the xenia executable (.exe)
+    :param config_settings: Dictionary or config object storing app settings (e.g., launcher settings)
+    :return: True if launch should proceed, False if user cancelled/closed window prematurely
+    """
+
+    if config_settings is None:
+        config_settings = {}
+
+    # Skip if user previously chose "Never"
+    if config_settings.get("never_check_xenia_res", False):
+        return True
+
+    # Locate config file
+    if os.path.isdir(xenia_exe_path):
+        xenia_dir = xenia_exe_path
+    else:
+        xenia_dir = os.path.dirname(xenia_exe_path)
+
+    config_path = os.path.join(xenia_dir, "xenia-canary.config.toml")
+
+    if not os.path.exists(config_path):
+        return True
+
+    # Read config content
+    try:
+        with open(config_path, "r", encoding="utf-8") as f:
+            content = f.read()
+    except Exception as e:
+        print(f"Error reading Xenia config: {e}")
+        return True
+
+    scale_x_match = re.search(r'^\s*draw_resolution_scale_x\s*=\s*(\d+)', content, re.MULTILINE)
+    scale_y_match = re.search(r'^\s*draw_resolution_scale_y\s*=\s*(\d+)', content, re.MULTILINE)
+
+    scale_x = int(scale_x_match.group(1)) if scale_x_match else 1
+    scale_y = int(scale_y_match.group(1)) if scale_y_match else 1
+
+    if scale_x >= 2 and scale_y >= 2:
+        return True
+
+    # --- DIALOG CREATION ---
+    dialog = tk.Toplevel(parent)
+    dialog.title("Resolution Check")
+    dialog.resizable(False, False)
+
+    dialog_width = 450
+    dialog_height = 160
+
+    # Center over main launcher if parent was provided
+    if parent:
+        parent.update_idletasks()
+        parent_x = parent.winfo_rootx()
+        parent_y = parent.winfo_rooty()
+        parent_w = parent.winfo_width()
+        parent_h = parent.winfo_height()
+
+        center_x = int(parent_x + (parent_w / 2) - (dialog_width / 2))
+        center_y = int(parent_y + (parent_h / 2) - (dialog_height / 2))
+        dialog.geometry(f"{dialog_width}x{dialog_height}+{center_x}+{center_y}")
+    else:
+        dialog.geometry(f"{dialog_width}x{dialog_height}")
+
+    msg = (
+        "Xenia is only rendering at 1x resolution.\n\n"
+        "Texture replacements that have mipmaps will show artifacts if it is lower than 2.\n\n"
+        "Would you like to update your resolution to 2?"
+    )
+
+    label = tk.Label(dialog, text=msg, justify="left", wraplength=420, padx=15, pady=15)
+    label.pack(side="top", fill="both", expand=True)
+
+    btn_frame = tk.Frame(dialog, pady=10)
+    btn_frame.pack(side="bottom", fill="x")
+
+    def on_yes():
+        new_content = content
+        if scale_x_match:
+            new_content = re.sub(r'^(\s*draw_resolution_scale_x\s*=\s*)\d+', r'\g<1>2', new_content, flags=re.MULTILINE)
+        else:
+            new_content += "\ndraw_resolution_scale_x = 2\n"
+
+        if scale_y_match:
+            new_content = re.sub(r'^(\s*draw_resolution_scale_y\s*=\s*)\d+', r'\g<1>2', new_content, flags=re.MULTILINE)
+        else:
+            new_content += "\ndraw_resolution_scale_y = 2\n"
+
+        try:
+            with open(config_path, "w", encoding="utf-8") as f:
+                f.write(new_content)
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to update Xenia config file: {e}")
+
+        dialog.destroy()
+
+    def on_not_this_time():
+        dialog.destroy()
+
+    def on_never():
+        config_settings["never_check_xenia_res"] = True
+        dialog.destroy()
+
+    btn_yes = tk.Button(btn_frame, text="Yes", width=12, command=on_yes)
+    btn_yes.pack(side="left", padx=(20, 5))
+
+    btn_not_now = tk.Button(btn_frame, text="Not this time", width=12, command=on_not_this_time)
+    btn_not_now.pack(side="left", padx=5)
+
+    btn_never = tk.Button(btn_frame, text="Never", width=12, command=on_never)
+    btn_never.pack(side="left", padx=5)
+
+    dialog.grab_set()
+    dialog.wait_window()
+
+    return True
+
 def _resolve_config_path():
     """Persist settings in %APPDATA%\\NHL2K10 Mod Launcher\\ — a stable, always-writable, per-user
     location that SURVIVES rebuilds (the onedir app folder is wiped by `pyinstaller --noconfirm`, so
@@ -4701,9 +4825,12 @@ class App(Tk):
     # ── Launch + Apply Mods ───────────────────────────────────────────────────
 
     def _launch_and_apply(self):
+        #1) Verify that our paths exist so we can launch the game
         xenia_path = self.cfg.get("xenia_path", "").strip()
         game_path  = self.cfg.get("game_path",  "").strip()
-        if not xenia_path or not Path(xenia_path).exists():
+        xenia_root_path = os.path.dirname(xenia_path)
+
+        if not xenia_root_path or not Path(xenia_root_path).exists():
             messagebox.showerror("Xenia not configured",
                 "Set the Xenia executable path in Settings first.")
             self._nb.select(self._tab_settings); return
@@ -4711,6 +4838,23 @@ class App(Tk):
             messagebox.showerror("Game not configured",
                 "Set the game .xex / ISO / folder path in Settings first.")
             self._nb.select(self._tab_settings); return
+
+        #2) Run the resolution check dialog
+        # (self.settings stores launcher configs, where 'never_check_xenia_res' will be saved)
+        settings_dict = getattr(self, "settings", None)
+        if settings_dict is None:
+            settings_dict = getattr(self, "cfg", {})
+
+        if not check_and_update_xenia_resolution(xenia_root_path, settings_dict, parent=self):
+            messagebox.showerror("Xenia not configured",
+                "Set the Xenia executable path in Settings first.")
+            return
+
+        #3) Save launcher settings if "Never" was clicked
+        if hasattr(self, "save_settings"):
+            self.save_settings()
+
+        #4) Proceed to launch the game
         self._log("─── Launch NHL 2k10 ───")
         self._log(f"Game: {Path(game_path).name}")
         try:
