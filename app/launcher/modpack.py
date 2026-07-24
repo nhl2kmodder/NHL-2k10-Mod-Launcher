@@ -7,9 +7,20 @@ user-chosen name, so two people's naming differences never break the merge):
   * Mod Pack (.n2kpack = zip) — everything: audio names + replacement WAVs + replacement
                                 textures, compressed (lossless).
 
+A third section — ROSTER — is different in kind: it is not a replacement FILE but a set of
+FIELD VALUES read live out of a Roster.ROS save and re-applied (in place, over the top) onto
+whatever ROS the recipient uses, so you can share e.g. "all 30 teams' colours" without shipping
+your players/ratings. Three whole-league groups, each one selectable checkbox:
+  * team_colors  — {CODE: {primary, secondary}}      (chunk 0x8489FAF3, via team_colors.py)
+  * arena_names  — {CODE: arena}                      (string pool, via roster_editor.py)
+  * team_names   — {CODE: {city, state, team, name}}  (string pool, via roster_editor.py)
+Applying names is best-effort: a name longer than its fixed slot in the target save is skipped
+(the same in-place constraint the Teams tab enforces), never grown.
+
 Identity keys:
   audio stream  ->  "<fid>:0x<OFFSET8>"   (resolved through the catalog, robust to renames)
-  texture       ->  its relative path under Textures/Modified/  (deterministic filename)
+  texture       ->  its relative path under Textures/Extracted/  (deterministic filename)
+  roster group  ->  the group name ("team_colors" | "arena_names" | "team_names")
 
 Merge model per item: NEW (recipient lacks it) -> add; SAME (identical) -> skip;
 CONFLICT (present but different) -> caller decides keep-mine / keep-theirs.
@@ -22,11 +33,27 @@ try:
 except ImportError:
     import archive_textures as AT
 
+try:
+    from . import team_colors as TC
+    from . import roster_editor as RE
+except ImportError:                                  # launcher/ is on sys.path -> bare import
+    import team_colors as TC
+    import roster_editor as RE
+
 FORMAT   = "nhl2k10-modpack"
 VERSION  = 1
 FILE_IDS = ["0A", "0B", "1A", "1B"]
 PACK_EXT = ".n2kpack"
 NAMES_EXT = ".n2knames.json"
+
+# Roster field-groups shareable in a pack (display order == picker order). Each is one checkbox
+# covering all 30 teams. Add more here (per-team font colours, etc.) as they're identified.
+ROSTER_GROUP_ORDER = ["team_colors", "arena_names", "team_names"]
+ROSTER_GROUPS = {
+    "team_colors": "Team Colours — primary + secondary (all teams)",
+    "arena_names": "Arena Names (all teams)",
+    "team_names":  "Team Names — city / state / team / name (all teams)",
+}
 
 # ── small helpers ─────────────────────────────────────────────────────────────
 def akey(fid, off):  return f"{fid}:0x{off:08X}"
@@ -93,12 +120,142 @@ def load_audio_wavs(root):
 def load_textures(root):
     """{relpath: Path} for Modified texture files (deterministic filenames)."""
     out = {}
-    base = AT.modified_root(root)
+    base = AT.extracted_root(root)
     if base.exists():
         for p in base.rglob("*"):
             if p.is_file():
                 out[p.relative_to(base).as_posix()] = p
     return out
+
+# ── roster field-groups (read live from a Roster.ROS, applied over the top) ────
+def _rgbhex(rgb):
+    return "#%02X%02X%02X" % (rgb[0] & 0xFF, rgb[1] & 0xFF, rgb[2] & 0xFF)
+
+def load_roster(ros_path):
+    """{group: data} read out of a Roster.ROS. Only groups that parse are returned, so a save
+    the readers can't map for one group still exports the others. Values use the same textual
+    form the pack stores (hex colours, raw name strings) so incoming==local compares cleanly."""
+    out = {}
+    ros_path = Path(ros_path)
+    if not ros_path.is_file():
+        return out
+    try:                                             # team colours (chunk 0x8489FAF3)
+        cols = TC.load(ros_path)
+        tc = {code: {"primary": _rgbhex(v["primary"]), "secondary": _rgbhex(v["secondary"])}
+              for code, v in cols.items()}
+        if tc:
+            out["team_colors"] = tc
+    except Exception:
+        pass
+    try:                                             # names + arenas (string pool)
+        ed = RE.RosterEditor(str(ros_path))
+        arenas, names = {}, {}
+        for t in ed.teams:
+            if t.arena:
+                arenas[t.code] = t.arena.text
+            rec = {}
+            if t.city:     rec["city"]  = t.city.text
+            if t.state:    rec["state"] = t.state.text
+            if t.team:     rec["team"]  = t.team.text
+            if t.nickname: rec["name"]  = t.nickname.text
+            if rec:
+                names[t.code] = rec
+        if arenas: out["arena_names"] = arenas
+        if names:  out["team_names"]  = names
+    except Exception:
+        pass
+    return out
+
+def _roster_item(group, data):
+    return {"section": "roster", "key": group, "label": ROSTER_GROUPS[group],
+            "team": "", "category": "Roster", "count": len(data)}
+
+def local_roster_items(ros_path):
+    """The exportable roster groups present in this save, as picker items (one per group)."""
+    data = load_roster(ros_path)
+    return [_roster_item(g, data[g]) for g in ROSTER_GROUP_ORDER if g in data]
+
+def diff_roster(in_roster, ros_path):
+    """Compare each incoming roster group against the recipient's live save -> status items."""
+    local = load_roster(ros_path) if ros_path else {}
+    items = []
+    for g in ROSTER_GROUP_ORDER:
+        if g not in in_roster:
+            continue
+        inc, loc = in_roster[g], local.get(g)
+        status = "new" if loc is None else ("same" if loc == inc else "conflict")
+        items.append({"section": "roster", "key": g, "status": status,
+                      "incoming": inc, "local": loc, "label": ROSTER_GROUPS[g],
+                      "team": "", "category": "Roster"})
+    return items
+
+def _add_name_edit(edits, skipped, slot, new):
+    """Queue an in-place string edit if it fits its fixed slot; record over-length ones instead."""
+    if slot is None or not new or new == slot.text:
+        return
+    if len(new) > slot.cap_chars:                    # can't grow the packed pool -> skip, don't corrupt
+        skipped.append((slot.text, new, slot.cap_chars)); return
+    edits.append((slot, new))
+
+def apply_roster(ros_path, groups, log=print):
+    """Apply the chosen roster groups onto `ros_path`, IN PLACE. Colours via team_colors
+    (writes a .colorbak); names/arenas via RosterEditor (writes a .bak). Over-length names are
+    skipped and logged, never grown. Returns {group: count_applied}."""
+    ros_path = Path(ros_path)
+    applied = {}
+    if "team_colors" in groups:
+        n = 0
+        for code, v in groups["team_colors"].items():
+            try:
+                TC.set_color(ros_path, code, primary=v.get("primary"),
+                             secondary=v.get("secondary"), log=log); n += 1
+            except KeyError:
+                log(f"  team_colors: '{code}' not in this roster — skipped")
+            except Exception as e:
+                log(f"  team_colors: '{code}' failed: {e}")
+        applied["team_colors"] = n
+
+    name_groups = [g for g in ("arena_names", "team_names") if g in groups]
+    if name_groups:
+        ed = RE.RosterEditor(str(ros_path))
+        by = {t.code: t for t in ed.teams}
+        edits, skipped, touched = [], [], {g: 0 for g in name_groups}
+        if "arena_names" in groups:
+            for code, arena in groups["arena_names"].items():
+                t = by.get(code)
+                if t:
+                    before = len(edits)
+                    _add_name_edit(edits, skipped, t.arena, arena)
+                    touched["arena_names"] += len(edits) - before
+        if "team_names" in groups:
+            for code, rec in groups["team_names"].items():
+                t = by.get(code)
+                if not t:
+                    continue
+                before = len(edits)
+                _add_name_edit(edits, skipped, t.city,  rec.get("city"))
+                _add_name_edit(edits, skipped, t.state, rec.get("state"))
+                _add_name_edit(edits, skipped, t.team,  rec.get("team"))
+                nm = rec.get("name")                 # nickname + its lowercase internal key
+                if t.nickname and nm and nm != t.nickname.text:
+                    low = nm.lower().replace(" ", "")
+                    if len(nm) <= t.nickname.cap_chars and (
+                            t.nick_lower is None or len(low) <= t.nick_lower.cap_chars):
+                        edits.append((t.nickname, nm))
+                        if t.nick_lower:
+                            edits.append((t.nick_lower, low))
+                    else:
+                        skipped.append((t.nickname.text, nm, t.nickname.cap_chars))
+                touched["team_names"] += len(edits) - before
+        if edits:
+            ed.apply_edits(edits)                    # all pre-checked to fit -> won't raise
+            ed.save()                                # writes <ROS>.bak then patches
+        for old, new, cap in skipped:
+            log(f"  roster name '{new}' too long for its slot ({cap} chars) — skipped")
+        for g in name_groups:
+            applied[g] = touched[g]
+    return applied
+
 
 # ── export ────────────────────────────────────────────────────────────────────
 def export_names(root, out_path, author=""):
@@ -128,7 +285,9 @@ def annotate(items, root):
     texmap = _tex_catalog_map()
     meta = load_audio_meta(root); _, off2entry = _catalog_index(root)
     for it in items:
-        if it.get("section") == "tex":
+        if it.get("section") == "roster":       # league-wide field group, not team/asset scoped
+            it.setdefault("team", ""); it["category"] = "Roster"
+        elif it.get("section") == "tex":
             team, cat = texmap.get(str(it["key"]).split("/")[0], ("", ""))
             it["team"], it["category"] = team, cat
         else:                                   # meta / audio
@@ -161,39 +320,61 @@ def local_items(root):
     return annotate(items, root)
 
 
-def _write_pack(out_path, meta, wavs, texs, author=""):
+def _write_pack(out_path, meta, wavs, texs, roster=None, author=""):
+    roster = roster or {}
+    out_path = Path(out_path)
+    out_path.parent.mkdir(parents=True, exist_ok=True)
+
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
+        # ALWAYS write manifest.json first to ensure it is a valid zip archive
+        z.writestr("manifest.json", json.dumps({
+            "format": FORMAT, "version": VERSION,
+            "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "author": author,
+            "summary": {"audio_meta": len(meta), "audio_wav": len(wavs),
+                        "textures": len(texs), "roster": len(roster)},
+        }, indent=1))
+
         if meta:
             z.writestr("audio_meta.json", json.dumps(meta, indent=1))
         for key, p in wavs.items():
             fid, off = parse_akey(key)
-            z.write(p, f"audio_wav/{fid}/{off:08X}.wav")
+            if Path(p).exists():
+                z.write(p, f"audio_wav/{fid}/{off:08X}.wav")
         for rel, p in texs.items():
-            z.write(p, f"textures/{rel}")
-        z.writestr("manifest.json", json.dumps({
-            "format": FORMAT, "version": VERSION,
-            "created": time.strftime("%Y-%m-%dT%H:%M:%S"), "author": author,
-            "summary": {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs)},
-        }, indent=1))
-    return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs)}
+            if Path(p).exists():
+                z.write(p, f"textures/{rel}")
+        if roster:
+            z.writestr("roster.json", json.dumps(roster, indent=1))
 
+    return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs),
+            "roster": len(roster)}
 
-def export_pack(root, out_path, include=("meta", "audio", "tex"), author=""):
-    """Write a compressed Mod Pack zip with the chosen change types (whole sections)."""
+def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None, author=""):
+    """Write a compressed Mod Pack zip with the chosen change types (whole sections).
+    Roster groups are included when "roster" is in `include` and a `ros_path` is given."""
     root = Path(root)
     meta = load_audio_meta(root)  if "meta"  in include else {}
     wavs = load_audio_wavs(root)  if "audio" in include else {}
     texs = load_textures(root)    if "tex"   in include else {}
-    return _write_pack(out_path, meta, wavs, texs, author)
+    roster = load_roster(ros_path) if ("roster" in include and ros_path) else {}
+    return _write_pack(out_path, meta, wavs, texs, roster, author)
 
 
-def export_selected(root, out_path, selected, author=""):
-    """Write a Mod Pack of ONLY the chosen items. `selected` = iterable of (section, key)."""
+def export_selected(root, out_path, selected, ros_path=None, author=""):
+    """Write a Mod Pack of ONLY the chosen items. `selected` = iterable of (section, key).
+    Roster groups (section=="roster") are re-read from `ros_path` at export time."""
     root = Path(root); sel = {(s, k) for s, k in selected}
     meta = {k: v for k, v in load_audio_meta(root).items() if ("meta",  k) in sel}
     wavs = {k: v for k, v in load_audio_wavs(root).items() if ("audio", k) in sel}
     texs = {k: v for k, v in load_textures(root).items()   if ("tex",   k) in sel}
-    return _write_pack(out_path, meta, wavs, texs, author)
+    
+    roster = {}
+    if any(s == "roster" for s, _ in sel):
+        if ros_path:
+            full_roster = load_roster(ros_path)
+            roster = {g: d for g, d in full_roster.items() if ("roster", g) in sel}
+
+    return _write_pack(out_path, meta, wavs, texs, roster, author)
 
 # ── diff (incoming vs local) ──────────────────────────────────────────────────
 def _meta_items(in_meta, local_meta, off2entry):
@@ -213,8 +394,12 @@ def diff_names(json_path, root):
     _, off2entry = _catalog_index(root)
     return doc.get("manifest", doc), _meta_items(in_meta, load_audio_meta(root), off2entry)
 
-def diff_pack(zip_path, root):
+def diff_pack(zip_path, root, ros_path=None):
     """Returns (manifest, items). Each item carries enough to preview + apply."""
+    zip_path = Path(zip_path)
+    if not zipfile.is_zipfile(zip_path):
+        raise ValueError(f"'{zip_path.name}' is not a valid zip archive (.n2kpack).")
+
     root = Path(root)
     local_meta = load_audio_meta(root)
     local_wavs = load_audio_wavs(root)
@@ -225,7 +410,9 @@ def diff_pack(zip_path, root):
         names = set(z.namelist())
         manifest = json.loads(z.read("manifest.json")) if "manifest.json" in names else {}
         in_meta = json.loads(z.read("audio_meta.json")) if "audio_meta.json" in names else {}
+        in_roster = json.loads(z.read("roster.json")) if "roster.json" in names else {}
         items += _meta_items(in_meta, local_meta, off2entry)
+        items += diff_roster(in_roster, ros_path)
         for n in sorted(names):
             if n.startswith("audio_wav/") and n.endswith(".wav"):
                 parts = n.split("/")
@@ -287,19 +474,21 @@ def _apply_wav(z, item, root, off2entry, log):
     log(f"  audio  -> Modified/Audio/{dest.parent.name}/{dest.name}")
 
 def _apply_tex(z, item, root, log):
-    dest = AT.modified_root(root) / item["key"]
+    dest = AT.extracted_root(root) / item["key"]
     dest.parent.mkdir(parents=True, exist_ok=True)
     with z.open(item["arc"]) as src, open(dest, "wb") as out:
         shutil.copyfileobj(src, out)
-    log(f"  texture-> Textures/Modified/{item['key']}")
+    log(f"  texture-> Textures/Extracted/{item['key']}")
 
-def apply_items(root, items, decisions, zip_path=None, log=print):
+def apply_items(root, items, decisions, zip_path=None, ros_path=None, log=print):
     """Apply a resolved item list. meta -> names JSON; audio/tex -> Modified/ staging
-    (the recipient then reviews and runs Patch Game / Apply to Game). Returns counts."""
+    (the recipient then reviews and runs Patch Game / Apply to Game); roster -> written straight
+    onto `ros_path` (in place, with a backup). Returns counts."""
     root = Path(root)
     _, off2entry = _catalog_index(root)
-    counts = {"meta": 0, "audio": 0, "tex": 0, "skipped": 0}
+    counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "skipped": 0}
     meta_by_fid = {}
+    roster_groups = {}
     z = zipfile.ZipFile(zip_path) if zip_path else None
     try:
         for it in items:
@@ -316,8 +505,16 @@ def apply_items(root, items, decisions, zip_path=None, log=print):
                 _apply_wav(z, it, root, off2entry, log); counts["audio"] += 1
             elif it["section"] == "tex" and z is not None:
                 _apply_tex(z, it, root, log); counts["tex"] += 1
+            elif it["section"] == "roster":
+                if ros_path and Path(ros_path).is_file():
+                    roster_groups[it["key"]] = it["incoming"]; counts["roster"] += 1
+                else:
+                    log("  roster skipped: no Roster.ROS path set (Teams tab → Browse…)")
+                    counts["skipped"] += 1
     finally:
         if z: z.close()
     if meta_by_fid:
         _write_meta(root, meta_by_fid)
+    if roster_groups:
+        apply_roster(ros_path, roster_groups, log)
     return counts

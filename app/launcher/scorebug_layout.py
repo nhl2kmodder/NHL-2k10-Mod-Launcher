@@ -643,54 +643,105 @@ def set_mesh_index_hidden(name, hide, gdir, log=print):
     return oe.apply_dram(dram, meta, IFF, gdir, log)
 
 
-# The bottom teal/cyan "back glow" bar = the glow_cylinder_color mesh (a complex INDEXED glow,
-# not a flat color-bar quad — see project_overlay_scene_roster). Index-buffer zeroing alone was a
-# no-op in-game (2026-07-22), which means the draw doesn't consume the file index buffer — most
-# likely a runtime-instanced/tinted draw. So the hide now ALSO zeros the mesh's VERTEX buffer in
-# the same write: if the renderer regenerates its own indices but still fetches the stored
-# vertices, collapsing every vertex to the origin makes all triangles degenerate (zero area →
-# nothing drawn) and zeros every vertex colour/alpha (an additive glow then contributes nothing).
-# If BOTH buffers zeroed STILL leaves the bar on screen, the draw is fully runtime-instanced and
-# only an XEX draw-skip patch will remove it. Both edits are reversible via byte backups.
-_TEAL_MESH = "glow_cylinder_color"
+# ── Bottom cyan/teal bar hide = PER-VERTEX ALPHA (cracked + in-game VERIFIED 2026-07-24) ─────────
+# The bottom bar is NOT the glow_cylinder_color mesh, and it isn't a named scene mesh at all — it's
+# drawn from a SHARED overlay geometry pool (that's why every named-mesh index/vertex hide was a
+# no-op). Its pixel shader computes final alpha = interp.w * c3.w * c4.w = vertexAlpha * 1 * 1, i.e.
+# the alpha is a PER-VERTEX byte in the vertex buffer (28-byte vertex: pos xyz @+0, RGBA color
+# @+12 in ARGB order, uv @+20). RenderDoc showed the bar = index-buffer indices 46..61 (16 verts;
+# the "256-stride" index values were the VS 8-in-16 endian byteswap of 46,47,48…). Those 16 verts
+# live at file offset 0x215690 (=vertex idx46) in the DECOMPRESSED blob0. Zeroing the alpha byte
+# (vertex+12) of all 16 → interp.w=0 → the bar is fully transparent. VERIFIED in-game.
+# We self-relocate by the alpha-independent RGB fingerprint + the idx46 position so the edit still
+# works after other in-place blob edits (and is detectable whether or not it's already hidden).
+# Full method write-up: docs/15_renderdoc_mesh_editing.md.
+_BAR_VB_HINT   = 0x215690      # decompressed-blob0 offset of bar vertex idx46
+_BAR_STRIDE    = 28            # 7 dwords per vertex
+_BAR_NVERTS    = 16           # indices 46..61
+_BAR_ALPHA_OFF = 12           # ARGB color dword @+12 → alpha is its first byte
+# RGB (bytes +13..+15), alpha-independent, for verts idx46..61:
+_BAR_RGB = ["000000","000000","ffffff","ffffff","ffffff","ffffff","000000","000000",
+            "000000","ffffff","ffffff","000000","000000","ffffff","ffffff","000000"]
+_BAR_V0_XYZ = (37.5109, -172.9844, 2.8940)   # idx46 position, for a strong (tolerant) anchor
+
+
+def _bar_base(dram):
+    """Offset (in decompressed blob0) of bar vertex idx46, or None. Validates by the 16-vertex RGB
+    fingerprint + the idx46 position, so it stays correct if the blob shifts and works whether the
+    bar is currently hidden (alpha 0) or shown."""
+    def ok(base):
+        if base < 0 or base + _BAR_NVERTS * _BAR_STRIDE > len(dram):
+            return False
+        for k, rgb in enumerate(_BAR_RGB):
+            o = base + k * _BAR_STRIDE + _BAR_ALPHA_OFF + 1     # +1 → skip alpha, read RGB
+            if dram[o:o + 3].hex() != rgb:
+                return False
+        try:
+            x, y, z = struct.unpack_from(">3f", dram, base)
+        except struct.error:
+            return False
+        return (abs(x - _BAR_V0_XYZ[0]) < 1.0 and abs(y - _BAR_V0_XYZ[1]) < 1.0
+                and abs(z - _BAR_V0_XYZ[2]) < 1.0)
+    if ok(_BAR_VB_HINT):
+        return _BAR_VB_HINT
+    for base in range(0, len(dram) - _BAR_NVERTS * _BAR_STRIDE, 4):   # relocate if the hint moved
+        if ok(base):
+            return base
+    return None
+
+
+def _bar_alpha_offsets(dram):
+    b = _bar_base(dram)
+    if b is None:
+        return None
+    return [b + k * _BAR_STRIDE + _BAR_ALPHA_OFF for k in range(_BAR_NVERTS)]
+
+
+def _bar_backup(gdir):
+    return Path(gdir) / "scoreclock_barvertexalpha.json"
 
 
 def teal_bar_hidden(gdir):
-    return (mesh_vertexbuf_hidden(_TEAL_MESH, gdir)
-            or mesh_index_hidden(_TEAL_MESH, gdir))
+    """True if the bottom bar's per-vertex alpha is currently all zero (bar transparent)."""
+    dram, _ = oe.load_dram(IFF, gdir)
+    offs = _bar_alpha_offsets(bytes(dram))
+    if not offs:
+        return False
+    return all(dram[o] == 0 for o in offs)
 
 
 def set_teal_bar_hidden(hide, gdir, log=print):
-    """Collapse (or restore) BOTH the index and vertex buffers of the cyan bar in one apply_dram
-    pass — the strongest file-side hide. See the note above for why both are needed."""
-    name = _TEAL_MESH
+    """Hide (zero) or restore the bottom cyan bar's 16 per-vertex alpha bytes. Reversible via a
+    one-time JSON backup of the original bytes. In-place blob0 edit via apply_dram."""
+    import json
     dram, meta = oe.load_dram(IFF, gdir)
-    ir = _mesh_index_range(bytes(dram), name)
-    vr = _mesh_vertexbuf_range(bytes(dram), name)
-    if (not ir or ir[1] <= ir[0]) and (not vr or vr[1] <= vr[0]):
-        raise ValueError(f"{name}: neither index nor vertex buffer found")
-    ib, vbk = _mesh_backup(gdir, name), _mesh_vb_backup(gdir, name)
+    offs = _bar_alpha_offsets(bytes(dram))
+    if not offs:
+        raise ValueError("bottom bar vertices not found in overlay_static blob0")
+    bpath = _bar_backup(gdir)
     if hide:
-        if ir and ir[1] > ir[0]:
-            if not ib.exists():
-                ib.write_bytes(bytes(dram[ir[0]:ir[1]]))
-            dram[ir[0]:ir[1]] = b"\x00" * (ir[1] - ir[0])
-            log(f"  {name}: index buffer zeroed ({ir[1] - ir[0]} B @0x{ir[0]:X})")
-        if vr and vr[1] > vr[0]:
-            if not vbk.exists():
-                vbk.write_bytes(bytes(dram[vr[0]:vr[1]]))
-            dram[vr[0]:vr[1]] = b"\x00" * (vr[1] - vr[0])
-            log(f"  {name}: vertex buffer zeroed ({vr[1] - vr[0]} B @0x{vr[0]:X}) -> geometry collapsed")
+        if not bpath.exists():
+            bpath.write_text(json.dumps({"stride": _BAR_STRIDE, "alpha_off": _BAR_ALPHA_OFF,
+                                         "backup": [[o, dram[o]] for o in offs]}))
+        for o in offs:
+            dram[o] = 0
+        log(f"  bottom bar: zeroed alpha on {len(offs)} vertices @0x{offs[0]:X}.. -> transparent")
     else:
-        if ir and ib.exists():
-            orig = ib.read_bytes()
-            dram[ir[0]:ir[0] + len(orig)] = orig
-            log(f"  {name}: index buffer restored")
-        if vr and vbk.exists():
-            orig = vbk.read_bytes()
-            dram[vr[0]:vr[0] + len(orig)] = orig
-            log(f"  {name}: vertex buffer restored")
+        if bpath.exists():
+            for o, v in json.loads(bpath.read_text())["backup"]:
+                dram[o] = v
+            log("  bottom bar: per-vertex alpha restored from backup")
+        else:                                          # no backup → restore stock opaque alphas
+            stock = [255, 0, 255, 0, 255, 0, 255, 0, 255, 255, 255, 255, 0, 0, 0, 0]
+            for o, v in zip(offs, stock):
+                dram[o] = v
+            log("  bottom bar: per-vertex alpha restored to stock (no backup found)")
     return oe.apply_dram(dram, meta, IFF, gdir, log)
+
+
+# Back-compat aliases (clearer names for the vertex-alpha mechanism).
+bar_vertexalpha_hidden = teal_bar_hidden
+set_bar_vertexalpha_hidden = set_teal_bar_hidden
 
 
 # The scorebug "2K" logo (grey backdrop + branding) = the logo_2k_mesh geometry. Hidden the SAME

@@ -3998,7 +3998,9 @@ class App(Tk):
                   "Conflicts (same item changed both ends) are previewed so you choose which to keep.\n"
                   "• Audio Names = just naming/category/sample-rate (small, git-friendly JSON).\n"
                   "• Mod Pack = everything: audio names + replacement WAVs + replacement textures "
-                  "(compressed .n2kpack). Imports stage into Modified — review, then Patch.")
+                  "+ roster edits (team colours / arena names / team names). Audio & textures stage "
+                  "into Modified (review, then Patch); roster edits apply straight onto your "
+                  "Roster.ROS so you can share them without shipping your players/ratings.")
         ).grid(row=13, column=0, columnspan=3, sticky=W, pady=(2, 8))
         share = ttk.Frame(outer); share.grid(row=14, column=0, columnspan=3, sticky=W)
         ttk.Button(share, text="Export Audio Names…", command=self._export_names).pack(side=LEFT, padx=(0, 4))
@@ -4064,7 +4066,7 @@ class App(Tk):
         v_type = StringVar(value="All"); v_team = StringVar(value="All"); v_cat = StringVar(value="All")
         fb = ttk.Frame(dlg, padding=(12, 0, 12, 6)); fb.pack(fill=X)
         ttk.Label(fb, text="Type:").pack(side=LEFT)
-        ttk.Combobox(fb, textvariable=v_type, values=["All", "Audio", "Texture"],
+        ttk.Combobox(fb, textvariable=v_type, values=["All", "Audio", "Texture", "Roster"],
                      state="readonly", width=9).pack(side=LEFT, padx=(3, 12))
         ttk.Label(fb, text="Team:").pack(side=LEFT)
         ttk.Combobox(fb, textvariable=v_team, values=teams, state="readonly",
@@ -4085,11 +4087,15 @@ class App(Tk):
 
         def _group_of(i):
             it = items[i]
+            if it["section"] == "roster":
+                return ("roster", "Roster")                          # league-wide field groups
             if it["section"] == "tex":
                 return ("tex", str(it["key"]).split("/")[0])          # the .iff folder
             return ("aud", it.get("category") or "Audio")
         def _group_label(g):
             kind, gid = g
+            if kind == "roster":
+                return "Roster (applied over your Roster.ROS)"
             if kind == "tex":
                 return _labelmap.get(gid, gid)                        # friendly asset name
             return f"Audio — {gid}" if gid != "Audio" else "Audio"
@@ -4124,6 +4130,7 @@ class App(Tk):
             it = items[i]; t = v_type.get()
             if t == "Audio" and it["section"] not in ("meta", "audio"): return False
             if t == "Texture" and it["section"] != "tex": return False
+            if t == "Roster" and it["section"] != "roster": return False
             if v_team.get() != "All" and it.get("team", "") != v_team.get(): return False
             if v_cat.get() != "All" and it.get("category", "") != v_cat.get(): return False
             return True
@@ -4204,11 +4211,18 @@ class App(Tk):
             items = mp.local_items(root)
         except Exception as e:
             messagebox.showerror("Export", f"Could not scan modified files:\n{e}"); return
+        ros_path = self._current_roster_path()
+        if ros_path:
+            try:
+                items += mp.local_roster_items(ros_path)     # Team Colours / Arena / Team Names
+            except Exception as e:
+                self._log(f"[modpack] roster scan skipped: {e}")
         if not items:
             messagebox.showinfo("Export Mod Pack",
-                "No modified files to export.\n\nEdit some textures/audio first, then try again."); return
+                "No modified files to export.\n\nEdit some textures/audio (or set a Roster.ROS on the "
+                "Teams tab for roster edits) first, then try again."); return
         sel = self._pick_items_dialog(
-            "Export Mod Pack", "Choose the modified files to include (all checked by default):", items)
+            "Export Mod Pack", "Choose the items to include (all checked by default):", items)
         if sel is None:
             return
         if not sel:
@@ -4219,12 +4233,13 @@ class App(Tk):
             filetypes=[("Mod Pack", "*" + mp.PACK_EXT), ("Zip", "*.zip")])
         if not p: return
         keys = {(it["section"], it["key"]) for it in sel}
-        self._log(f"─── Export Mod Pack ({len(sel)} file(s)) ───")
+        self._log(f"─── Export Mod Pack ({len(sel)} item(s)) ───")
         def work():
             try:
-                res = mp.export_selected(root, p, keys)
+                res = mp.export_selected(root, p, keys, ros_path=ros_path)
                 self._log_q.put(f"Mod Pack: {res['audio_meta']} names, {res['audio_wav']} "
-                                f"audio, {res['textures']} texture(s) → {Path(p).name}")
+                                f"audio, {res['textures']} texture(s), {res['roster']} roster "
+                                f"group(s) → {Path(p).name}")
             except Exception as e:
                 self._log_q.put(f"Export failed: {e}")
         self._run_in_thread(work, op_label="Building Mod Pack…")
@@ -4237,9 +4252,10 @@ class App(Tk):
             filetypes=[("Mod Pack", "*" + mp.PACK_EXT), ("Zip", "*.zip"), ("All", "*.*")])
         if not p: return
         self._log(f"─── Import Mod Pack: {Path(p).name} ───")
+        ros_path = self._current_roster_path()
         def work():
             try:
-                _manifest, items = mp.diff_pack(p, root)
+                _manifest, items = mp.diff_pack(p, root, ros_path=ros_path)
                 self._pending_import = (items, p)
             except Exception as e:
                 self._log_q.put(f"Import failed: {e}"); self._pending_import = None
@@ -4271,16 +4287,24 @@ class App(Tk):
         if not root: return
         decisions = {f'{it["section"]}|{it["key"]}': "theirs" for it in sel if it["status"] == "conflict"}
         try:
-            counts = mp.apply_items(root, sel, decisions, zip_path=zip_path, log=self._log)
+            counts = mp.apply_items(root, sel, decisions, zip_path=zip_path,
+                                    ros_path=self._current_roster_path(), log=self._log)
         except Exception as e:
             messagebox.showerror("Import failed", str(e)); return
         self._reload_audio()
         if getattr(self, "_bank_records", None): self._bank_populate()
         self._log(f"Imported {what}: +{counts['meta']} names, +{counts['audio']} audio, "
-                  f"+{counts['tex']} textures")
+                  f"+{counts['tex']} textures, +{counts['roster']} roster group(s)")
+        roster_note = ("\n\nRoster edits were written straight to your Roster.ROS (backups made) — "
+                       "restart the game to see them." if counts["roster"] else "")
         messagebox.showinfo("Import complete",
-            f"Names: {counts['meta']}   Audio: {counts['audio']}   Textures: {counts['tex']}\n\n"
-            "Replacements are staged in your Extracted folder — review, then Apply All Mods.")
+            f"Names: {counts['meta']}   Audio: {counts['audio']}   Textures: {counts['tex']}   "
+            f"Roster: {counts['roster']}\n\n"
+            "Replacements are staged in your Extracted folder — review, then Apply All Mods."
+            + roster_note)
+        if counts["roster"] and Path(self._v_roster.get().strip() or "x").is_file():
+            try: self._teams_load()          # refresh the Teams grid from the patched save
+            except Exception: pass
 
     def _run_merge(self, items, zip_path, what):
         """Auto-apply NEW items, resolve CONFLICTs via a dialog, then apply. Shared by both
@@ -4299,7 +4323,8 @@ class App(Tk):
         root = self._get_root()
         if not root: return
         try:
-            counts = mp.apply_items(root, items, decisions, zip_path=zip_path, log=self._log)
+            counts = mp.apply_items(root, items, decisions, zip_path=zip_path,
+                                    ros_path=self._current_roster_path(), log=self._log)
         except Exception as e:
             messagebox.showerror("Merge failed", str(e)); return
         kept_theirs = sum(1 for v in decisions.values() if v == "theirs")
@@ -4453,6 +4478,17 @@ class App(Tk):
         ex = p / "NHL2k10_Extracted_Files"
         ex.mkdir(parents=True, exist_ok=True)
         return ex
+
+    def _current_roster_path(self) -> str:
+        """The Roster.ROS a mod pack should read/write, or "" if none is available.
+        Prefers the Teams-tab field, then the saved config, then auto-discovery."""
+        p = ""
+        try:
+            p = self._v_roster.get().strip()
+        except Exception:
+            p = ""
+        p = p or self.cfg.get("roster_path", "") or self._discover_roster()
+        return p if p and Path(p).is_file() else ""
 
     def _get_game_root(self) -> Path | None:
         r = self.cfg.get("root_path", "")
