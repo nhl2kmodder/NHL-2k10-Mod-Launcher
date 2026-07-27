@@ -70,7 +70,7 @@ def convert_one(task):
     if hires:
         src = Image.open(hires).convert("RGBA")
         img = src if src.size == (512, 512) else src.resize((512, 512), Image.LANCZOS)
-        img = AT._alpha_bleed(img)                       # external cut-out: fill transparent RGB
+        img = AT._alpha_bleed_fast(img)                       # external cut-out: fill transparent RGB
     else:
         img = AT.T.decode(pdec[:0x10000], 256, 256, "DXT4_5", 16, 1, 1, 0).convert("RGBA")
         img = img.resize((512, 512), Image.LANCZOS)      # native: backdrop RGB already sane

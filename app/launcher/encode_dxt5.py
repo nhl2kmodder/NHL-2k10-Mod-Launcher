@@ -92,8 +92,11 @@ def _fit_color(rgb, w=None):
         cov = np.einsum('bij,bik->bjk', d, d)       # (NB,3,3)
     ax = np.tile(np.array([0.577, 0.577, 0.577], np.float32), (NB, 1))
     for _ in range(8):                              # power iteration -> principal colour axis
-        ax = np.einsum('bjk,bk->bj', cov, ax)
-        n = np.linalg.norm(ax, axis=1, keepdims=True); n[n == 0] = 1.0; ax = ax / n
+        #ax = np.einsum('bjk,bk->bj', cov, ax)
+        #n = np.linalg.norm(ax, axis=1, keepdims=True); n[n == 0] = 1.0; ax = ax / n
+        n = np.sqrt((ax ** 2).sum(axis=1, keepdims=True))
+        n[n == 0] = 1.0
+        ax = ax / n
     proj = np.einsum('bij,bj->bi', d, ax)
     pca0 = np.clip(mean[:, 0, :] + ax * proj.max(1)[:, None], 0, 255)
     pca1 = np.clip(mean[:, 0, :] + ax * proj.min(1)[:, None], 0, 255)
@@ -158,11 +161,11 @@ def _fit_bc4_refined(al, iters=3):
         d = np.abs(al[:, :, None] - t[:, None, :]); idx = d.argmin(-1)          # (NB,16)
         return (np.take_along_axis(d, idx[:, :, None], -1)[:, :, 0] ** 2).sum(1), idx
 
-    b0e = np.round(al.max(1)).astype(np.float64)        # min/max baseline (== _fit_alpha)
-    b1e = np.round(al.min(1)).astype(np.float64)
+    b0e = np.round(al.max(1)).astype(np.float32)        # min/max baseline (== _fit_alpha)
+    b1e = np.round(al.min(1)).astype(np.float32)
     best_sse, best_idx = _sse(b0e, b1e)
     best0, best1 = b0e.copy(), b1e.copy()
-    a0, a1 = al.max(1).astype(np.float64), al.min(1).astype(np.float64)
+    a0, a1 = al.max(1).astype(np.float32), al.min(1).astype(np.float32)
     for _ in range(max(1, iters)):                      # LSQ-refine endpoints vs current indices
         _, idx = _sse(a0, a1)
         wa0 = _BC4_WA0[idx]; wa1 = _BC4_WA1[idx]
@@ -179,33 +182,36 @@ def _fit_bc4_refined(al, iters=3):
         best_idx = np.where(win[:, None], idx2, best_idx); best_sse = np.where(win, sse, best_sse)
     return best0.astype(np.int64), best1.astype(np.int64), best_idx.astype(np.int64)
 
+from scipy.ndimage import distance_transform_edt
 
 def _alpha_bleed(rgba, max_passes=64, thresh=0):
-    """Flood the colour of the nearest opaque pixel into see-through pixels (alpha<=thresh)
-    so the DXT colour endpoints / edge texels aren't pulled by arbitrary transparent RGB —
-    this removes the halo/fringe around cut-out logos. Alpha is left untouched; only the
-    RGB of see-through pixels changes. No-op (cheap early-out) on fully-opaque images."""
+    """
+    Flood the colour of the nearest opaque pixel into see-through pixels (alpha <= thresh)
+    using Euclidean Distance Transform (EDT).
+    Replaces slow iterative np.roll loops while preserving the original interface.
+    """
     known = rgba[..., 3] > thresh
     if known.all() or not known.any():
         return rgba.copy()
-    rgb = rgba[..., :3].copy()
-    for _ in range(max_passes):
-        if known.all():
-            break
-        acc = np.zeros_like(rgb); cnt = np.zeros(known.shape, np.float32)
-        for dy, dx in ((-1, 0), (1, 0), (0, -1), (0, 1)):       # 4-connected neighbours
-            ks = np.roll(known, (dy, dx), (0, 1)); cs = np.roll(rgb, (dy, dx), (0, 1))
-            if dy == -1: ks[-1, :] = False                      # kill np.roll wrap-around
-            elif dy == 1: ks[0, :] = False
-            if dx == -1: ks[:, -1] = False
-            elif dx == 1: ks[:, 0] = False
-            acc += cs * ks[..., None]; cnt += ks
-        fill = (~known) & (cnt > 0)
-        rgb[fill] = acc[fill] / cnt[fill][:, None]
-        known = known | fill
-    out = rgba.copy(); out[..., :3] = rgb
+    
+    # Compute nearest opaque neighbor coordinates
+    indices = distance_transform_edt(~known, return_distances=False, return_indices=True)
+    
+    out = rgba.copy()
+    # Fill transparent RGB with color of nearest opaque pixel
+    out[..., :3] = rgba[indices[0], indices[1], :3]
     return out
 
+def _gto_block_vec(bw, bh, log2_bpu):
+    """Vectorized block tile index mapping for DXT1/5, DXN, and DXT5A formats."""
+    bx, by = np.meshgrid(np.arange(bw, dtype=np.int64), np.arange(bh, dtype=np.int64))
+    bx_flat = bx.ravel()
+    by_flat = by.ravel()
+    
+    # Calculate byte offsets using vectorized gto calculation
+    offsets = _gto_vec(bx_flat, by_flat, bw, log2_bpu)
+    bytes_per_block = 1 << log2_bpu
+    return offsets // bytes_per_block
 
 def encode_image(img, levels=0, alpha_aware=True, premultiply=False):
     """PIL RGBA WxH -> game gto-tiled DXT5 bytes ((W//4)*(H//4)*16).
@@ -223,6 +229,13 @@ def encode_image(img, levels=0, alpha_aware=True, premultiply=False):
     if levels:                                      # optional posterize (LZ compressibility)
         step = 256 // levels
         rgba[..., :3] = np.minimum(255, (rgba[..., :3] // step) * step + step // 2)
+    # Clean up sub-pixel alpha noise on smaller UI elements / mips to prevent DXT5 block quantization noise
+    if W <= 256 or H <= 256:
+        alpha_chan = rgba[..., 3]
+        # Snap weak anti-aliasing pixels to clean boundaries
+        alpha_chan = np.where(alpha_chan < 32, 0.0, alpha_chan)
+        alpha_chan = np.where(alpha_chan > 224, 255.0, alpha_chan)
+        rgba[..., 3] = alpha_chan
     if premultiply:                                 # engine convention: premultiplied alpha
         rgba[..., :3] *= rgba[..., 3:4] / 255.0     # transparent -> 0, partial -> colour*alpha
         weighted = False                            # premult 0s are REAL samples -> fit them all
@@ -242,8 +255,15 @@ def encode_image(img, levels=0, alpha_aware=True, premultiply=False):
                                                     # wobbling a feathered cut-out edge
 
     NB = bw * bh
-    ai = (aidx.astype(np.uint64) << (3 * np.arange(16, dtype=np.uint64))[None, :]).sum(1)   # 48-bit
-    ci = (cidx.astype(np.uint64) << (2 * np.arange(16, dtype=np.uint64))[None, :]).sum(1)   # 32-bit
+
+    # Create explicit bit shift vectors using uint64
+    alpha_shifts = (3 * np.arange(16, dtype=np.uint64))[None, :]
+    color_shifts = (2 * np.arange(16, dtype=np.uint64))[None, :]
+
+    # Perform bitwise shift first, then reduce via sum
+    ai = np.bitwise_or.reduce(aidx.astype(np.uint64) << alpha_shifts, axis=1) # 48-bit alpha index bitmask
+    ci = np.bitwise_or.reduce(cidx.astype(np.uint64) << color_shifts, axis=1) # 32-bit color index bitmask
+    
     blk = np.empty((NB, 16), np.uint8)
     blk[:, 0] = a0.astype(np.uint8); blk[:, 1] = a1.astype(np.uint8)
     for k in range(6): blk[:, 2 + k] = (ai >> np.uint64(8 * k)) & np.uint64(0xFF)
@@ -251,8 +271,7 @@ def encode_image(img, levels=0, alpha_aware=True, premultiply=False):
     blk[:, 10] = (p1 >> 8) & 0xFF; blk[:, 11] = p1 & 0xFF
     for k in range(4): blk[:, 12 + k] = (ci >> np.uint64(8 * k)) & np.uint64(0xFF)
 
-    gmap = np.fromiter((T.gto(bx, by, bw, 4) // 16 for by in range(bh) for bx in range(bw)),
-                       dtype=np.int64, count=NB)
+    gmap = _gto_block_vec(bw, bh, 4)
     tiled = np.zeros((max(NB, int(gmap.max()) + 1), 16), np.uint8)   # pow2>=128 wide -> == NB
     tiled[gmap] = blk                               # linear (by*bw+bx) -> gto-tiled slot
     return tiled.reshape(-1).tobytes()
@@ -299,8 +318,7 @@ def encode_image_dxt1(img, alpha_aware=True):
     blk[:, 2] = (q1 >> 8) & 0xFF; blk[:, 3] = q1 & 0xFF          # c1 big-endian
     for k in range(4): blk[:, 4 + k] = (ci >> np.uint64(8 * k)) & np.uint64(0xFF)
 
-    gmap = np.fromiter((T.gto(bx, by, bw, 3) // 8 for by in range(bh) for bx in range(bw)),
-                       dtype=np.int64, count=NB)
+    gmap = _gto_block_vec(bw, bh, 3)
     tiled = np.zeros((max(NB, int(gmap.max()) + 1), 8), np.uint8)    # pow2>=128 wide -> == NB
     tiled[gmap] = blk
     return tiled.reshape(-1).tobytes()
@@ -322,8 +340,7 @@ def encode_image_dxt5a(img):
     blk = np.empty((NB, 8), np.uint8)
     blk[:, 0] = a0.astype(np.uint8); blk[:, 1] = a1.astype(np.uint8)
     for k in range(6): blk[:, 2 + k] = (ai >> np.uint64(8 * k)) & np.uint64(0xFF)
-    gmap = np.fromiter((T.gto(bx, by, bw, 3) // 8 for by in range(bh) for bx in range(bw)),
-                       dtype=np.int64, count=NB)
+    gmap = _gto_block_vec(bw, bh, 3)
     tiled = np.zeros((max(NB, int(gmap.max()) + 1), 8), np.uint8)
     tiled[gmap] = blk
     return tiled.reshape(-1).tobytes()
@@ -348,8 +365,7 @@ def encode_image_dxn(img):
     for k in range(6): blk[:, 2 + k] = (aix >> np.uint64(8 * k)) & np.uint64(0xFF)
     blk[:, 8] = ry0.astype(np.uint8); blk[:, 9] = ry1.astype(np.uint8)
     for k in range(6): blk[:, 10 + k] = (aiy >> np.uint64(8 * k)) & np.uint64(0xFF)
-    gmap = np.fromiter((T.gto(bx, by, bw, 4) // 16 for by in range(bh) for bx in range(bw)),
-                       dtype=np.int64, count=NB)
+    gmap = _gto_block_vec(bw, bh, 4)
     tiled = np.zeros((max(NB, int(gmap.max()) + 1), 16), np.uint8)
     tiled[gmap] = blk
     return tiled.reshape(-1).tobytes()
@@ -377,6 +393,7 @@ def encode_image_linear(img, fmt, tiled=1):
     a = np.frombuffer(img.convert("RGBA").tobytes(), np.uint8).reshape(H * W, 4).astype(np.uint32)
     R, G, B, A = a[:, 0], a[:, 1], a[:, 2], a[:, 3]
     bpu = _LINEAR_BPU[fmt]
+
     if fmt == "8888":                                   # bytes [A,R,G,B]
         px = np.stack([A, R, G, B], 1).astype(np.uint8)
     elif fmt == "8":                                    # grayscale (R)
@@ -391,12 +408,22 @@ def encode_image_linear(img, fmt, tiled=1):
         else:  # 1555
             w = ((A >= 128).astype(np.uint32) << 15) | ((R >> 3) << 10) | ((G >> 3) << 5) | (B >> 3)
         px = np.stack([(w >> 8) & 0xFF, w & 0xFF], 1).astype(np.uint8)
+
     if not tiled:
         return px.reshape(-1).tobytes()
-    bl = bpu.bit_length() - 1
+
+    # Calculate bit shift from byte size safely
+    bl = int(np.log2(bpu)) if bpu > 0 else 0
     ys, xs = np.divmod(np.arange(W * H, dtype=np.int64), W)
     offs = _gto_vec(xs, ys, W, bl)
-    out = np.zeros(max(W * H * bpu, int(offs.max()) + bpu), np.uint8)   # pow2>=32 -> == W*H*bpu
+
+    # Ensure buffer size accounts for pitch-padding and total mapped offset
+    max_offset = int(offs.max()) + bpu
+    expected_size = W * H * bpu
+    out_size = max(expected_size, max_offset)
+
+    out = np.zeros(out_size, np.uint8)
     for k in range(bpu):
         out[offs + k] = px[:, k]
-    return out.tobytes()
+        
+    return out[:expected_size].tobytes() if out_size > expected_size else out.tobytes()

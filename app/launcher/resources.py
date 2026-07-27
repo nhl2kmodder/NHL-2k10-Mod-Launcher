@@ -37,6 +37,7 @@ REQUIRED = (
     "frontend_logo_tile_map.json",   # Front-end tab: logo atlas tiles
     "team_fields.json",              # Teams tab: team-record field defs (seed for %APPDATA% copy)
     "jersey_map.json",               # IFF tab: jersey -> its front-end twin (one edit, both copies)
+    "live_offsets.json",             # IFF tab: content-matched tail-texture offsets (rink/arena/led/…)
 )
 
 

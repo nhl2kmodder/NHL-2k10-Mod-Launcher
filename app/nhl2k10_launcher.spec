@@ -32,6 +32,7 @@ _required = [
     'team_iff_catalog.csv', 'discovered_assets.csv', 'portrait_key_map.json',
     'global_iff_runtime_map.csv', 'fe_components.json', 'fe_uniform_map.json',
     'frontend_logo_tile_map.json', 'team_fields.json', 'jersey_map.json',
+    'live_offsets.json',
 ]
 _have = {p.name for p in data_src.glob('*') if p.is_file()} if data_src.is_dir() else set()
 _gone = [f for f in _required if f not in _have]
@@ -57,6 +58,16 @@ try:
 except Exception:
     _ort_binaries = []
 
+# scipy >= 1.18 vendors array_api_compat under scipy._external and imports its submodules
+# dynamically (scipy._lib._array_api -> ...array_api_compat.numpy.fft), which static analysis and
+# the hooks-contrib scipy hook (as of 2026.5) miss — the built exe then dies at startup with
+# ModuleNotFoundError. Collect the whole vendored tree explicitly.
+try:
+    from PyInstaller.utils.hooks import collect_submodules
+    _scipy_hidden = collect_submodules('scipy._external')
+except Exception:
+    _scipy_hidden = []
+
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
     [str(HERE / 'nhl2k10_launcher.py')],
@@ -69,7 +80,8 @@ a = Analysis(
                    'bank_parser', 'audio_names', 'modpack', 'xenia_mem', 'live_capture', 'f0985030',
                    'goalie_equipment', 'customasset', 'roster_editor', 'ros_file', 'ros_editor_gui',
                    'ros_live_editor', 'team_colors', 'team_fields', 'team_fields_gui', 'colorpick', 'jerseys',
-                   'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime'],
+                   'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime']
+                  + _scipy_hidden,
     hookspath=[],
     runtime_hooks=[],
     excludes=[],

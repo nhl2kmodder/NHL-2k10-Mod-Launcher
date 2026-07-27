@@ -16,13 +16,23 @@ Field map (memory record, from the player generator Function_83FE66F0 + accessor
 Add your own fields (offset + type + bit range) to map ratings/jersey by experiment — the raw hex view
 helps. Requires the game at a roster-loaded state (main menu / roster screen).
 """
-import sys, struct
+import sys, struct, threading
 from pathlib import Path
 import tkinter as tk
 from tkinter import ttk, messagebox
 sys.path.insert(0, str(Path(__file__).parent))
 import goalie_equipment as GE
 import xenia_mem as XM
+# archive_textures must be the SAME module instance the launcher configured (set_game_dir), so
+# prefer the package import; fall back to the path-hack import for standalone runs.
+try:
+    from launcher import archive_textures as AT
+except ImportError:
+    import archive_textures as AT
+try:
+    from PIL import Image, ImageTk
+except ImportError:
+    Image = ImageTk = None
 
 # Enum maps (value -> display string). The editor writes the value; the user only sees the string.
 POS_MAP     = {0: "G", 1: "D", 2: "LW", 3: "RW", 4: "C"}
@@ -205,6 +215,14 @@ class LiveEditorFrame(ttk.Frame):
         self._plist.bind("<<TreeviewSelect>>", self._on_player)
 
         right = ttk.Frame(pane); pane.add(right, weight=3)
+        pf = ttk.LabelFrame(right, text="Portrait — as currently in the game files (mods included)")
+        pf.pack(fill=tk.X, padx=6, pady=(4, 0))
+        self._port_img = ttk.Label(pf, text="—", anchor=tk.CENTER)
+        self._port_img.pack(side=tk.LEFT, padx=4, pady=4)
+        self._port_info = ttk.Label(pf, text="select a player", foreground="#888", justify=tk.LEFT)
+        self._port_info.pack(side=tk.LEFT, padx=8)
+        self._port_photo = None          # PhotoImage ref (tk shows nothing without it)
+        self._port_token = None          # stale-decode guard for the background loader
         fw = ttk.LabelFrame(right, text="Fields (Enter to write to the game)")
         fw.pack(fill=tk.BOTH, expand=True, padx=6, pady=4)
         cv = tk.Canvas(fw, highlightthickness=0)
@@ -260,7 +278,7 @@ class LiveEditorFrame(ttk.Frame):
         sel = self._plist.selection()
         if not sel:
             return
-        self.sel = int(sel[0]); self._render_form(); self._render_hex()
+        self.sel = int(sel[0]); self._render_form(); self._render_hex(); self._update_portrait()
 
     def _render_form(self):
         from collections import OrderedDict
@@ -301,6 +319,57 @@ class LiveEditorFrame(ttk.Frame):
             messagebox.showerror("Write", err)
         var.set(str(self.roster.get(self.sel, f)))
         self._render_hex()
+        if f["name"] == "Portrait ID":
+            self._update_portrait()
+
+    _PORT_SIZE = 148
+
+    def _update_portrait(self):
+        """Load the portrait the selected player's Portrait ID resolves to, from the CURRENT game
+        files (so replaced portraits show as replaced), and display it. Decodes off-thread — the
+        first call reads the whole 66MB pack."""
+        if self.sel is None or not self.roster:
+            return
+        f = next(f for f in KNOWN_FIELDS if f["name"] == "Portrait ID")
+        key = int(self.roster.get(self.sel, f))
+        self._port_token = tok = object()
+        if ImageTk is None:
+            self._port_info.config(text="Pillow is not installed — no preview", foreground="#e06060")
+            return
+        self._port_info.config(text=f"Portrait ID {key} — loading…", foreground="#888")
+
+        def work():
+            img = None; err = None; blob = None
+            try:
+                blob = AT.portrait_key_blob_map().get(key)
+                if blob is None:
+                    err = f"Portrait ID {key}: no portrait with this ID"
+                else:
+                    img = AT.decode_portrait_current(blob)
+                    if img is None:
+                        err = f"Portrait ID {key} → #{blob}: decode failed"
+            except Exception as e:
+                err = str(e)
+
+            def done():
+                if tok is not self._port_token:      # a newer selection superseded this decode
+                    return
+                if img is not None:
+                    # keep RGBA: alpha is the head-silhouette mask, so the cut-out renders with
+                    # no backdrop, straight over the panel background
+                    ph = ImageTk.PhotoImage(img.resize((self._PORT_SIZE,) * 2, Image.LANCZOS))
+                    self._port_photo = ph
+                    self._port_img.config(image=ph, text="")
+                    self._port_info.config(text=f"Portrait ID {key} → portrait #{blob}", foreground="#8c8")
+                else:
+                    self._port_photo = None
+                    self._port_img.config(image="", text="—")
+                    self._port_info.config(text=err or "?", foreground="#e0a030")
+            try:
+                self.after(0, done)
+            except tk.TclError:                      # window closed while decoding
+                pass
+        threading.Thread(target=work, daemon=True).start()
 
     def _add_field(self):
         try:
@@ -573,6 +642,15 @@ def open_team_editor(parent):
 
 
 if __name__ == "__main__":
+    # standalone run: the launcher normally calls set_game_dir; pick it up from its config instead
+    try:
+        import json, os
+        cfg = Path(os.environ["APPDATA"]) / "NHL2K10 Mod Launcher" / "nhl2k10_launcher_config.json"
+        r = json.loads(cfg.read_text()).get("root_path")
+        if r:
+            AT.set_game_dir(r)
+    except Exception:
+        pass
     root = tk.Tk(); root.title("NHL 2K10 — Live Roster Editor"); root.geometry("1080x760")
     LiveEditorFrame(root).pack(fill=tk.BOTH, expand=True)
     root.mainloop()

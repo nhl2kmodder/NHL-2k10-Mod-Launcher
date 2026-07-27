@@ -15,6 +15,7 @@ REPLACE  : edited image -> game-order tiled DXT5 (encode_dxt5) -> re-pack the VR
 from __future__ import annotations
 import struct, zlib, re, sys, shutil, csv, json
 import hashlib
+import os
 from collections import OrderedDict
 from pathlib import Path
 
@@ -47,10 +48,11 @@ GAME_DIR = None
 
 def set_game_dir(d):
     """Point the reader at the game-files folder. Call before any read."""
-    global GAME_DIR, _PORTRAIT_PACK, _PORTRAIT_OFFS, _PORTRAIT_KEY_MAP
+    global GAME_DIR, _PORTRAIT_PACK, _PORTRAIT_OFFS, _PORTRAIT_KEY_MAP, _PORTRAIT_CUR
     GAME_DIR = Path(d) if d else None
     _TREE_CACHE.clear()                 # every cache below is keyed to the old folder
     _PORTRAIT_PACK = _PORTRAIT_OFFS = _PORTRAIT_KEY_MAP = None
+    _PORTRAIT_CUR = None
 
 
 def _dir(d=None):
@@ -79,6 +81,9 @@ DISCOVERED_CSV = R.data_path("discovered_assets.csv")
 # Live-capture catalog (live_capture.py output): real file offsets for "loader-repacked"
 # packs (global.iff, …) whose sub-texture offsets aren't stored in the file. Optional.
 LIVE_CATALOG = _PROJ / "live_capture" / "live_offsets.json"
+# Shipped-with-the-launcher copy (arena_trace.py captures we distribute). Merged UNDER the user's
+# local catalog by _live_catalog(); offsets are install-independent so this "just works" for anyone.
+LIVE_CATALOG_BUNDLED = R.data_path("live_offsets.json")
 MAGIC = bytes([0x0e, 0x48, 0x37, 0xc3])
 ARCS = ("0A", "0B", "1A", "1B")
 _BE = lambda b, o: struct.unpack_from(">I", b, o)[0]
@@ -247,42 +252,23 @@ def is_edited(root, file_path):
     return _sha1(file_path) != rec
 
 
-def folders_with_edits(root):
-    """Set of edit-folder keys (posix, matching asset_iff()) that contain at least one file the user
-    has actually CHANGED since extraction. Used to gate Apply-All's expensive per-asset decompress to
-    only edited assets — the old scan called list_textures() (a full pack decompress, up to ~13 MB for
-    a rink) on EVERY catalog asset just to look for edits, so opening the dialog took minutes.
-    Extracted/ files are compared against the extract-time hash manifest (loaded once); legacy
-    Modified//Original/ files have no manifest entry and always count as edits."""
-    root = Path(root)
-    tex = root / "Textures"
-    ex_root = extracted_root(root)
-    try:
-        ex_res = ex_root.resolve()
-    except Exception:
-        ex_res = ex_root
-    manifest = _load_manifest(ex_root)
-    out = set()
-    for base in ("Extracted", "Modified", "Original"):
-        bd = tex / base
-        if not bd.is_dir():
-            continue
-        for f in bd.rglob("*"):
-            if f.suffix.lower() not in (".dds", ".png"):
-                continue
-            key = f.parent.relative_to(bd).as_posix()
-            if key in out:
-                continue                       # this folder already has a known edit — skip the hash
-            edited = True                      # legacy / hand-dropped (no manifest entry) => edit
-            try:
-                rec = manifest.get(f.resolve().relative_to(ex_res).as_posix())
-                if rec is not None:
-                    edited = (_sha1(f) != rec)
-            except Exception:
-                edited = True
-            if edited:
-                out.add(key)
-    return out
+def folders_with_edits(extracted_dir: Path) -> list[Path]:
+    """
+    Scans only the Extracted/ directory for valid edit targets.
+    Avoids multi-directory comparison overhead and skips deep unused subtrees.
+    """
+    if not extracted_dir.exists():
+        return []
+
+    edited_folders = []
+    
+    # Efficient os.scandir walk through Extracted/
+    for root, dirs, files in os.walk(extracted_dir):
+        # Filter for relevant folders containing image/manifest edits
+        if any(f.endswith((".png", ".dds", ".json")) for f in files):
+            edited_folders.append(Path(root))
+            
+    return edited_folders
 
 
 def revert_extract(root, name, rec_list=None, clean_dir=None, log=print):
@@ -960,13 +946,23 @@ _LIVE_CACHE = None
 
 
 def _live_catalog():
-    """Lazy-load the live-capture catalog (list of {iff,file_offset,w,h,fmt,...})."""
+    """Lazy-load the live-capture catalog (list of {iff,file_offset,w,h,fmt,...}).
+
+    Two sources, merged: the BUNDLED catalog shipped in launcher/data/live_offsets.json (the
+    offsets we captured — install-independent because they're content-matched into the retail
+    archives, which are byte-identical on every disc) PLUS the user's own LOCAL captures at
+    <game>/live_capture/live_offsets.json. Local entries win on (iff,file_offset) collisions, so
+    a user can extend coverage (new arenas/screens) without losing the shipped data."""
     global _LIVE_CACHE
     if _LIVE_CACHE is None:
-        try:
-            _LIVE_CACHE = json.loads(Path(LIVE_CATALOG).read_text())
-        except Exception:
-            _LIVE_CACHE = []
+        merged = {}
+        for src in (LIVE_CATALOG_BUNDLED, LIVE_CATALOG):   # bundled first, local overrides/extends
+            try:
+                for e in json.loads(Path(src).read_text()):
+                    merged[(e["iff"], e["file_offset"])] = e
+            except Exception:
+                pass
+        _LIVE_CACHE = list(merged.values())
     return _LIVE_CACHE
 
 
@@ -1062,6 +1058,12 @@ def _portrait_offsets(clean_dir=None):
     if _PORTRAIT_OFFS is not None:
         return _PORTRAIT_OFFS
     data, size = _portrait_pack(clean_dir)
+    _PORTRAIT_OFFS = _walk_portrait_offsets(data, size)
+    return _PORTRAIT_OFFS
+
+
+def _walk_portrait_offsets(data, size):
+    """Header-only walk of a portrait pack -> per-portrait blob metadata (see _portrait_offsets)."""
     offs = []
     o = data.find(MAGIC)
     while 0 <= o and o + 20 <= len(data) and o < size:
@@ -1074,7 +1076,6 @@ def _portrait_offsets(clean_dir=None):
         if dec_sz >= _PORTRAIT_MIP0:
             offs.append({"off": o, "tot": tot, "dec_sz": dec_sz, "wp": wp, "codec": codec})
         o += tot
-    _PORTRAIT_OFFS = offs
     return offs
 
 
@@ -1090,8 +1091,11 @@ def decode_portrait(name, index, clean_dir=None):
     offs = _portrait_offsets(clean_dir)
     if not (0 <= index < len(offs)):
         return None
-    b = offs[index]
     data, _size = _portrait_pack(clean_dir)
+    return _decode_portrait_blob(data, offs[index])
+
+
+def _decode_portrait_blob(data, b):
     try:
         dec = DF.decompress_codec(data[b["off"] + 20:b["off"] + b["tot"]],
                                   b["dec_sz"], (1 << b["wp"]) - 1, b["wp"])
@@ -1099,6 +1103,43 @@ def decode_portrait(name, index, clean_dir=None):
         return T.decode(_dxt_endian(dec[:_PORTRAIT_MIP0]), 256, 256, "DXT4_5", 16, 1, 1, 0).convert("RGBA")
     except Exception:
         return None
+
+
+_PORTRAIT_CUR = None                     # (cache_key, data, offs) for the CURRENT (modded) pack
+
+
+def _portrait_pack_current():
+    """(data, offs) for disc_b9610aac.iff read from the CURRENT game files — no .orig preference,
+    so applied portrait mods are visible. Replacements splice blobs in place, so blob ORDER (and
+    thus portrait indices / the key->blob map) matches the clean pack even after edits. Cached;
+    invalidated when the archive file or the asset's TOC location changes."""
+    global _PORTRAIT_CUR
+    loc = resolve("disc_b9610aac.iff", None)
+    if not loc:
+        return b"", []
+    arc, off, size, _idx, _f3 = loc
+    p = _arc_file(None, arc)
+    try:
+        key = (str(p), p.stat().st_mtime_ns, off, size)
+    except OSError:
+        return b"", []
+    if _PORTRAIT_CUR and _PORTRAIT_CUR[0] == key:
+        return _PORTRAIT_CUR[1], _PORTRAIT_CUR[2]
+    with open(p, "rb") as f:
+        f.seek(off)
+        data = f.read(size)
+    offs = _walk_portrait_offsets(data, size)
+    _PORTRAIT_CUR = (key, data, offs)
+    return data, offs
+
+
+def decode_portrait_current(index):
+    """Decode portrait `index` from the CURRENT game files (mods applied) -> PIL RGBA, or None.
+    Same index space as decode_portrait; different pixels wherever a portrait was replaced."""
+    data, offs = _portrait_pack_current()
+    if not (0 <= index < len(offs)):
+        return None
+    return _decode_portrait_blob(data, offs[index])
 
 
 _PORTRAIT_KEY_MAP = None
@@ -1152,6 +1193,27 @@ def portrait_key_blob_map(clean_dir=None):
     _PORTRAIT_KEY_MAP = key_blob
     return key_blob
 
+import numpy as np
+from scipy.ndimage import distance_transform_edt
+
+def _alpha_bleed_fast(rgb: np.ndarray, alpha: np.ndarray, threshold: int = 10) -> np.ndarray:
+    """
+    Fills transparent/semi-transparent pixels with the color of the nearest fully opaque pixel.
+    Replaces iterative roll loops with a fast Exact Euclidean Distance Transform.
+    """
+    mask = alpha >= threshold  # Opaque/valid pixels
+    
+    # If image is entirely transparent or entirely opaque, return original RGB
+    if not np.any(mask) or np.all(mask):
+        return rgb
+
+    # Find coordinates of the nearest opaque pixel for every pixel in the image
+    indices = distance_transform_edt(~mask, return_distances=False, return_indices=True)
+    
+    # Map the nearest opaque colors to the transparent regions
+    bled_rgb = rgb[indices[0], indices[1]]
+    
+    return bled_rgb
 
 def _alpha_bleed(img, iters=16):
     """Dilate opaque RGB outward into the fully-transparent region (edge-bleed / alpha-fill). The
@@ -1208,24 +1270,33 @@ def _unmatte(img):
     a[part, :3] = np.clip((a[part, :3] - c[None, :] * (1 - w)) / np.maximum(w, 1.0 / 255), 0, 255)
     return Image.fromarray(a.astype(np.uint8), "RGBA")
 
+def _premult_resize(img: Image.Image, size: tuple[int, int]) -> Image.Image:
+    """Resizes an RGBA image using premultiplied alpha downscaling.
+    Prevents black border bleeding and DXT5 quantization noise on small UI mips.
+    """
+    if img.size == size:
+        return img.copy()
 
-def _premult_resize(img, size):
-    """Resize straight-alpha RGBA in PREMULTIPLIED space. Straight per-channel resampling mixes
-    the transparent region's RGB (matte/backdrop) into every edge pixel; premultiplying first
-    weights RGB by coverage so only visible colour survives. Alpha uses a non-ringing filter
-    (BILINEAR area-average) — Lanczos overshoot on a near-binary mask sprays partial-alpha
-    speckle outside the silhouette, which the game magnifies into the chunky fringe."""
-    if img.size == tuple(size):
-        return img.convert("RGBA")
-    a = np.asarray(img.convert("RGBA")).astype(np.float32)
-    al = a[..., 3]
-    pm = a[..., :3] * (al[..., None] / 255.0)
-    ch = [np.asarray(Image.fromarray(pm[..., c], "F").resize(size, Image.LANCZOS), np.float32)
-          for c in range(3)]
-    al2 = np.clip(np.asarray(Image.fromarray(al, "F").resize(size, Image.BILINEAR), np.float32), 0, 255)
-    rgb = np.clip(np.stack(ch, -1) * 255.0 / np.maximum(al2[..., None], 1.0), 0, 255)
-    out = np.concatenate([rgb, al2[..., None]], -1).astype(np.uint8)
-    return Image.fromarray(out, "RGBA")
+    # Convert PIL Image to float32 NumPy array
+    arr = np.array(img.convert("RGBA"), dtype=np.float32)
+
+    # 1. Premultiply RGB channels by Alpha
+    alpha_norm = arr[..., 3:4] / 255.0
+    arr[..., :3] *= alpha_norm
+
+    # 2. Resample in premultiplied space
+    pm_img = Image.fromarray(arr.astype(np.uint8), mode="RGBA")
+    resized_pm = pm_img.resize(size, Image.Resampling.LANCZOS)
+
+    # 3. Un-premultiply back to Straight RGBA
+    res_arr = np.array(resized_pm, dtype=np.float32)
+    a_res = res_arr[..., 3:4]
+    mask = a_res[..., 0] > 0
+
+    # Avoid division by zero on fully transparent pixels
+    res_arr[..., :3][mask] /= (a_res / 255.0)[mask]
+
+    return Image.fromarray(np.clip(res_arr, 0, 255).astype(np.uint8), mode="RGBA")
 
 
 def _feather_alpha(img, sigma):
@@ -1324,10 +1395,19 @@ def _native_backdrop_plate(index, clean_dir=None):
     subject = a[..., 3] > 0
     if not subject.any():
         return Image.fromarray(a[..., :3].astype(np.uint8), "RGB")
+        
     inv = a.copy()
     inv[..., 3] = np.where(subject, 0.0, 255.0)          # "opaque" = the backdrop region
-    plate = _alpha_bleed(Image.fromarray(inv.astype(np.uint8), "RGBA"), iters=192)
-    pr = np.asarray(plate.convert("RGBA")).astype(np.float32)[..., :3]
+    
+    # Extract RGB and Alpha channels as uint8 arrays for the fast alpha bleed
+    inv_uint8 = inv.astype(np.uint8)
+    rgb = inv_uint8[..., :3]
+    alpha = inv_uint8[..., 3]
+    
+    # Fast Euclidean Distance Transform bleed (replaces slow iterative rolling)
+    bled_rgb = _alpha_bleed_fast(rgb, alpha)
+    
+    pr = bled_rgb.astype(np.float32)
     from PIL import ImageFilter
     bl = np.asarray(Image.fromarray(pr.astype(np.uint8), "RGB")
                     .filter(ImageFilter.GaussianBlur(6)), np.float32)
@@ -1342,7 +1422,16 @@ def _portrait_level(src, size, plate=None):
     feather the mask to native width. The result is structurally a native studio photo — valid
     colour on the whole canvas — so mip levels below it are made by plain straight halving."""
     im = _premult_resize(src, size)
-    im = _alpha_bleed(im)
+    
+    # Convert PIL Image to RGB and Alpha arrays
+    arr = np.array(im.convert("RGBA"), dtype=np.uint8)
+    rgb = arr[..., :3]
+    alpha = arr[..., 3]
+    
+    # Bleed RGB into transparent regions
+    arr[..., :3] = _alpha_bleed_fast(rgb, alpha)
+    im = Image.fromarray(arr, mode="RGBA")
+    
     if plate is not None:
         a = np.asarray(im.convert("RGBA")).astype(np.float32)
         p = np.asarray(plate.convert("RGB").resize(size, Image.BILINEAR), np.float32)
@@ -1796,6 +1885,22 @@ def list_textures(name: str, clean_dir: Path = None):
         return fe_component_records(name)
     _vram, recs = _load_tree(name, clean_dir)
     cat = catalog_records(name)
+    # Multi-sub-package assets (rink_*/arena_presentation_*/led_*/…): the formal count@0x20 tree
+    # covers only the FIRST sub-package; the tail textures are appended by the _extra_fetch_records
+    # HEURISTIC (packing="scatter") which assumes absolute VRAM offsets and so MISLOCATES them (they
+    # decode as noise). When a live capture exists (arena_trace.py content-matched each resident
+    # texture to its true file offset), replace ONLY those scatter records with the catalog's
+    # corrected offsets — formal records (and their indices/edits) stay untouched. No-op without a
+    # capture, so current behavior is unchanged.
+    if cat and any(r.get("packing") == "scatter" for r in recs):
+        formal = [r for r in recs if r.get("packing") != "scatter"]
+        formal_offs = {r["vram_off"] for r in formal}
+        tail = [c for c in cat if c["vram_off"] not in formal_offs]
+        if tail:
+            merged = formal + sorted(tail, key=lambda c: c["vram_off"])
+            for i, r in enumerate(merged):
+                r["index"] = i
+            return merged
     if len(cat) > len(recs):
         return cat
     return recs or cat
@@ -1905,7 +2010,7 @@ def _team_asset_folder(name: str):
 
 
 def asset_iff(name: str) -> str:
-    """The folder for this asset under Original/ & Modified/. Grouped layout:
+    """The folder for this asset under Extracted/. Grouped layout:
       logo_<code>.iff                    -> Logos/            (file <code>.dds)
       uniform[_base]_<code>_<kit>.iff    -> Uniform/<TEAM>/<KIT>/
       jersey-decal component             -> Uniform/<TEAM>/<KIT>/  (decals / decals_normal)

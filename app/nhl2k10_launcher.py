@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """
-NHL 2k10 Mod Launcher  —  Audio + Textures + Arena Music
+NHL 2k10 Mod Launcher — Audio + Textures + Arena Music
 Unified modding tool for NHL 2k10 (Xbox 360 / Xenia)
 """
+
 import hashlib
 import json
 import mmap
@@ -18,14 +19,16 @@ import threading
 import winsound
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
+
+import tkinter as tk
 from tkinter import *
 from tkinter import filedialog, messagebox, simpledialog, ttk
 
 # ── Module path setup ─────────────────────────────────────────────────────────
 _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE))
-sys.path.insert(0, str(_HERE / "launcher"))     # launcher/* import each other bare (ros_file, …);
-                                                # the frozen build gets this from the .spec pathex.
+sys.path.insert(0, str(_HERE / "launcher"))
+
 from launcher import roster_editor as rost
 from launcher import team_colors as tcol
 from launcher import archive_textures as archtex
@@ -41,11 +44,13 @@ except ImportError:
     _PIL = False
 
 # ═══════════════════════════════════════════════════════════════════════════════
-# Constants
+# Constants & Global Executor
 # ═══════════════════════════════════════════════════════════════════════════════
-
 APP_TITLE   = "NHL 2k10 Mod Launcher"
 APP_VERSION = "1.0.0"
+
+# Shared Thread Pool Executor for background non-blocking tasks
+EXECUTOR = ThreadPoolExecutor(max_workers=os.cpu_count() or 4)
 
 if getattr(sys, "frozen", False):
     _BASE = Path(sys.executable).parent
@@ -56,46 +61,30 @@ else:
 # not next to the exe, so read them from there when frozen.
 _RES = Path(getattr(sys, "_MEIPASS", _BASE))
 
-# Give Windows an explicit app id so the taskbar uses OUR icon (not python's) and groups correctly.
+# Windows explicit App User Model ID
 try:
     import ctypes
     ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("NHL2K10.ModLauncher")
 except Exception:
     pass
 
-import os
-import re
-import tkinter as tk
-from tkinter import messagebox
-
 def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, parent=None):
-    """
-    Checks xenia-canary.config.toml for draw_resolution_scale_x and y.
-    
-    :param xenia_exe_path: Full path to the xenia executable (.exe)
-    :param config_settings: Dictionary or config object storing app settings (e.g., launcher settings)
-    :return: True if launch should proceed, False if user cancelled/closed window prematurely
-    """
-
+    """Checks xenia-canary.config.toml for draw_resolution_scale_x and y."""
     if config_settings is None:
         config_settings = {}
 
-    # Skip if user previously chose "Never"
     if config_settings.get("never_check_xenia_res", False):
         return True
 
-    # Locate config file
     if os.path.isdir(xenia_exe_path):
         xenia_dir = xenia_exe_path
     else:
         xenia_dir = os.path.dirname(xenia_exe_path)
 
     config_path = os.path.join(xenia_dir, "xenia-canary.config.toml")
-
     if not os.path.exists(config_path):
         return True
 
-    # Read config content
     try:
         with open(config_path, "r", encoding="utf-8") as f:
             content = f.read()
@@ -112,22 +101,15 @@ def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, pare
     if scale_x >= 2 and scale_y >= 2:
         return True
 
-    # --- DIALOG CREATION ---
     dialog = tk.Toplevel(parent)
     dialog.title("Resolution Check")
     dialog.resizable(False, False)
+    dialog_width, dialog_height = 450, 160
 
-    dialog_width = 450
-    dialog_height = 160
-
-    # Center over main launcher if parent was provided
     if parent:
         parent.update_idletasks()
-        parent_x = parent.winfo_rootx()
-        parent_y = parent.winfo_rooty()
-        parent_w = parent.winfo_width()
-        parent_h = parent.winfo_height()
-
+        parent_x, parent_y = parent.winfo_rootx(), parent.winfo_rooty()
+        parent_w, parent_h = parent.winfo_width(), parent.winfo_height()
         center_x = int(parent_x + (parent_w / 2) - (dialog_width / 2))
         center_y = int(parent_y + (parent_h / 2) - (dialog_height / 2))
         dialog.geometry(f"{dialog_width}x{dialog_height}+{center_x}+{center_y}")
@@ -139,7 +121,6 @@ def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, pare
         "Texture replacements that have mipmaps will show artifacts if it is lower than 2.\n\n"
         "Would you like to update your resolution to 2?"
     )
-
     label = tk.Label(dialog, text=msg, justify="left", wraplength=420, padx=15, pady=15)
     label.pack(side="top", fill="both", expand=True)
 
@@ -163,7 +144,6 @@ def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, pare
                 f.write(new_content)
         except Exception as e:
             messagebox.showerror("Error", f"Failed to update Xenia config file: {e}")
-
         dialog.destroy()
 
     def on_not_this_time():
@@ -173,18 +153,12 @@ def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, pare
         config_settings["never_check_xenia_res"] = True
         dialog.destroy()
 
-    btn_yes = tk.Button(btn_frame, text="Yes", width=12, command=on_yes)
-    btn_yes.pack(side="left", padx=(20, 5))
-
-    btn_not_now = tk.Button(btn_frame, text="Not this time", width=12, command=on_not_this_time)
-    btn_not_now.pack(side="left", padx=5)
-
-    btn_never = tk.Button(btn_frame, text="Never", width=12, command=on_never)
-    btn_never.pack(side="left", padx=5)
+    tk.Button(btn_frame, text="Yes", width=12, command=on_yes).pack(side="left", padx=(20, 5))
+    tk.Button(btn_frame, text="Not this time", width=12, command=on_not_this_time).pack(side="left", padx=5)
+    tk.Button(btn_frame, text="Never", width=12, command=on_never).pack(side="left", padx=5)
 
     dialog.grab_set()
     dialog.wait_window()
-
     return True
 
 def _resolve_config_path():
@@ -512,9 +486,20 @@ else:
     _NO_WINDOW_FLAGS = 0
     _NO_WINDOW_STARTUPINFO = None
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# Audio Processing Optimizations (Automatic Tempdir Cleanup)
+# ═══════════════════════════════════════════════════════════════════════════════
+if sys.platform == "win32":
+    _NO_WINDOW_FLAGS = subprocess.CREATE_NO_WINDOW
+    _NO_WINDOW_STARTUPINFO = subprocess.STARTUPINFO()
+    _NO_WINDOW_STARTUPINFO.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+    _NO_WINDOW_STARTUPINFO.wShowWindow = subprocess.SW_HIDE
+else:
+    _NO_WINDOW_FLAGS = 0
+    _NO_WINDOW_STARTUPINFO = None
 
 def _run(cmd, **kw):
-    """subprocess.run that never pops a console window on Windows."""
+    """subprocess.run wrapper that prevents popping console windows on Windows."""
     kw["creationflags"] = kw.get("creationflags", 0) | _NO_WINDOW_FLAGS
     kw.setdefault("startupinfo", _NO_WINDOW_STARTUPINFO)
     return subprocess.run(cmd, **kw)
@@ -537,20 +522,20 @@ def make_riff_xma2(raw: bytes, channels: int, sample_rate: int = SAMPLE_RATE) ->
     hdr += b"data" + le32(len(raw))
     return hdr + raw
 
-def decode_xma2(raw: bytes, channels: int, out_wav: Path,
-                xma2encode: str, sample_rate: int = SAMPLE_RATE) -> float:
-    work = Path(tempfile.mkdtemp(prefix="nhl_dec_"))
-    xma  = work / "t.xma"
-    xma.write_bytes(make_riff_xma2(raw, channels, sample_rate))
-    try:
-        r = _run(
-            [xma2encode, str(xma), "/DecodeToPCM", str(out_wav)],
-            capture_output=True, timeout=120)
-        if r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 512:
-            dur, _ = wav_info(out_wav)
-            return dur
-    except Exception:
-        pass
+def decode_xma2(raw: bytes, channels: int, out_wav: Path, xma2encode: str, sample_rate: int = 48000) -> float:
+    """Decodes XMA2 raw bytes to PCM WAV using a temporary directory context manager."""
+    with tempfile.TemporaryDirectory(prefix="nhl_dec_") as tmpdir:
+        work = Path(tmpdir)
+        xma = work / "t.xma"
+        xma.write_bytes(make_riff_xma2(raw, channels, sample_rate))
+
+        try:
+            r = _run([xma2encode, str(xma), "/DecodeToPCM", str(out_wav)], capture_output=True, timeout=120)
+            if r.returncode == 0 and out_wav.exists() and out_wav.stat().st_size > 512:
+                dur, _ = wav_info(out_wav)
+                return dur
+        except Exception:
+            pass
     return 0.0
 
 def _xma2_data_from_riff(xma_data: bytes) -> bytes:
@@ -564,63 +549,57 @@ def _xma2_data_from_riff(xma_data: bytes) -> bytes:
         pos += 8 + csz + (csz & 1)
     raise ValueError("No data chunk in encoded XMA2")
 
-def encode_wav_to_xma2(wav: Path, channels: int, ffmpeg: str, xma2encode: str,
-                       sample_rate: int = SAMPLE_RATE, quality: int = 60) -> bytes:
-    work    = Path(tempfile.mkdtemp(prefix="nhl_enc_"))
-    pcm_wav = work / "pcm.wav"
-    xma_out = work / "out.xma"
-    speaker = "C" if channels == 1 else "F,R"
-    _run(
-        [ffmpeg, "-y", "-i", str(wav),
-         "-acodec", "pcm_s16le", "-ar", str(sample_rate),
-         "-ac", str(channels), str(pcm_wav)],
-        capture_output=True, check=True)
-    def _try(q: int) -> bytes:
-        base = [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out),
-                "/Quality", str(q), "/Speaker", speaker]
-        for cmd in [base + ["/UseLoopPoints"], base,
-                    [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q)]]:
-            if xma_out.exists():
-                xma_out.unlink()
-            r = _run(cmd, capture_output=True)
-            if r.returncode == 0:
-                return _xma2_data_from_riff(xma_out.read_bytes())
-        err = (r.stderr or r.stdout or b"").decode(errors="replace").strip()
-        raise RuntimeError(f"xma2encode failed (rc={r.returncode}): {err or 'no output'}")
-    return _try(quality)
+def encode_wav_to_xma2(wav: Path, channels: int, ffmpeg: str, xma2encode: str, sample_rate: int = 48000, quality: int = 60) -> bytes:
+    """Encodes WAV file to XMA2 with guaranteed temporary file cleanup."""
+    with tempfile.TemporaryDirectory(prefix="nhl_enc_") as tmpdir:
+        work = Path(tmpdir)
+        pcm_wav = work / "pcm.wav"
+        xma_out = work / "out.xma"
+        speaker = "C" if channels == 1 else "F,R"
 
-def encode_wav_to_fit(wav: Path, channels: int, ffmpeg: str, xma2encode: str,
-                      sample_rate: int, max_packets: int, log=None) -> tuple:
-    work    = Path(tempfile.mkdtemp(prefix="nhl_enc_"))
-    pcm_wav = work / "pcm.wav"
-    xma_out = work / "out.xma"
-    speaker = "C" if channels == 1 else "F,R"
-    _run(
-        [ffmpeg, "-y", "-i", str(wav),
-         "-acodec", "pcm_s16le", "-ar", str(sample_rate),
-         "-ac", str(channels), str(pcm_wav)],
-        capture_output=True, check=True)
-    def _try(q: int) -> bytes:
-        base = [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out),
-                "/Quality", str(q), "/Speaker", speaker]
-        for cmd in [base + ["/UseLoopPoints"], base,
-                    [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q)]]:
+        _run([ffmpeg, "-y", "-i", str(wav), "-acodec", "pcm_s16le", "-ar", str(sample_rate), "-ac", str(channels), str(pcm_wav)], capture_output=True, check=True)
+
+        base = [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(quality), "/Speaker", speaker]
+        for cmd in [base + ["/UseLoopPoints"], base, [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(quality)]]:
             if xma_out.exists():
                 xma_out.unlink()
             r = _run(cmd, capture_output=True)
             if r.returncode == 0:
                 return _xma2_data_from_riff(xma_out.read_bytes())
+
         err = (r.stderr or r.stdout or b"").decode(errors="replace").strip()
         raise RuntimeError(f"xma2encode failed (rc={r.returncode}): {err or 'no output'}")
-    best = b""
-    for q in [60, 50, 40, 30, 20, 10]:
-        raw  = _try(q)
-        best = raw
-        if log:
-            log(f"  quality={q} → {len(raw)//PACKET_SIZE} pkts (slot={max_packets})")
-        if len(raw) // PACKET_SIZE <= max_packets:
-            return raw, q
-    return best, 10
+
+def encode_wav_to_fit(wav: Path, channels: int, ffmpeg: str, xma2encode: str, sample_rate: int, max_packets: int, log=None) -> tuple:
+    """Iteratively encodes audio to fit target packet constraints with auto-cleanup."""
+    with tempfile.TemporaryDirectory(prefix="nhl_enc_fit_") as tmpdir:
+        work = Path(tmpdir)
+        pcm_wav = work / "pcm.wav"
+        xma_out = work / "out.xma"
+        speaker = "C" if channels == 1 else "F,R"
+
+        _run([ffmpeg, "-y", "-i", str(wav), "-acodec", "pcm_s16le", "-ar", str(sample_rate), "-ac", str(channels), str(pcm_wav)], capture_output=True, check=True)
+
+        def _try(q: int) -> bytes:
+            base = [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q), "/Speaker", speaker]
+            for cmd in [base + ["/UseLoopPoints"], base, [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q)]]:
+                if xma_out.exists():
+                    xma_out.unlink()
+                r = _run(cmd, capture_output=True)
+                if r.returncode == 0:
+                    return _xma2_data_from_riff(xma_out.read_bytes())
+            err = (r.stderr or r.stdout or b"").decode(errors="replace").strip()
+            raise RuntimeError(f"xma2encode failed (rc={r.returncode}): {err or 'no output'}")
+
+        best = b""
+        for q in [60, 50, 40, 30, 20, 10]:
+            raw = _try(q)
+            packets = len(raw) // 2048
+            if max_packets <= 0 or packets <= max_packets:
+                return raw, q
+            best = raw
+
+        return best, 10
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # XMA2 stream scanner
@@ -915,7 +894,7 @@ def op_set_sample_rate(root: Path, game_root: Path, fid: str,
 # GUI
 # ═══════════════════════════════════════════════════════════════════════════════
 
-class App(Tk):
+class App(tk.Tk):
     def __init__(self):
         super().__init__()
         self.cfg        = load_config()
@@ -2016,9 +1995,10 @@ class App(Tk):
         self._v_pa_src_filter = StringVar()
         self._v_pa_src_filter.trace_add("write", lambda *a: self._portrait_populate_sources())
         ttk.Entry(sbar, textvariable=self._v_pa_src_filter, width=18).pack(side=LEFT, padx=(4, 0))
-        ttk.Label(right, text="Extract saves the selected portrait as a PNG; Import replaces its pixels in "
-                              "the game files (any size — resized to 256×256 DXT4_5). Shows in-game after the "
-                              "portrait pack reloads (restart / reopen the screen).",
+        ttk.Label(right, text="Previews show what's CURRENTLY in the game files (mods included). Extract saves "
+                              "the selected portrait as a PNG; Import replaces its pixels in the game files (any "
+                              "size — resized to 256×256 DXT4_5). Shows in-game after the portrait pack reloads "
+                              "(restart / reopen the screen).",
                   foreground="#888", font=("Segoe UI", 8), wraplength=260, justify=LEFT).pack(side=BOTTOM, anchor=W, pady=(4, 0))
         sbtn = ttk.Frame(right); sbtn.pack(side=BOTTOM, fill=X, pady=(6, 0))
         ttk.Button(sbtn, text="Extract PNG…", command=self._portrait_extract).pack(side=LEFT)
@@ -2049,10 +2029,14 @@ class App(Tk):
         if pi is not None:
             return pi
         try:
-            img = archtex.decode_portrait("disc_b9610aac.iff", blob)
+            # show what's CURRENTLY in the game files (mods included); fall back to the clean
+            # (.orig) decode only if the current archive can't be read
+            img = archtex.decode_portrait_current(blob) or archtex.decode_portrait("disc_b9610aac.iff", blob)
             if img is None:
                 return None
-            img = img.convert("RGB"); img.thumbnail((size, size))
+            # keep RGBA: the alpha channel is the head-silhouette mask, so the studio backdrop
+            # disappears and the cut-out renders straight over the UI background
+            img.thumbnail((size, size))
             pi = ImageTk.PhotoImage(img)
             self._pa_thumb_cache[blob] = pi
             return pi
@@ -2173,7 +2157,7 @@ class App(Tk):
         k, blob = self._portrait_selected_blob()
         if blob is None:
             messagebox.showinfo("Extract portrait", "Pick a portrait on the right first."); return
-        img = archtex.decode_portrait("disc_b9610aac.iff", blob)
+        img = archtex.decode_portrait_current(blob) or archtex.decode_portrait("disc_b9610aac.iff", blob)
         if img is None:
             messagebox.showerror("Extract portrait", "Couldn't decode that portrait."); return
         nm = self._pa_key_name.get(k, f"portrait_{k}").strip().replace(" ", "_") or f"portrait_{k}"
@@ -2226,7 +2210,7 @@ class App(Tk):
             messagebox.showerror("Import portrait", "Import failed — see the Operation Log for details."); return
         blob, img_path = imp
         try:                                    # show the imported image in the preview immediately
-            im = Image.open(img_path).convert("RGB"); im.thumbnail((140, 140))
+            im = Image.open(img_path).convert("RGBA"); im.thumbnail((140, 140))
             self._pa_thumb_cache[blob] = ImageTk.PhotoImage(im)
         except Exception:
             self._pa_thumb_cache.pop(blob, None)
@@ -2328,14 +2312,12 @@ class App(Tk):
         return self._pd_season_labels.get(self._v_pd_season.get(), "current")
 
     def _pd_thumb(self, img, size=180):
-        """PhotoImage of a reframed portrait (composited on the native gray backdrop for preview)."""
+        """PhotoImage of a reframed portrait (alpha kept — cut-out shows over the UI background)."""
         if img is None:
             return None
         try:
-            bg = Image.new("RGBA", img.size, (147, 147, 147, 255))
-            bg.alpha_composite(img.convert("RGBA"))
-            bg = bg.convert("RGB"); bg.thumbnail((size, size))
-            return ImageTk.PhotoImage(bg)
+            im = img.convert("RGBA"); im.thumbnail((size, size))
+            return ImageTk.PhotoImage(im)
         except Exception:
             return None
 
@@ -4263,7 +4245,14 @@ class App(Tk):
         def _pstate(g):
             cs = [checked[i] for i in groups[g] if matches(i)]
             return None if not cs else ("all" if all(cs) else "none" if not any(cs) else "some")
+            
         def refresh(*_):
+            # 1. Save which category IDs (pmap values) were currently expanded before wiping
+            expanded_groups = {
+                pmap[child] for child in tv.get_children() 
+                if child in pmap and tv.item(child, "open")
+            }
+
             tv.delete(*tv.get_children()); pmap.clear()
             for g, idxs in groups.items():
                 vis = [i for i in idxs if matches(i)]
@@ -4271,7 +4260,12 @@ class App(Tk):
                     continue
                 st = _pstate(g)
                 pid = "G%d" % len(pmap); pmap[pid] = g
-                tv.insert("", END, iid=pid, open=True,
+                
+                # 2. Keep it open if it was previously open (defaults to True on initial load)
+                is_open = pid not in pmap or g in expanded_groups if expanded_groups or len(pmap) == 1 else True
+                # Alternatively, use: is_open = (g in expanded_groups) if expanded_groups else True
+
+                tv.insert("", END, iid=pid, open=(g in expanded_groups) if expanded_groups else True,
                           text=f"{_group_label(g)}   ({len(vis)})",
                           values=(BOX[st], "", "") + (("",) if show_status else ()))
                 for i in vis:
@@ -4281,6 +4275,7 @@ class App(Tk):
                     tv.insert(pid, END, iid=str(i), text="    " + _leaf_label(i), values=vals,
                               tags=(it.get("status", ""),) if show_status else ())
             count_lbl.config(text=f"{sum(checked)} of {len(items)} checked")
+            
         for v in (v_type, v_team, v_cat):
             v.trace_add("write", refresh)
 
@@ -5812,6 +5807,8 @@ class App(Tk):
         ttk.Button(bar, text="Extract Original Files", command=self._iff_revert_extract).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Revert IFF to Original", command=self._iff_revert).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Open Extracted Files", command=lambda: self._iff_open("Extracted")).pack(side=LEFT, padx=2)
+        ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
+        ttk.Button(bar, text="Jersey Normal Stitcher…", command=self._open_normal_stitcher).pack(side=LEFT, padx=2)
         # Quality is AUTOMATIC now (no toggles): replacements store as lossless 8888 when the pack can
         # grow, a larger-than-native source auto-upscales the slot (hi-res), and the archives
         # auto-compact after any relocating apply. Capture-from-Game logic is retained
@@ -6072,6 +6069,32 @@ class App(Tk):
         head = f"{iff}  ·  texture #{rec['index']}" if rec else iff
         fmt = f"  {rec['fmt']}" if rec else ""
         self._iff_info.config(text=f"{head}\n{img.width}×{img.height}{fmt}  ({tag})")
+
+    def _open_normal_stitcher(self):
+        """Open the standalone Jersey Normal Stitcher — regenerates the sewn-stripe relief in a
+        uniform_base base_normal so it follows a re-striped base colour. Passes the configured
+        game folder so 'Load stock from game' / 'Apply to game' work with no extra setup."""
+        try:
+            from launcher import normal_stitcher
+            gd = None
+            try:
+                gd = self._get_game_root()
+            except Exception:
+                pass
+            # Extract root (…/NHL2k10_Extracted_Files) so the tool can auto-load YOUR edited base
+            # colour for the selected team+kit. Compute quietly (no warning dialogs).
+            er = None
+            try:
+                r = self._v_root.get().strip() or self.cfg.get("root_path", "")
+                if r:
+                    ex = Path(r) / "NHL2k10_Extracted_Files"
+                    if ex.is_dir():
+                        er = str(ex)
+            except Exception:
+                pass
+            normal_stitcher.open_stitcher(self, game_dir=gd, extract_root=er)
+        except Exception as e:
+            messagebox.showerror("Jersey Normal Stitcher", f"Could not open the tool:\n{e}")
 
     def _build_iff_ctx(self):
         """Main asset list — whole-asset actions."""
