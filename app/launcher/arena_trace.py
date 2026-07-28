@@ -32,6 +32,12 @@ USAGE  (load the game INTO the arena you want first — the textures must be res
     python arena_trace.py                 # one-shot: capture every resident rink/arena/ui target
     python arena_trace.py rink_det.iff    # one specific asset
     python arena_trace.py --cats rink,led # only these categories (see CATEGORIES)
+    python arena_trace.py --scan           # DRY: one read-only sweep, list every target asset that
+                                           #   is resident RIGHT NOW (incl. disc_* scenes); writes
+                                           #   nothing — use it to pick what's worth capturing
+    python arena_trace.py --scenes         # map the resident disc_* raw-VRAM scenes: sweep RAM for
+                                           #   texture fetch constants, content-match into the scene
+                                           #   files' raw tails -> catalog entries (dims + offsets)
     python arena_trace.py --watch          # GUIDED: capture the arena you're IN, then it tells you
                                            #   to load the next one; loops until you Ctrl-C
     python arena_trace.py --watch --all    # same, but ALSO sweep global/loading/frontend/menus as
@@ -95,7 +101,7 @@ GENERAL_TARGETS = list(dict.fromkeys(
 # Without this, a watch pass walked all 512MB once PER target (170x, minutes, no output). Now: ONE
 # regex sweep for coarse keys + a couple of 64-byte confirm-reads -> seconds/pass.
 HEADER_CACHE = _data_path("iff_headers.json")
-_CACHE_VER = 3                                                # bump -> old caches auto-rebuild
+_CACHE_VER = 4                                                # bump -> old caches auto-rebuild
 _VLEN = 64                                                    # max discriminator-window length
 _ALEN = 32                                                   # anchor-window length
 
@@ -183,14 +189,24 @@ def _header_index(targets, progress=True):
         if progress:
             print(f"indexing asset headers (one-time, then cached)…")
         fdrams = {}
+        scenes = set(_scene_targets())                        # ff3bef94 raw-VRAM arena scenes
         for i, iff in enumerate(targets):
             try:
                 loc, data, size = at._read_asset(iff, GAME)
                 if loc is None:
                     continue
+                if iff in scenes:
+                    # The scene's DRAM tree is rewritten at load (like rink record headers), so it
+                    # is NOT a reliable needle. Its raw tiled-DXT tail IS loaded into guest RAM
+                    # verbatim -> anchor on a mid-tail slice instead (runtime-stable by nature).
+                    start = size // 2
+                    fdrams[iff] = bytes(data[start:start + 0x80000])
+                    continue
                 blobs = [b["dec"] for b in at._walk_blobs(data, size) if b["dec"]]
                 if len(blobs) >= 2:
                     fdrams[iff] = min(blobs, key=len)          # same blob _capture scans for
+                elif len(blobs) == 1:
+                    fdrams[iff] = blobs[0]                     # single-blob pack: still a needle
             except Exception:
                 pass
             if progress and (i + 1) % 40 == 0:
@@ -202,7 +218,7 @@ def _header_index(targets, progress=True):
         cache = {}
         twins = defaultdict(list)                             # md5 -> members lacking a unique anchor
         for iff, fd in fdrams.items():
-            ua = _unique_anchor(fd, corpus, prefer_record=iff not in repacked)
+            ua = _unique_anchor(fd, corpus, prefer_record=iff not in repacked and iff not in scenes)
             if ua:                                            # unique -> anchor alone identifies it
                 cache[iff] = {"v": _CACHE_VER, "aoff": ua[0], "anchor": ua[1].hex(),
                               "voff": 0, "vwin": ""}
@@ -213,7 +229,7 @@ def _header_index(targets, progress=True):
         # among the twins (count == group size) to avoid borrowing a texture shared with other teams.
         for _hsh, members in twins.items():
             fd = fdrams[members[0]]
-            pr = members[0] not in repacked
+            pr = members[0] not in repacked and members[0] not in scenes
             cands = [(o, w) for o, w in _stable_windows(fd, _ALEN, 18) if len(w) == _ALEN] if pr \
                 else [(o, fd[o:o + _ALEN]) for o in range(0, max(1, len(fd) - _ALEN), 8)
                       if len(set(fd[o:o + _ALEN])) >= 20]
@@ -294,6 +310,20 @@ def _team_catalog_rows():
     except Exception as e:
         print(f"[warn] could not read team_iff_catalog.csv: {e}")
     return rows
+
+
+def _scene_targets():
+    """disc_* arena-interior scenes (category=scene_arena in discovered_assets.csv). They're not in
+    team_iff_catalog, so the normal target list never includes them — the dry scan adds them."""
+    out = []
+    try:
+        for ln in Path(at.DISCOVERED_CSV).read_text().splitlines()[1:]:
+            f = ln.split(",")
+            if len(f) >= 3 and f[1] == "scene_arena" and f[2] not in out:
+                out.append(f[2])
+    except Exception as e:
+        print(f"[warn] could not read discovered_assets.csv: {e}")
+    return out
 
 
 def build_targets(cats=None, only_iff=None, all_mode=False):
@@ -436,6 +466,114 @@ def trace_iff(iff, handle, phys, save_png=True, require_header16=False, rec_base
                       "fmt": e["fmt"], "mip0": e["mip0"], "dup": e.get("dup", 1)}
                      for e in recovered), key=lambda x: x["file_offset"]),
                 entries=entries)
+
+
+# ── ff3bef94 scene mapping (fetch-constant sweep) ────────────────────────────
+# The disc_* arena scenes have NO 0xE0 record array — their raw tiled-DXT tail is loaded into guest
+# RAM verbatim and the GAME builds the texture descriptors (Xenos fetch constants) at runtime. So we
+# recover dims the only place they exist: sweep guest RAM for plausible fetch constants (same field
+# layout _parse_rec matches inside records: (d0&3)==2, code=d1&0x3F, w/h in d2), then content-match
+# each constant's pixel bytes into the resident scenes' RAW FILE bytes. A byte-identical match gives
+# a proven (file_offset, w, h, fmt, tiled) -> a normal live-catalog entry with raw=1 (offsets are
+# WHOLE-FILE offsets, not texture-blob offsets — archive_textures decodes raw entries accordingly).
+
+def _scene_mip0(w, h, bpu, blk, tiled, pitch):
+    """Byte size of mip level 0 as stored (tiled rows/pitch round up to 32 units)."""
+    if blk:
+        row = max(pitch * 8, (w + 3) // 4); rows = (h + 3) // 4
+    else:
+        row = max(pitch * 32, w); rows = h
+    if tiled:
+        row = (row + 31) & ~31; rows = (rows + 31) & ~31
+    return row * rows * bpu
+
+
+def _fetch_sweep(handle, phys):
+    """One walk of guest RAM -> {guest_base: (w, h, code, tiled, pitch)} candidate texture fetch
+    constants. Vectorized; the pitch/width consistency check kills most false positives, and the
+    content-match verification later kills the rest."""
+    import numpy as np
+    codes = np.zeros(64, bool)
+    for c in at._FETCH_FMT:
+        codes[c] = True
+    out = {}
+    for base, sz in xm.enum_committed_regions(handle, phys, xm.PHYS_SIZE):
+        c = xm.read_bytes(handle, base, sz)
+        if not c or len(c) < 16:
+            continue
+        a = np.frombuffer(c, dtype=">u4", count=len(c) // 4)
+        if len(a) < 4:
+            continue
+        f0, f1, f2 = a[:-2], a[1:-1], a[2:]
+        w = (f2 & 0x1FFF) + 1; hh = ((f2 >> 13) & 0x1FFF) + 1
+        pitch = (f0 >> 22) & 0x1FF
+        pu = pitch * 32                                   # texels/row the pitch field implies
+        m = (((f0 & 3) == 2) & codes[f1 & 0x3F]
+             & (w >= 16) & (w <= 2048) & (hh >= 16) & (hh <= 2048)
+             & (f1 >= 1 << 12) & ((f1 >> 12) < 0x20000)   # base page inside 512MB guest RAM
+             & ((pitch == 0) | ((pu >= w) & (pu <= 2 * w + 255))))
+        for pos in np.nonzero(m)[0]:
+            f0i, f1i, f2i = int(a[pos]), int(a[pos + 1]), int(a[pos + 2])
+            gbase = (f1i >> 12) << 12
+            if gbase not in out:
+                out[gbase] = ((f2i & 0x1FFF) + 1, ((f2i >> 13) & 0x1FFF) + 1,
+                              f1i & 0x3F, (f0i >> 31) & 1, (f0i >> 22) & 0x1FF)
+    return out
+
+
+def scene_capture(handle, phys, save_png=True):
+    """Map the resident disc_* scenes' textures -> live-catalog entries (raw whole-file offsets).
+    Returns (loaded_scene_list, entries)."""
+    scenes = _scene_targets()
+    sigs = {i: s for i, s in _header_index(scenes, progress=False).items() if i in scenes}
+    found = _locate_headers(handle, phys, sigs)
+    if not found:
+        return [], []
+    files = {}
+    for iff in sorted(found):
+        loc, data, size = at._read_asset(iff, GAME)
+        if loc is not None:
+            files[iff] = bytes(data[:size])
+    print(f"resident scenes: {', '.join(files)}")
+    print("sweeping guest RAM for texture fetch constants…")
+    fetches = _fetch_sweep(handle, phys)
+    print(f"  {len(fetches)} candidate fetch constants; content-matching into "
+          f"{len(files)} scene file(s)…")
+    entries = []; seen = set()
+    for gbase in sorted(fetches):
+        w, h, code, tiled, pitch = fetches[gbase]
+        nm, bpu, blk = T.FMT[code]
+        mip0 = _scene_mip0(w, h, bpu, blk, tiled, pitch)
+        probe = xm.read_bytes(handle, phys + gbase, min(mip0, 0x400))
+        if not probe or len(probe) < 0x140:
+            continue
+        needle = probe[0x100:0x140]                       # skip leading bytes (often padding)
+        if len(set(needle)) < 8:                          # too flat to be a trustworthy needle
+            continue
+        for iff, fb in files.items():
+            pos = fb.find(needle)
+            while pos >= 0:
+                foff = pos - 0x100
+                if foff >= 0 and fb[foff:foff + len(probe)] == probe:
+                    big = xm.read_bytes(handle, phys + gbase, min(mip0, 0x10000))
+                    if big and fb[foff:foff + len(big)] == big and (iff, foff) not in seen:
+                        seen.add((iff, foff))
+                        entries.append(dict(iff=iff, file_offset=foff, w=w, h=h, fmt=nm,
+                                            bpu=bpu, block=blk, tiled=int(tiled), mip0=mip0,
+                                            dup=1, how="fetch-scan", raw=1))
+                        if save_png:
+                            try:
+                                out_dir = lc.OUT_ROOT / iff[:-4]
+                                out_dir.mkdir(parents=True, exist_ok=True)
+                                img = T.decode(at._dxt_endian(fb[foff:foff + mip0], nm),
+                                               w, h, nm, bpu, blk, tiled, 0).convert("RGBA")
+                                at._to_straight(img, nm).save(
+                                    out_dir / f"{foff:08x}_{w}x{h}_{nm}.png")
+                            except Exception:
+                                pass
+                    break                                 # verified (or refuted) at first real hit
+                pos = fb.find(needle, pos + 1)
+    return sorted(files), entries
 
 
 # ── diagnostics: why did an asset capture nothing? ───────────────────────────
@@ -623,6 +761,8 @@ def _publish_bundled():
 def main(argv):
     args = argv[1:]
     watch = "--watch" in args;  args = [a for a in args if a != "--watch"]
+    scan = "--scan" in args;    args = [a for a in args if a != "--scan"]
+    scenes_mode = "--scenes" in args;  args = [a for a in args if a != "--scenes"]
     gui = "--gui" in args;      args = [a for a in args if a != "--gui"]
     diag = "--diag" in args;    args = [a for a in args if a != "--diag"]
     now = "--now" in args;      args = [a for a in args if a != "--now"]
@@ -647,6 +787,65 @@ def main(argv):
     def _commit(entries, reports):
         rows = lc._merge_catalog(entries); _write_report(reports); _publish_bundled()
         return rows
+
+    if scenes_mode:
+        loaded, entries = scene_capture(h, phys, save_png=True)
+        if not loaded:
+            print("No disc_* scene is resident — get to the screen that loads one "
+                  "(check with --scan) and re-run.")
+        elif entries:
+            per = {}
+            for e in entries:
+                per.setdefault(e["iff"], []).append(e)
+            rows = _commit(entries, [dict(iff=i, formal_count=0, tree_records=0, loaded=True,
+                                          resident=len(v), known=0, recovered=len(v),
+                                          recovered_list=sorted(
+                                              ({"file_offset": e["file_offset"], "w": e["w"],
+                                                "h": e["h"], "fmt": e["fmt"], "mip0": e["mip0"],
+                                                "dup": 1} for e in v),
+                                              key=lambda x: x["file_offset"]),
+                                          entries=v) for i, v in per.items()])
+            print(f"\nmapped {len(entries)} scene texture(s):")
+            for i, v in sorted(per.items()):
+                dims = ", ".join(f"{e['w']}x{e['h']} {e['fmt']}" for e in
+                                 sorted(v, key=lambda e: e["file_offset"])[:6])
+                print(f"  {i:22} {len(v):>3} textures  ({dims}{', …' if len(v) > 6 else ''})")
+            print(f"\ncatalog: {len(rows)} entries -> {lc.CATALOG}")
+            print(f"bundled for shipping -> {at.LIVE_CATALOG_BUNDLED}   (commit this file)")
+            print(f"verification PNGs -> {lc.OUT_ROOT}\\<scene>\\")
+            print("In the launcher: Reload, then the scene shows its textures in the IFF tab.")
+        else:
+            print(f"\nScenes resident ({', '.join(loaded)}) but no fetch constant matched their "
+                  "bytes — the scene may not be on screen this instant (its textures must be "
+                  "bound for drawing). Re-run while the scene is visibly rendering.")
+        xm.close_handle(h); return
+
+    if scan:
+        # DRY sweep: locate every target's resident signature in ONE RAM walk and report it.
+        # Reads guest RAM only — no extraction, no catalog/report/PNG writes.
+        targets = build_targets(cats, all_mode=True)
+        for t in _scene_targets():
+            if t not in targets:
+                targets.append(t)
+        print(f"DRY SCAN — read-only, nothing is captured or written.  targets: {len(targets)}")
+        sigs = _header_index(targets)
+        nosig = [t for t in targets if t not in sigs]
+        t0 = time.time()
+        found = _locate_headers(h, phys, sigs)
+        dt = time.time() - t0
+        if found:
+            print(f"\n{len(found)} asset(s) resident right now ({dt:.1f}s sweep):")
+            for iff in sorted(found):
+                print(f"  {iff:34} @ host 0x{found[iff]:X}")
+            print("\nCapture any of these with:  python arena_trace.py <name>.iff   (or --watch)")
+        else:
+            print(f"\nNothing resident ({dt:.1f}s sweep) — get into an arena/menu and re-run.")
+        if nosig:
+            print(f"\n(no locate signature for {len(nosig)} target(s) — can't be scanned: "
+                  f"{', '.join(nosig[:8])}{' …' if len(nosig) > 8 else ''})")
+        print("NOTE: disc_* scenes are located by raw texture-tail bytes (loaded verbatim), so a "
+              "hit means that scene's data really is in RAM right now.")
+        xm.close_handle(h); return
 
     if now:
         # One-shot: capture what's on screen RIGHT NOW. `only` scopes it (team abbrev or iff); the

@@ -1134,6 +1134,7 @@ class App(tk.Tk):
         self._tab_goalie   = ttk.Frame(self._nb)
         self._tab_portrait = ttk.Frame(self._nb)
         self._tab_scorebug = ttk.Frame(self._nb)
+        self._tab_gameplay = ttk.Frame(self._nb)
         self._tab_settings = ttk.Frame(self._nb)
 
         self._nb.add(self._tab_audio,    text="  Audio  ")
@@ -1147,6 +1148,7 @@ class App(tk.Tk):
         self._nb.add(self._tab_goalie,   text="  Goalie Equipment  ")
         self._nb.add(self._tab_portrait, text="  Portraits  ")
         self._nb.add(self._tab_scorebug, text="  Scoreclock  ")
+        self._nb.add(self._tab_gameplay, text="  Gameplay  ")
         self._nb.add(self._tab_settings, text="  Settings  ")
 
         self._build_audio_tab()
@@ -1157,6 +1159,7 @@ class App(tk.Tk):
         self._build_goalie_tab()
         self._build_portrait_tab()
         self._build_scorebug_tab()
+        self._build_gameplay_tab()
         self._build_settings_tab()
 
         log_frame = ttk.LabelFrame(pane, text="Operation Log", padding=4)
@@ -4019,6 +4022,209 @@ class App(tk.Tk):
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
+    # ── Gameplay tab ──────────────────────────────────────────────────────────
+
+    def _build_gameplay_tab(self):
+        """Gameplay tuning constants ("tuners") — bare floats in the XEX's .data that the
+        gameplay engine reads directly. Registry + presets come from the Title Update #1
+        binary diff (docs 16/17): the '2K Official Patch (v1.1)' preset writes 2K's own
+        retuned values into our v1.0 xex."""
+        t = self._tab_gameplay
+        from launcher import gameplay_tuning as gpt
+        self._gpt = gpt
+        self._gpt_cur = {}            # {key: current float in xex}
+        self._gpt_pending = {}        # {key: queued float}
+
+        head = ttk.Frame(t, padding=(12, 10, 12, 4)); head.pack(fill=X)
+        ttk.Label(head, text="Gameplay Tuning",
+                  font=("Segoe UI", 13, "bold")).pack(side=LEFT)
+        self._gpt_xexlbl = StringVar(value="")
+        ttk.Label(head, textvariable=self._gpt_xexlbl, foreground="#999").pack(side=RIGHT)
+        ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
+                  text="Engine tuning constants recovered by diffing the official Title Update #1 "
+                       "against the retail game. Queue values (or load a preset), then Apply — "
+                       "writes default.xex; takes effect on the NEXT game launch. "
+                       "“2K Official Patch (v1.1)” = the values 2K shipped in the title update: "
+                       "faster acceleration, easier pinning, retuned shot velocity and rebounds."
+                  ).pack(fill=X, padx=12)
+
+        body = ttk.Frame(t); body.pack(fill=BOTH, expand=True, padx=12, pady=6)
+
+        cols = ("tuner", "group", "current", "stock", "v11", "state", "pending")
+        tv = ttk.Treeview(body, columns=cols, show="headings", height=18,
+                          selectmode="extended")
+        for c, w, a in (("tuner", 250, W), ("group", 130, W), ("current", 80, E),
+                        ("stock", 80, E), ("v11", 90, E), ("state", 70, W), ("pending", 90, E)):
+            tv.heading(c, text={"tuner": "Tuner", "group": "Group", "current": "Current",
+                                "stock": "Stock (v1.0)", "v11": "2K Patch (v1.1)",
+                                "state": "State", "pending": "Pending"}[c])
+            tv.column(c, width=w, anchor=a)
+        sb = ttk.Scrollbar(body, command=tv.yview); tv.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y); tv.pack(side=LEFT, fill=BOTH, expand=True)
+        tv.bind("<<TreeviewSelect>>", lambda e: self._gpt_show_note())
+        tv.bind("<Double-1>", lambda e: self._gpt_edit_dialog())
+        self._gpt_tv = tv
+
+        # right-hand controls
+        ctl = ttk.Frame(body, padding=(12, 0, 0, 0)); ctl.pack(side=LEFT, fill=Y)
+        ed = ttk.LabelFrame(ctl, text="Set selected", padding=8); ed.pack(fill=X)
+        row = ttk.Frame(ed); row.pack(fill=X)
+        ttk.Label(row, text="Value").pack(side=LEFT)
+        self._gpt_val = StringVar()
+        ttk.Entry(row, textvariable=self._gpt_val, width=10).pack(side=LEFT, padx=4)
+        ttk.Button(row, text="Queue", width=7, command=self._gpt_queue_value).pack(side=LEFT)
+        ttk.Label(ed, text="Or double-click a row. Queued values are only written on Apply.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=200,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        pr = ttk.LabelFrame(ctl, text="Presets", padding=8); pr.pack(fill=X, pady=(8, 0))
+        ttk.Button(pr, text="2K Official Patch (v1.1)",
+                   command=lambda: self._gpt_queue_preset("v11")).pack(fill=X)
+        ttk.Button(pr, text="Stock (v1.0 factory)",
+                   command=lambda: self._gpt_queue_preset("stock")).pack(fill=X, pady=(4, 0))
+        ttk.Label(pr, text="Presets queue every tuner; review the Pending column, then Apply.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=200,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        note = ttk.LabelFrame(ctl, text="About this tuner", padding=8); note.pack(fill=X, pady=(8, 0))
+        self._gpt_note = StringVar(value="(select a tuner)")
+        ttk.Label(note, textvariable=self._gpt_note, foreground="#aaa",
+                  font=("Segoe UI", 8), wraplength=200, justify=LEFT).pack(anchor=W)
+
+        act = ttk.Frame(t, padding=(12, 4, 12, 10)); act.pack(fill=X)
+        ttk.Button(act, text="Apply to Game Files", style="Accent.TButton",
+                   command=self._gpt_apply).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Discard Pending", command=self._gpt_discard).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Reload", command=self._gpt_load).pack(side=LEFT)
+        self._gpt_status = StringVar(value="")
+        ttk.Label(act, textvariable=self._gpt_status, foreground="#999").pack(side=RIGHT)
+
+        self.after(900, self._gpt_load)
+
+    @staticmethod
+    def _gpt_fmt(v):
+        return f"{v:.6g}" if v is not None else ""
+
+    def _gpt_load(self):
+        xex = self._sb_xex()
+        if not xex:
+            self._gpt_status.set("Set the game files folder in Settings.")
+            return
+        self._gpt_xexlbl.set(str(xex))
+        def work():
+            try:
+                cur = self._gpt.read_all(str(xex))
+                err = None
+            except Exception as e:
+                cur, err = {}, str(e)
+            def done():
+                if err:
+                    self._gpt_status.set(err)
+                    self._log_q.put(f"[gameplay] {xex}: {err}"); return
+                self._gpt_cur = cur
+                self._gpt_refresh()
+                n = sum(1 for k, v in cur.items() if self._gpt.classify(k, v) != "stock")
+                self._gpt_status.set(f"{len(cur)} tuners read — "
+                                     + ("all stock" if n == 0 else f"{n} modified"))
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _gpt_refresh(self):
+        tv = self._gpt_tv
+        sel = set(tv.selection())
+        tv.delete(*tv.get_children())
+        for t in self._gpt.TUNERS:
+            k = t["key"]
+            cur = self._gpt_cur.get(k)
+            state = self._gpt.classify(k, cur) if cur is not None else "?"
+            pend = self._gpt_pending.get(k)
+            v11 = None if t["v11"] is None else self._gpt._f(t["v11"])
+            tv.insert("", END, iid=k, values=(
+                t["label"], t["group"], self._gpt_fmt(cur),
+                self._gpt_fmt(self._gpt._f(t["stock"])), self._gpt_fmt(v11),
+                state, self._gpt_fmt(pend) if pend is not None else ""))
+        for iid in sel:
+            if tv.exists(iid):
+                tv.selection_add(iid)
+
+    def _gpt_show_note(self):
+        sel = self._gpt_tv.selection()
+        if not sel:
+            self._gpt_note.set("(select a tuner)"); return
+        t = self._gpt.BY_KEY[sel[0]]
+        self._gpt_note.set(f"{t['note']}\n\nVA 0x{t['va']:X} — also live-pokeable via Cheat "
+                           f"Engine while the game runs (float, big-endian).")
+
+    def _gpt_queue_value(self):
+        sel = self._gpt_tv.selection()
+        if not sel:
+            messagebox.showerror("Gameplay", "Select one or more tuners first."); return
+        try:
+            v = float(self._gpt_val.get())
+        except ValueError:
+            messagebox.showerror("Gameplay", "Value must be a number."); return
+        for k in sel:
+            self._gpt_pending[k] = v
+        self._gpt_refresh()
+
+    def _gpt_edit_dialog(self):
+        sel = self._gpt_tv.selection()
+        if not sel:
+            return
+        k = sel[0]; t = self._gpt.BY_KEY[k]
+        cur = self._gpt_pending.get(k, self._gpt_cur.get(k))
+        v = simpledialog.askstring("Gameplay", f"{t['label']}\n\n{t['note']}\n\nNew value:",
+                                   initialvalue=self._gpt_fmt(cur), parent=self)
+        if v is None:
+            return
+        try:
+            self._gpt_pending[k] = float(v)
+        except ValueError:
+            messagebox.showerror("Gameplay", "Value must be a number."); return
+        self._gpt_refresh()
+
+    def _gpt_queue_preset(self, which):
+        vals = self._gpt.preset_v11() if which == "v11" else self._gpt.preset_stock()
+        # only queue actual changes vs current file state
+        n = 0
+        for k, v in vals.items():
+            cur = self._gpt_cur.get(k)
+            if cur is None or self._gpt_fmt(cur) != self._gpt_fmt(v):
+                self._gpt_pending[k] = v; n += 1
+            else:
+                self._gpt_pending.pop(k, None)
+        self._gpt_refresh()
+        self._gpt_status.set(f"preset queued — {n} change(s) pending" if n else
+                             "already matches that preset — nothing to apply")
+
+    def _gpt_discard(self):
+        self._gpt_pending.clear()
+        self._gpt_refresh()
+        self._gpt_status.set("pending changes discarded")
+
+    def _gpt_apply(self):
+        if not self._gpt_pending:
+            self._gpt_status.set("nothing pending"); return
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Gameplay", "Set the game files folder in Settings."); return
+        edits = dict(self._gpt_pending)
+        def work():
+            try:
+                n = self._gpt.write_values(str(xex), edits, log=self._log_q.put)
+                err = None
+            except Exception as e:
+                n, err = 0, str(e)
+            def done():
+                if err:
+                    messagebox.showerror("Gameplay", f"Apply failed:\n{err}"); return
+                self._gpt_pending.clear()
+                self._log_q.put(f"[gameplay] wrote {n} tuner(s) to {xex.name}")
+                self._gpt_status.set(f"applied {n} change(s) — restart the game to take effect")
+                self._gpt_load()
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
+
     # ── Settings tab ──────────────────────────────────────────────────────────
 
     def _build_settings_tab(self):
@@ -4692,7 +4898,16 @@ class App(tk.Tk):
         # just to hunt for edits, so the dialog took minutes to appear. folders_with_edits() walks the
         # Extracted/ tree once (hash-manifest compare) and returns only the touched folders.
         try:
-            edited_folders = archtex.folders_with_edits(root)
+            # folders_with_edits returns ABSOLUTE Paths; asset_iff() returns folder strings
+            # relative to Textures/Extracted (or Modified/) — normalize before comparing, else
+            # the filter never matches and Apply All reports "Nothing to apply".
+            edited_folders = set()
+            for _p in archtex.folders_with_edits(root):
+                for _base in (root / "Textures" / "Extracted", root / "Textures" / "Modified"):
+                    try:
+                        edited_folders.add(_p.relative_to(_base).as_posix())
+                    except ValueError:
+                        pass
         except Exception as e:
             self._log(f"[apply-all] edit scan fell back to full scan ({e})"); edited_folders = None
         for iff in sorted({r["iff"] for r in self._iff_catalog}):

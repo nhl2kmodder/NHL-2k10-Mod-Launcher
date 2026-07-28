@@ -1812,7 +1812,7 @@ def catalog_records(name: str):
                   key=lambda e: e["file_offset"])
     return [{"index": i, "w": e["w"], "h": e["h"], "fmt": e["fmt"], "bpu": e["bpu"],
              "block": e["block"], "tiled": e["tiled"], "vram_off": e["file_offset"],
-             "mip0": e["mip0"], "tail": 0, "foot": e["mip0"]}
+             "mip0": e["mip0"], "tail": 0, "foot": e["mip0"], "raw": e.get("raw", 0)}
             for i, e in enumerate(rows)]
 
 
@@ -1894,6 +1894,16 @@ def list_textures(name: str, clean_dir: Path = None):
     # capture, so current behavior is unchanged.
     if cat and any(r.get("packing") == "scatter" for r in recs):
         formal = [r for r in recs if r.get("packing") != "scatter"]
+        # A formal record can itself be a bogus runtime-resolved primary (Loading.iff: 512x512
+        # DXT4_5 @0 decodes as noise, while the capture proved 64x128 8888 lives at 0). When the
+        # catalog has the SAME offset with DIFFERENT dims/fmt, the content-matched capture wins;
+        # genuine formal records (rink/led) always agree with their capture, so they're untouched.
+        cat_by_off = {c["vram_off"]: c for c in cat}
+        formal = [cat_by_off[r["vram_off"]]
+                  if (c := cat_by_off.get(r["vram_off"])) is not None
+                  and (c["w"], c["h"], c["fmt"]) != (r["w"], r["h"], r["fmt"])
+                  else r
+                  for r in formal]
         formal_offs = {r["vram_off"] for r in formal}
         tail = [c for c in cat if c["vram_off"] not in formal_offs]
         if tail:
@@ -1922,6 +1932,18 @@ def decode_record(name: str, rec: dict, clean_dir: Path = None):
                                 rec["tiled"], 0).convert("RGBA"), rec["fmt"])
         except Exception:
             return None
+    if rec.get("raw"):
+        # ff3bef94 scene texture (arena_trace.py --scenes): vram_off is a WHOLE-FILE offset into
+        # the scene's raw uncompressed texture tail — no blob decompression involved.
+        loc, data, size = _read_asset(name, clean_dir)
+        if loc is None:
+            return None
+        try:
+            return _to_straight(T.decode(_dxt_endian(bytes(data[rec["vram_off"]:rec["vram_off"] + rec["mip0"]]), rec["fmt"]),
+                                rec["w"], rec["h"], rec["fmt"], rec["bpu"], rec["block"],
+                                rec["tiled"], 0).convert("RGBA"), rec["fmt"])
+        except Exception:
+            return None
     vram, _recs = _load_tree(name, clean_dir)
     if vram is None:
         return None
@@ -1934,25 +1956,15 @@ def decode_record(name: str, rec: dict, clean_dir: Path = None):
 
 
 def decode_all_textures(name: str, clean_dir: Path = None):
-    """Decode every texture of `name` from CLEAN -> [(record, PIL RGBA)]."""
-    if name in PORTRAIT_PACKS:
-        return [(r, decode_portrait(name, r["index"], clean_dir)) for r in portrait_records(name, clean_dir)]
-    if name in BUNDLE_PACKS:
-        return [(r, decode_bundle(name, r["index"], clean_dir)) for r in bundle_records(name, clean_dir)]
-    if name in _fe_components():
-        return [(r, decode_record(name, r, clean_dir)) for r in fe_component_records(name)]
-    vram, recs = _load_tree(name, clean_dir)
-    if vram is None:
-        return []
-    recs = recs or catalog_records(name)        # loader-repacked packs (global.iff) via live catalog
+    """Decode every texture of `name` from CLEAN -> [(record, PIL RGBA)]. Iterates the SAME record
+    list the browse tree shows (list_textures) so extract == preview. The old direct _load_tree walk
+    bypassed the live-capture catalog corrections, so any asset with catalog-corrected offsets
+    (Loading.iff, rink/led tails, …) extracted its scatter records as noise while previewing fine."""
     out = []
-    for r in recs:
-        try:
-            out.append((r, _to_straight(T.decode(_dxt_endian(vram[r["vram_off"]:r["vram_off"] + r["mip0"]], r["fmt"]),
-                        r["w"], r["h"], r["fmt"], r["bpu"], r["block"],
-                        r["tiled"], 0).convert("RGBA"), r["fmt"])))
-        except Exception:
-            pass
+    for r in list_textures(name, clean_dir):
+        img = decode_record(name, r, clean_dir)
+        if img is not None:
+            out.append((r, img))
     return out
 
 
@@ -2424,7 +2436,10 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
     mip_src = _premult_pil(edited_img) if premf else edited_img
 
     def _enc_lvl(im):                                    # exact per-level encode used below
-        return (ED.encode_image(im, premultiply=False, alpha_aware=False)
+        # premf: image is already premultiplied; _encode_tiled (not bare ED.encode_image) so the
+        # 8-in-16 fetch-endian swap is applied — bare encode stored mips unswapped and the GPU
+        # scrambled every level below mip0 ("small logos boxy/noisy" root cause, 2026-07-27).
+        return (_encode_tiled(im, fmt, tiled, premultiply=False, alpha_aware=False)
                 if premf else _encode_tiled(im, fmt, tiled))
 
     # SQUARE branding / logo mip tail (verified on the real logo_*.iff packs, and identical to the
@@ -2476,7 +2491,7 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
                 # BOX (2x2 average) is the game's own mip filter: matches native compressibility
                 # (~native size -> fits in-place) and avoids LANCZOS ringing/overshoot at edges.
                 lvl_img = mip_src.resize((mw, mh), Image.BOX).convert("RGBA")
-                new_lvl = (ED.encode_image(lvl_img, premultiply=False, alpha_aware=False)
+                new_lvl = (_encode_tiled(lvl_img, fmt, tiled, premultiply=False, alpha_aware=False)
                            if premf else _encode_tiled(lvl_img, fmt, tiled))
             except Exception:
                 break
@@ -2522,6 +2537,10 @@ def replace_at(iff, vram_off, w, h, fmt, edited_path, game_dir, log=print, tiled
     arc, off, size, idx, f3 = loc
     with open(game_dir / arc, "rb") as f:
         f.seek(off); res = bytearray(f.read(size))
+    if res[:4] == b"\xff\x3b\xef\x94":
+        # ff3bef94 scene: its textures live in the RAW file tail (catalog raw=1 records), not in a
+        # compressed VRAM blob — this path would corrupt the DRAM tree. Raw replace TBD.
+        raise ValueError(f"{iff}: scene raw-tail texture replace is not supported yet (view/extract only)")
     vb = _big_vram_blob(res, size)
     if not vb:
         raise ValueError(f"{iff}: no VRAM blob")
@@ -2634,7 +2653,7 @@ def _grow_many(iff, arc, off, idx, res, size, tex_b, items, game_dir, log, prefe
             mw, mh = e["w"] // 2, e["h"] // 2
             while mw >= 4 and mh >= 4:
                 lvl = mip_src.resize((mw, mh), Image.BOX).convert("RGBA")
-                chain += (ED.encode_image(lvl, premultiply=False, alpha_aware=False)
+                chain += (_encode_tiled(lvl, e["fmt"], 1, premultiply=False, alpha_aware=False)
                           if premf else _encode_tiled(lvl, e["fmt"], 1))
                 mw //= 2; mh //= 2
         mip0 = _mip0_size(nf, e["w"], e["h"]); tail = len(chain) - mip0
@@ -3303,7 +3322,7 @@ def replace_scene_hires(scene_name: str, edited_path, game_dir, scale: int = 4, 
     chain = bytearray(); mw, mh = NW, NH
     while mw >= 4 and mh >= 4:
         lvl = mip_src.resize((mw, mh), Image.BOX if premf else Image.LANCZOS).convert("RGBA")
-        chain += (ED.encode_image(lvl, premultiply=False, alpha_aware=False) if premf
+        chain += (_encode_tiled(lvl, fmt, 1, premultiply=False, alpha_aware=False) if premf
                   else _encode_tiled(lvl, fmt, 1))
         mw //= 2; mh //= 2
     mip0 = _mip0_size(fmt, NW, NH); tail = len(chain) - mip0
@@ -3408,7 +3427,7 @@ def replace_multitex_grow(iff, vram_off, w, h, fmt, edited_path, game_dir, scale
     mw, mh = NW // 2, NH // 2
     while mw >= 4 and mh >= 4:                             # premult-space BOX mips (clean edges)
         lvl = mip_src.resize((mw, mh), Image.BOX).convert("RGBA")
-        chain += (ED.encode_image(lvl, premultiply=False, alpha_aware=False) if premf
+        chain += (_encode_tiled(lvl, fmt, 1, premultiply=False, alpha_aware=False) if premf
                   else _encode_tiled(lvl, fmt, 1))
         mw //= 2; mh //= 2
     mip0 = _mip0_size(fmt, NW, NH); tail = len(chain) - mip0
