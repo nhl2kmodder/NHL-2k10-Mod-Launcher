@@ -42,12 +42,12 @@ GAMECLOCK4_KEY  = 0x20BDB8          # template record (unused in stock bug)
 # new elements: (record name, bind name, X, Y, size)
 # scene coords: +X right, +Y up; main text row Y~-149, bottom bar Y~-171.
 NEW_ELEMENTS = [
-    ("shots_away",  "SHOTS_AWAY",  -145.0, -166.0, 20.0),
-    ("shots_home",  "SHOTS_HOME",   -75.0, -166.0, 20.0),
+    ("shots_away",  "SHOTS_AWAY",  -196.0, -166.0, 20.0),
+    ("shots_home",  "SHOTS_HOME",  -134.0, -166.0, 20.0),
 ]
 # gameclock4 becomes the label between them
 LABEL_BIND = "SHOTS_LABEL"
-LABEL_POS  = (-118.0, -166.0, 20.0)
+LABEL_POS  = (-170.0, -167.5, 40.0)
 
 
 def crc(s: str) -> int:
@@ -149,6 +149,38 @@ def build(dram: bytearray):
         "binds": {LABEL_BIND: crc(LABEL_BIND),
                   **{b: crc(b) for _, b, _, _, _ in NEW_ELEMENTS}},
     }
+
+
+def set_element_positions(gdir: str, positions: dict):
+    """Update already-applied (count>=12) SOG text records in overlay_static.iff in place.
+    `positions` maps record name (e.g. 'shots_away', 'gameclock4', 'shots_home') -> (x, y, size).
+    Used by the live tuner's Bake to persist a live SOG layout. Returns the names updated."""
+    r = oe.load_dram(IFF, gdir)
+    dram, meta = (bytearray(r[0]), r[1]) if isinstance(r, tuple) else (bytearray(r), None)
+    d = dram
+    cnt = struct.unpack_from(">I", d, COUNT_OFF)[0]
+    if cnt < TABLE_COUNT + 1:
+        raise RuntimeError(f"shots not applied to the file yet (count={cnt}); Apply shots first.")
+    po = BASEPTR_OFFS[1]
+    tbl = po + struct.unpack_from(">I", d, po)[0] - 1 - BASE_BIAS
+    want = {crc(o): o for o in positions}          # +0x04 raw-name crc -> our record name
+    updated = []
+    for i in range(cnt):
+        rec = tbl + i * REC_STRIDE
+        if struct.unpack_from(">I", d, rec)[0] != KEY_SCOREBUG_TEXT:
+            continue
+        o = want.get(struct.unpack_from(">I", d, rec + 4)[0])
+        if not o:
+            continue
+        x, y, size = positions[o]
+        struct.pack_into(">f", d, rec + 0x68, x)
+        struct.pack_into(">f", d, rec + 0x6C, y)
+        struct.pack_into(">f", d, rec + 0x7C, size)
+        updated.append(o)
+    if not updated:
+        raise RuntimeError("no matching SOG records found in the file")
+    oe.apply_dram(bytes(d), meta, IFF, gdir)
+    return updated
 
 
 def apply(gdir: str):

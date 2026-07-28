@@ -2840,14 +2840,21 @@ class App(tk.Tk):
         head = ttk.Frame(t, padding=(12, 10, 12, 4)); head.pack(fill=X)
         ttk.Label(head, text="Scoreclock Element Editor",
                   font=("Segoe UI", 13, "bold")).pack(side=LEFT)
+        ttk.Button(head, text="Live Tune in Xenia…",
+                   command=self._sbl_live_tune).pack(side=RIGHT)
         ttk.Button(head, text="Whole-Scoreclock Position (screen anchor)…",
-                   command=self._sb_anchor_dialog).pack(side=RIGHT)
+                   command=self._sb_anchor_dialog).pack(side=RIGHT, padx=(0, 6))
         self._sbl_shadow_btn = ttk.Button(head, text="Hide Scorebug Logo",
                                           command=self._sbl_toggle_shadow)
         self._sbl_shadow_btn.pack(side=RIGHT, padx=(0, 6))
         self._sbl_teal_btn = ttk.Button(head, text="Hide Bottom Teal Bar",
                                         command=self._sbl_toggle_teal)
         self._sbl_teal_btn.pack(side=RIGHT, padx=(0, 6))
+        # SOG is an ADDED (non-stock) element set — a clean/re-extract of overlay_static.iff drops
+        # the home/away shot rows and the file-driven tab can't list them. This restores them.
+        self._sbl_sog_btn = ttk.Button(head, text="Add Shots on Goal",
+                                       command=self._sbl_restore_sog)
+        self._sbl_sog_btn.pack(side=RIGHT, padx=(0, 6))
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
                   text="Move, resize and recolour each part of the in-game scoreclock. Pick an "
                        "element in the list or preview, queue changes, then Apply — writes "
@@ -2858,7 +2865,7 @@ class App(tk.Tk):
         # Preview canvas
         pv = ttk.LabelFrame(t, text="Preview (schematic, to scale — dashed = stock)", padding=4)
         pv.pack(fill=X, padx=12, pady=(6, 4))
-        self._sbl_canvas = Canvas(pv, height=150, bg="#0e0f12", highlightthickness=0)
+        self._sbl_canvas = Canvas(pv, height=128, bg="#0e0f12", highlightthickness=0)
         self._sbl_canvas.pack(fill=X)
         self._sbl_canvas.bind("<Configure>", lambda e: self._sbl_render())
         self._sbl_canvas.bind("<Button-1>", self._sbl_canvas_click)
@@ -2867,13 +2874,16 @@ class App(tk.Tk):
 
         # Element list (left)
         left = ttk.Frame(body); left.pack(side=LEFT, fill=BOTH, expand=True)
-        cols = ("element", "x", "y", "fontsize", "width", "height", "color", "pending")
+        # "font" shows the element's font resource (the real glyph-size lever). The old
+        # "Font Size" column was the +0x7C CLIP-BOX width — misleading, so it's hidden from
+        # the table (still editable via the Width box in the side panel).
+        cols = ("element", "x", "y", "font", "width", "height", "color", "pending")
         tv = ttk.Treeview(left, columns=cols, show="headings", height=12,
                           selectmode="extended")     # multi-select for group actions
         for c, w, a in (("element", 196, W), ("x", 56, W), ("y", 56, W),
-                        ("fontsize", 66, W), ("width", 58, W), ("height", 58, W),
+                        ("font", 150, W), ("width", 58, W), ("height", 58, W),
                         ("color", 70, W), ("pending", 150, W)):
-            tv.heading(c, text={"x": "X", "y": "Y", "fontsize": "Font Size",
+            tv.heading(c, text={"x": "X", "y": "Y", "font": "Font",
                                 "width": "Width", "height": "Height",
                                 "color": "Color", "pending": "Pending"}.get(c, c.title()))
             tv.column(c, width=w, anchor=a)
@@ -2883,8 +2893,29 @@ class App(tk.Tk):
         tv.bind("<Double-1>", self._sbl_tv_double)     # double-click a cell to edit X/Y/Size/Color
         self._sbl_tv = tv
 
-        # Edit controls (right)
-        ctl = ttk.Frame(body, padding=(12, 0, 0, 0)); ctl.pack(side=LEFT, fill=Y)
+        # Edit controls (right) — wrapped in a FIXED-HEIGHT scroll area. The column of Move/Scale/
+        # Font panels + help had grown taller than the window, so its requested height forced the
+        # whole tab past the screen and clipped the bottom Apply bar. Giving the canvas a small
+        # requested height decouples the tab height from the column's natural height: on a short
+        # window the column scrolls (drag the bar, or wheel while the pointer is over it) instead
+        # of pushing the action bar off-screen. Nothing removed.
+        try:
+            _cbg = ttk.Style().lookup("TFrame", "background") or self.cget("background")
+        except Exception:
+            _cbg = self.cget("background")
+        ctl_wrap = ttk.Frame(body, padding=(12, 0, 0, 0)); ctl_wrap.pack(side=LEFT, fill=Y)
+        ctl_canvas = Canvas(ctl_wrap, width=244, height=240, highlightthickness=0, bd=0, bg=_cbg)
+        ctl_bar = ttk.Scrollbar(ctl_wrap, orient=VERTICAL, command=ctl_canvas.yview)
+        ctl_canvas.configure(yscrollcommand=ctl_bar.set)
+        ctl_bar.pack(side=RIGHT, fill=Y)
+        ctl_canvas.pack(side=LEFT, fill=Y)
+        ctl = ttk.Frame(ctl_canvas)
+        ctl_canvas.create_window((0, 0), window=ctl, anchor="nw")
+        ctl.bind("<Configure>",
+                 lambda e: ctl_canvas.configure(scrollregion=ctl_canvas.bbox("all")))
+        _ctl_wheel = lambda e: ctl_canvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        ctl_canvas.bind("<Enter>", lambda e: ctl_canvas.bind_all("<MouseWheel>", _ctl_wheel))
+        ctl_canvas.bind("<Leave>", lambda e: ctl_canvas.unbind_all("<MouseWheel>"))
         self._sbl_selvar = StringVar(value="(no element selected)")
         ttk.Label(ctl, textvariable=self._sbl_selvar, font=("Segoe UI", 9, "bold"),
                   wraplength=210).pack(anchor=W, pady=(0, 4))
@@ -2906,33 +2937,36 @@ class App(tk.Tk):
         ttk.Button(exact, text="Set move", command=self._sbl_set_move).grid(
             row=1, column=0, columnspan=4, sticky=EW, pady=(3, 0))
 
-        sc = ttk.LabelFrame(ctl, text="Scale — text, logos & bars (independent X, Y)",
+        sc = ttk.LabelFrame(ctl, text="Scale (independent X, Y)",
                             padding=8); sc.pack(fill=X, pady=(8, 0))
         srow = ttk.Frame(sc); srow.pack()
-        ttk.Label(srow, text="×X").grid(row=0, column=0)
-        self._sbl_sx = StringVar(value="1.0")
+        ttk.Label(srow, text="X").grid(row=0, column=0)
+        self._sbl_sx = StringVar(value="1.2")
         ttk.Entry(srow, textvariable=self._sbl_sx, width=6).grid(row=0, column=1, padx=2)
-        ttk.Label(srow, text="×Y").grid(row=0, column=2)
-        self._sbl_sy = StringVar(value="1.0")
+        ttk.Label(srow, text="Y").grid(row=0, column=2)
+        self._sbl_sy = StringVar(value="1.2")
         ttk.Entry(srow, textvariable=self._sbl_sy, width=6).grid(row=0, column=3, padx=2)
-        ttk.Button(sc, text="Set scale (× stock)", command=self._sbl_set_scale).pack(
+        ttk.Button(sc, text="Set scale", command=self._sbl_set_scale).pack(
             fill=X, pady=(4, 0))
-        ttk.Label(sc, text="1.0 = stock. 2 = double, 0.5 = half. Works on text glyphs too now "
-                           "(scores/period/abbrevs) — the clip box widens with it so bigger text "
-                           "won't truncate.", foreground="#888", font=("Segoe UI", 7),
+        ttk.Label(sc, text="Text: the ABSOLUTE glyph scale — the same number shown in the "
+                           "Width/Height cells (stock 1.1 or 1.2; double-click those cells "
+                           "to edit one axis). Meshes: a ×-stock factor (1 = stock, 0.5 = "
+                           "half); absolute mesh W/H via the table cells. Blank = leave that "
+                           "axis alone. Nothing else changes automatically — if bigger text "
+                           "truncates with \"…\", raise its Width (clip box) yourself.",
+                  foreground="#888", font=("Segoe UI", 7),
                   wraplength=210, justify=LEFT).pack(anchor=W)
 
-        fs = ttk.LabelFrame(ctl, text="Text — font size & colour", padding=8); fs.pack(fill=X, pady=(8, 0))
+        fs = ttk.LabelFrame(ctl, text="Text — font & colour", padding=8); fs.pack(fill=X, pady=(8, 0))
         ffr = ttk.Frame(fs); ffr.pack(fill=X)
-        ttk.Label(ffr, text="Font (size)").pack(side=LEFT)
-        self._sbl_font = StringVar(value="Normal")
-        ttk.Combobox(ffr, textvariable=self._sbl_font, state="readonly", width=15,
+        ttk.Label(ffr, text="Font").pack(side=LEFT)
+        self._sbl_font = StringVar(value="Stock Large (abbrev/score)")
+        ttk.Combobox(ffr, textvariable=self._sbl_font, state="readonly", width=24,
                      values=list(self._sblay.FONTS.keys())).pack(side=LEFT, padx=3)
         ttk.Button(ffr, text="Set", width=5, command=self._sbl_set_font).pack(side=LEFT)
-        ttk.Label(fs, text="Per-element FONT = per-element SIZE (the real size lever — there's no scale "
-                           "field). Small/Large use the game's built-in Avenir 24/40. EXPERIMENTAL: "
-                           "apply + relaunch to check, and tell me if an element resizes — then I'll "
-                           "add named custom sizes.",
+        ttk.Label(fs, text="Per-element font, from the game's font registry (english.iff — each "
+                           "entry = typeface × scale, so the font choice is also the size "
+                           "choice). Apply + relaunch to see it.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=210,
                   justify=LEFT).pack(anchor=W, pady=(3, 0))
         frow = ttk.Frame(fs); frow.pack(fill=X, pady=(5, 0))
@@ -2946,6 +2980,16 @@ class App(tk.Tk):
                   foreground="#888", font=("Segoe UI", 7), wraplength=210,
                   justify=LEFT).pack(anchor=W, pady=(2, 0))
         ttk.Button(fs, text="Colour…", command=self._sbl_pick_color).pack(fill=X, pady=(6, 0))
+        cs = ttk.Frame(fs); cs.pack(fill=X, pady=(6, 0))
+        ttk.Button(cs, text="UPPERCASE", command=lambda: self._sbl_set_uppercase(True)).pack(
+            side=LEFT, expand=True, fill=X, padx=(0, 2))
+        ttk.Button(cs, text="Normal case", command=lambda: self._sbl_set_uppercase(False)).pack(
+            side=LEFT, expand=True, fill=X, padx=(2, 0))
+        ttk.Label(fs, text="Force the element's text to CAPS at draw time (Shots → SHOTS, "
+                           "1st → 1ST). The Shots label = \"Shots Label\"; the period text = "
+                           "\"Period\". Apply + relaunch to see it.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=210,
+                  justify=LEFT).pack(anchor=W, pady=(2, 0))
 
         hb = ttk.Frame(ctl); hb.pack(fill=X, pady=(10, 0))
         ttk.Button(hb, text="Hide", command=lambda: self._sbl_set_hidden(True)).pack(
@@ -3027,6 +3071,10 @@ class App(tk.Tk):
                 tl = self._sblay.teal_bar_hidden(game_dir) if game_dir else False
             except Exception:
                 tl = False
+            try:
+                sog = self._sblay.sog_present(game_dir) if game_dir else False
+            except Exception:
+                sog = False
             def done():
                 if hasattr(self, "_sbl_shadow_btn"):
                     self._sbl_shadow_btn.config(
@@ -3034,6 +3082,10 @@ class App(tk.Tk):
                 if hasattr(self, "_sbl_teal_btn"):
                     self._sbl_teal_btn.config(
                         text="Show Bottom Teal Bar" if tl else "Hide Bottom Teal Bar")
+                if hasattr(self, "_sbl_sog_btn"):
+                    # ✓ when present (button still works — re-verifies/repairs the XEX side)
+                    self._sbl_sog_btn.config(
+                        text="Shots on Goal ✓" if sog else "Add Shots on Goal")
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
@@ -3086,6 +3138,35 @@ class App(tk.Tk):
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
+    def _sbl_restore_sog(self):
+        """(Re)install the Shots-on-Goal mod (home/away shot rows + label). SOG is an ADDED,
+        non-stock element set; a clean/re-extract of overlay_static.iff drops it and this
+        file-driven tab then can't list it. Idempotent — reports if already present. Writes
+        overlay_static.iff (+ idempotent XEX bind rows); shows on next game launch."""
+        game_dir = self._get_game_root()
+        if not game_dir:
+            messagebox.showerror("Scoreclock", "Set the game files folder in Settings."); return
+        self._sbl_statusvar.set("Installing Shots on Goal… (this re-packs the scene — ~1–2 min)")
+        self._sbl_sog_btn.config(state="disabled")
+        def work():
+            try:
+                status = self._sblay.install_sog(game_dir, self._log_q.put)
+                err = None
+            except Exception as e:
+                status, err = None, str(e)
+            def done():
+                self._sbl_sog_btn.config(state="normal")
+                if err:
+                    self._log_q.put(f"[scoreclock] Add Shots on Goal FAILED — {err}")
+                    self._sbl_statusvar.set(f"Failed: {err}")
+                    messagebox.showerror("Scoreclock", f"Couldn't add Shots on Goal:\n{err}")
+                    return
+                self._log_q.put(f"[scoreclock] Add Shots on Goal — {status}")
+                self._sbl_statusvar.set(f"{status}. Reloading…")
+                self._sbl_load()            # re-read the file so the SOG rows appear in the tab
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
+
     def _sbl_refresh_table(self):
         tv = self._sbl_tv
         keep = set(tv.selection())
@@ -3097,15 +3178,27 @@ class App(tk.Tk):
             eff_x = r["x"] + float(ed.get("dx", 0))
             eff_y = r["y"] + float(ed.get("dy", 0))
             if r["kind"] == "text":
-                sz = float(ed.get("size", r.get("size", 0)))
-                fontsize_txt = f"{sz:.0f}"
-                width_txt = height_txt = "—"        # text rows have no bbox (greyed placeholder)
+                if "font" in ed:                     # pending font override, else on-disk font
+                    font_txt = self._sblay._HASH_FONT.get(int(ed["font"]), "custom")
+                else:
+                    font_txt = r.get("font", "")
+                # Width/Height cells show the ABSOLUTE glyph scale (the anim-desc consts;
+                # stock 1.1 or 1.2) — pending sx/sy factors are folded in.
+                stock_sc = r.get("stock_scale") or 0.0
+                if stock_sc:
+                    # apply writes stock*factor as the ABSOLUTE const, so a pending factor
+                    # previews as stock*factor (not current*factor)
+                    ax = stock_sc * float(ed["sx"]) if "sx" in ed else r.get("scale_ax", stock_sc)
+                    ay = stock_sc * float(ed["sy"]) if "sy" in ed else r.get("scale_ay", stock_sc)
+                    width_txt, height_txt = f"{ax:.2f}", f"{ay:.2f}"
+                else:
+                    width_txt = height_txt = "—"
                 col = ("#%02X%02X%02X" % tuple(int(c) & 0xFF for c in ed["color"])
                        if "color" in ed else r.get("color", ""))
             else:
                 w = r.get("w", 0) * float(ed.get("sx", 1))
                 h = r.get("h", 0) * float(ed.get("sy", 1))
-                fontsize_txt = "—"                  # meshes have no font size
+                font_txt = "—"                      # meshes have no font
                 width_txt = f"{w:.0f}"; height_txt = f"{h:.0f}"
                 col = ""
             bits = []
@@ -3114,7 +3207,12 @@ class App(tk.Tk):
             if ed.get("dx") or ed.get("dy"):
                 bits.append(f"move {ed.get('dx', 0):+g},{ed.get('dy', 0):+g}")
             if ed.get("sx", 1) != 1 or ed.get("sy", 1) != 1:
-                bits.append(f"×{ed.get('sx', 1):g}/{ed.get('sy', 1):g}")
+                if r["kind"] == "text" and (r.get("stock_scale") or 0):
+                    st = r["stock_scale"]
+                    bits.append(f"scale {st * float(ed.get('sx', 1)):.2f}/"
+                                f"{st * float(ed.get('sy', 1)):.2f}")
+                else:
+                    bits.append(f"×{ed.get('sx', 1):g}/{ed.get('sy', 1):g}")
             if "size" in ed:
                 bits.append(f"width {ed['size']:g}")
             if "font" in ed:
@@ -3123,7 +3221,7 @@ class App(tk.Tk):
                 bits.append("recolour")
             tv.insert("", END, iid=nm, values=(
                 r["label"], f"{eff_x:.1f}", f"{eff_y:.1f}",
-                fontsize_txt, width_txt, height_txt, col,
+                font_txt, width_txt, height_txt, col,
                 ", ".join(bits)))
         for nm in keep:
             if tv.exists(nm):
@@ -3272,6 +3370,15 @@ class App(tk.Tk):
         if r["kind"] == "text":
             self._sbl_selvar.set(f"{r['label']}  ·  text")
             self._sbl_size.set(f"{ed.get('size', r.get('size', 0)):g}")
+            # prefill the scale entries with the element's CURRENT absolute glyph scale
+            # (pending folded in) so a single-axis tweak never resets the other axis
+            stock_sc = r.get("stock_scale") or 0.0
+            if stock_sc:
+                ax = stock_sc * float(ed["sx"]) if "sx" in ed else r.get("scale_ax", stock_sc)
+                ay = stock_sc * float(ed["sy"]) if "sy" in ed else r.get("scale_ay", stock_sc)
+                self._sbl_sx.set(f"{ax:.2f}"); self._sbl_sy.set(f"{ay:.2f}")
+            else:
+                self._sbl_sx.set(""); self._sbl_sy.set("")
         else:
             self._sbl_selvar.set(f"{r['label']}  ·  logo/bar")
             self._sbl_sx.set(f"{ed.get('sx', 1):g}"); self._sbl_sy.set(f"{ed.get('sy', 1):g}")
@@ -3303,22 +3410,44 @@ class App(tk.Tk):
         self._sbl_refresh_table(); self._sbl_render()
 
     def _sbl_set_scale(self):
+        """Set scale from the side panel. TEXT rows take the value as the ABSOLUTE glyph
+        scale (the number shown in their Width/Height cells; stock 1.1/1.2); MESH rows take
+        it as a ×-stock factor (their absolute size is edited via the W/H cells).
+        A BLANK entry leaves that axis untouched — only the axes you fill in change."""
         names = self._sbl_selection()
         if not names:
             return
+        vx = vy = None
         try:
-            sx = float(self._sbl_sx.get()); sy = float(self._sbl_sy.get())
+            if self._sbl_sx.get().strip():
+                vx = float(self._sbl_sx.get())
+            if self._sbl_sy.get().strip():
+                vy = float(self._sbl_sy.get())
         except ValueError:
-            messagebox.showerror("Scoreclock", "Scale factors must be numbers."); return
-        if sx <= 0 or sy <= 0:
-            messagebox.showerror("Scoreclock", "Scale factors must be positive."); return
+            messagebox.showerror("Scoreclock", "Scale values must be numbers."); return
+        if vx is None and vy is None:
+            return
+        if (vx is not None and vx <= 0) or (vy is not None and vy <= 0):
+            messagebox.showerror("Scoreclock", "Scale values must be positive."); return
         applied = 0
-        for nm in names:                           # scale now applies to BOTH meshes (vertex scale)
-            r = self._sbl_row(nm)                  # and text (glyph scale via the transform matrix)
+        for nm in names:
+            r = self._sbl_row(nm)
             if not r:
                 continue
             ed = self._sbl_ped(nm)
-            ed["sx"], ed["sy"] = sx, sy            # keep sx/sy even at 1.0 so it resets a prior scale
+            if r["kind"] == "text":
+                stock_sc = r.get("stock_scale") or 0.0
+                if not stock_sc:
+                    continue
+                if vx is not None:
+                    ed["sx"] = vx / stock_sc       # absolute -> factor
+                if vy is not None:
+                    ed["sy"] = vy / stock_sc
+            else:
+                if vx is not None:
+                    ed["sx"] = vx
+                if vy is not None:
+                    ed["sy"] = vy
             applied += 1
         if not applied:
             return
@@ -3546,6 +3675,24 @@ class App(tk.Tk):
         self._sbl_ped(nm)["color"] = rgb
         self._sbl_refresh_table(); self._sbl_render()
 
+    def _sbl_set_uppercase(self, on):
+        """Force selected text element(s) to CAPS at draw time (record +0xB0), or back to
+        normal case. Text-only; meshes are skipped. Reversible."""
+        names = self._sbl_selection()
+        if not names:
+            return
+        applied = 0
+        for nm in names:
+            r = self._sbl_row(nm)
+            if not r or r["kind"] != "text":
+                continue
+            self._sbl_ped(nm)["uppercase"] = bool(on)
+            applied += 1
+        if not applied:
+            messagebox.showinfo("Scoreclock", "Uppercase applies to text elements (label, "
+                                "period, scores, abbreviations)."); return
+        self._sbl_refresh_table(); self._sbl_render()
+
     def _sbl_set_hidden(self, hide):
         """Hide (shove off-screen) or show every selected element. Reversible."""
         names = self._sbl_selection()
@@ -3589,7 +3736,7 @@ class App(tk.Tk):
         r = self._sbl_row(nm)
         if not r:
             return
-        cols = ("element", "x", "y", "fontsize", "width", "height", "color", "pending")
+        cols = ("element", "x", "y", "font", "width", "height", "color", "pending")
         try:
             cname = cols[int(colid.replace("#", "")) - 1]
         except (ValueError, IndexError):
@@ -3597,24 +3744,32 @@ class App(tk.Tk):
         tv.selection_set(nm); self._sbl_render()
         if cname == "color":
             self._sbl_edit_color_hex(nm); return
-        if cname not in ("x", "y", "fontsize", "width", "height"):
+        if cname == "font":
+            messagebox.showinfo("Scoreclock", "Pick a font in the side panel (Text — font & "
+                                "colour) and press Set."); return
+        if cname not in ("x", "y", "width", "height"):
             return
         is_text = r["kind"] == "text"
-        if cname == "fontsize" and not is_text:
-            messagebox.showinfo("Scoreclock", "Meshes have no font size — edit Width/Height."); return
-        if cname in ("width", "height") and is_text:
-            messagebox.showinfo("Scoreclock", "Text has no width/height — edit Font Size."); return
+        stock_sc = r.get("stock_scale") or 0.0
+        if cname in ("width", "height") and is_text and not stock_sc:
+            messagebox.showinfo("Scoreclock", "This text element has no glyph-scale channel."); return
         ed = self._sbl_pending.get(nm, {})
         if cname == "x":
             cur = r["x"] + float(ed.get("dx", 0)); title = "X position"
         elif cname == "y":
             cur = r["y"] + float(ed.get("dy", 0)); title = "Y position"
-        elif cname == "fontsize":
-            cur = float(ed.get("size", r.get("size", 0))); title = "Font size"
         elif cname == "width":
-            cur = r.get("w", 0) * float(ed.get("sx", 1)); title = "Width"
+            if is_text:                             # absolute glyph scale X (stock 1.1/1.2)
+                cur = stock_sc * float(ed["sx"]) if "sx" in ed else r.get("scale_ax", stock_sc)
+                title = f"Glyph scale X (stock {stock_sc:g})"
+            else:
+                cur = r.get("w", 0) * float(ed.get("sx", 1)); title = "Width"
         else:  # height
-            cur = r.get("h", 0) * float(ed.get("sy", 1)); title = "Height"
+            if is_text:                             # absolute glyph scale Y
+                cur = stock_sc * float(ed["sy"]) if "sy" in ed else r.get("scale_ay", stock_sc)
+                title = f"Glyph scale Y (stock {stock_sc:g})"
+            else:
+                cur = r.get("h", 0) * float(ed.get("sy", 1)); title = "Height"
         val = simpledialog.askstring("Scoreclock", f"{title} for “{r['label']}”:",
                                      initialvalue=f"{cur:g}", parent=self)
         if val is None:
@@ -3629,18 +3784,26 @@ class App(tk.Tk):
             e["dx"] = f - r["x"]                    # delta from the on-disk value
         elif cname == "y":
             e["dy"] = f - r["y"]
-        elif cname == "fontsize":
-            e["size"] = f                          # absolute font size
         elif cname == "width":
-            base = r.get("w", 0)                    # target width -> scale factor about centroid
-            if base <= 0:
-                messagebox.showerror("Scoreclock", "This mesh has no measurable width."); return
-            e["sx"] = f / base                      # preserves any existing pending sy
+            if is_text:
+                if f <= 0:
+                    messagebox.showerror("Scoreclock", "Glyph scale must be positive."); return
+                e["sx"] = f / stock_sc              # stored as a factor; written as stock*factor
+            else:
+                base = r.get("w", 0)                # target width -> scale factor about centroid
+                if base <= 0:
+                    messagebox.showerror("Scoreclock", "This mesh has no measurable width."); return
+                e["sx"] = f / base                  # preserves any existing pending sy
         else:  # height
-            base = r.get("h", 0)
-            if base <= 0:
-                messagebox.showerror("Scoreclock", "This mesh has no measurable height."); return
-            e["sy"] = f / base                      # preserves any existing pending sx
+            if is_text:
+                if f <= 0:
+                    messagebox.showerror("Scoreclock", "Glyph scale must be positive."); return
+                e["sy"] = f / stock_sc
+            else:
+                base = r.get("h", 0)
+                if base <= 0:
+                    messagebox.showerror("Scoreclock", "This mesh has no measurable height."); return
+                e["sy"] = f / base                  # preserves any existing pending sx
         self._sbl_refresh_table(); self._sbl_render()
 
     def _sbl_apply_all(self):
@@ -3724,8 +3887,11 @@ class App(tk.Tk):
 
     def _sbl_effective_snapshot(self, rows=None, pending=None):
         """ABSOLUTE layout of every element = file rows + pending edits, JSON-safe. This is what a
-        preset stores now (not disposable relative deltas) so it survives Apply + any reset.
-        text -> {kind,x,y,size,color:[r,g,b],hidden}; mesh -> {kind,x,y,w,h,hidden}."""
+        preset stores now (not disposable relative deltas) so it survives Apply + any reset. LOSSLESS
+        — every editable value is captured so nothing is silently dropped on reload:
+        text -> {kind,x,y,size,color:[r,g,b],hidden,uppercase,font_hash,scale_x,scale_y};
+        mesh -> {kind,x,y,w,h,hidden}. (Presence of shots_away/shots_home also records the SOG mod,
+        which reload re-installs if the target file lost it.)"""
         rows = self._sbl_rows if rows is None else rows
         pending = self._sbl_pending if pending is None else pending
         snap = {}
@@ -3740,7 +3906,15 @@ class App(tk.Tk):
                 else:
                     cc = (r.get("color") or "#FFFFFF").lstrip("#")
                     col = [int(cc[i:i + 2], 16) for i in (0, 2, 4)] if len(cc) >= 6 else [255, 255, 255]
-                snap[nm] = {"kind": "text", "x": x, "y": y, "size": size, "color": col, "hidden": hidden}
+                # effective = pending override, else on-disk row value (same units the editor/apply use:
+                # font = +0xDC hash; scale_x/y = factor of the element's stock glyph const)
+                upper = bool(ed["uppercase"]) if "uppercase" in ed else bool(r.get("uppercase", False))
+                fonth = int(ed["font"]) if "font" in ed else int(r.get("font_hash", 0) or 0)
+                sx = float(ed["sx"]) if "sx" in ed else float(r.get("scale_x", 1) or 1)
+                sy = float(ed["sy"]) if "sy" in ed else float(r.get("scale_y", 1) or 1)
+                snap[nm] = {"kind": "text", "x": x, "y": y, "size": size, "color": col,
+                            "hidden": hidden, "uppercase": upper, "font_hash": fonth,
+                            "scale_x": sx, "scale_y": sy}
             else:
                 w = (r.get("w", 0) or 0) * float(ed.get("sx", 1))
                 h = (r.get("h", 0) or 0) * float(ed.get("sy", 1))
@@ -3772,6 +3946,17 @@ class App(tk.Tk):
                     curc = tuple(int(cur[i:i + 2], 16) for i in (0, 2, 4)) if len(cur) >= 6 else (255, 255, 255)
                     if col != curc:
                         ed["color"] = col
+                # uppercase / font / glyph-scale — restored the same way the editor sets them, so
+                # Apply (apply_edits) writes them back. Only emit a delta when it actually differs.
+                if "uppercase" in a and bool(a["uppercase"]) != bool(r.get("uppercase", False)):
+                    ed["uppercase"] = bool(a["uppercase"])
+                if "font_hash" in a and int(a["font_hash"]) and \
+                        int(a["font_hash"]) != int(r.get("font_hash", 0) or 0):
+                    ed["font"] = int(a["font_hash"])
+                if "scale_x" in a and abs(float(a["scale_x"]) - float(r.get("scale_x", 1) or 1)) > 1e-4:
+                    ed["sx"] = float(a["scale_x"])
+                if "scale_y" in a and abs(float(a["scale_y"]) - float(r.get("scale_y", 1) or 1)) > 1e-4:
+                    ed["sy"] = float(a["scale_y"])
             else:
                 rw = (r.get("w", 0) or 0.0); rh = (r.get("h", 0) or 0.0)
                 if rw > 1e-6 and abs(float(a.get("w", rw)) / rw - 1) > 1e-4: ed["sx"] = float(a["w"]) / rw
@@ -3835,7 +4020,12 @@ class App(tk.Tk):
             messagebox.showinfo("Scoreclock", "The scene is still loading — try Load again in a "
                                 "moment."); return
         if isinstance(ed, dict) and "__abs__" in ed:      # new absolute-snapshot format
-            self._sbl_pending = self._sbl_snapshot_to_pending(ed["__abs__"])
+            snap = ed["__abs__"]
+            want_sog = ("shots_away" in snap) or ("shots_home" in snap)
+            have_sog = any(r["name"] in ("shots_away", "shots_home") for r in self._sbl_rows)
+            if want_sog and not have_sog:                 # preset had SOG, file lost it -> re-add it
+                self._sbl_preset_load_restoring_sog(name, snap); return
+            self._sbl_pending = self._sbl_snapshot_to_pending(snap)
         elif isinstance(ed, dict) and ed:                 # legacy relative-delta format
             self._sbl_pending = {n: dict(e) for n, e in ed.items()}
         else:                                             # empty preset -> nothing to restore
@@ -3845,6 +4035,38 @@ class App(tk.Tk):
         self._sbl_refresh_table(); self._sbl_render()
         n = len(self._sbl_pending)
         self._sbl_statusvar.set(f"Loaded preset “{name}” ({n} element(s)) — Apply to write it.")
+
+    def _sbl_preset_load_restoring_sog(self, name, snap):
+        """Preset captured the Shots-on-Goal mod but the current file lost it — re-install SOG
+        (writes overlay_static.iff), reload the scene, THEN stage the preset's edits so SOG's saved
+        position/scale/font/etc. apply too. install_sog is idempotent and file-driven, so the SOG
+        rows appear in the tab right after. Background thread, matching the other _sbl writers."""
+        game_dir = self._get_game_root()
+        if not game_dir:
+            messagebox.showerror("Scoreclock", "Set the game files folder in Settings."); return
+        self._sbl_statusvar.set(f"Preset “{name}” includes Shots on Goal — re-installing it… (~1–2 min)")
+        def work():
+            try:
+                self._sblay.install_sog(game_dir, self._log_q.put)
+                rows = self._sblay.list_elements(game_dir)
+                err = None
+            except Exception as e:
+                rows, err = None, str(e)
+            def done():
+                if err:
+                    self._log_q.put(f"[scoreclock] preset SOG restore FAILED — {err}")
+                    self._sbl_statusvar.set(f"Failed: {err}")
+                    messagebox.showerror("Scoreclock", f"Couldn't restore Shots on Goal:\n{err}")
+                    return
+                self._sbl_rows = rows
+                self._sbl_pending = self._sbl_snapshot_to_pending(snap, rows)
+                self._sbl_factory = False
+                self._sbl_refresh_table(); self._sbl_render(); self._sbl_sync_shadow_btn()
+                n = len(self._sbl_pending)
+                self._sbl_statusvar.set(f"Restored Shots on Goal + loaded preset “{name}” "
+                                        f"({n} edit(s)) — Apply to write it.")
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
 
     def _sbl_preset_save(self):
         name = self._sbl_preset_var.get()
@@ -3929,6 +4151,21 @@ class App(tk.Tk):
         threading.Thread(target=work, daemon=True).start()
 
     # ── Whole-scoreclock screen anchor (secondary dialog) ─────────────────────
+
+    def _sbl_live_tune(self):
+        """Open the live scoreclock tuner (edits the RUNNING game in Xenia, instant feedback)."""
+        game_dir = self._get_game_root()
+        if not game_dir:
+            messagebox.showwarning("Live Tune", "Set the game folder first (Settings).")
+            return
+        try:
+            from launcher import scoreclock_live
+        except ImportError:
+            import scoreclock_live
+        try:
+            scoreclock_live.open_live_scoreclock(self, str(game_dir))
+        except Exception as e:
+            messagebox.showerror("Live Tune", f"Could not open the live tuner:\n{e}")
 
     def _sb_anchor_dialog(self):
         """Whole-scoreclock placement: the 3×3 screen anchor (XEX patch) + the advanced
@@ -6605,9 +6842,7 @@ class App(tk.Tk):
                 snap = shadow = teal = None
                 if is_overlay:
                     try:
-                        snap = self._sblay.capture_snapshot(game_dir)
-                        shadow = self._sblay.scorebug_logo_hidden(game_dir)
-                        teal = self._sblay.teal_bar_hidden(game_dir)
+                        snap, shadow, teal = self._sblay.capture_overlay_state(game_dir)
                     except Exception as ce:
                         self._log_q.put(f"  (layout snapshot skipped: {ce})")
                 self._emit_progressf(0.2, f"{iff}: resetting to clean")
@@ -6632,14 +6867,7 @@ class App(tk.Tk):
                 self._log_q.put(f"  {status}")
                 if is_overlay and snap:
                     try:
-                        led = self._sblay.snapshot_edits(snap, game_dir)
-                        if led:
-                            self._sblay.apply_edits(led, game_dir, self._log_q.put)
-                        if shadow:
-                            self._sblay.set_scorebug_logo_hidden(True, game_dir, self._log_q.put)
-                        if teal:
-                            self._sblay.set_teal_bar_hidden(True, game_dir, self._log_q.put)
-                        self._log_q.put(f"  restored scoreclock layout ({len(led)} element edit(s))")
+                        self._log_q.put("  " + self._sbl_restore_overlay_layout(snap, shadow, teal, game_dir))
                     except Exception as re:
                         self._log_q.put(f"  (WARNING: layout restore failed — {re})")
                 self._emit_progressf(0.75, f"{iff}: syncing front-end copy")
@@ -6767,6 +6995,17 @@ class App(tk.Tk):
         else:
             self._iff_apply_all()
 
+    def _sbl_restore_overlay_layout(self, snap, shadow, teal, game_dir):
+        """Re-apply the FULL scoreclock state onto a freshly-cleaned overlay_static.iff.
+
+        ensure_clean() wipes blob0 — that's the per-element LAYOUT *and* the whole Shots-on-Goal
+        mod (its two cloned records live in blob0). Restoring only the per-element edits (the old
+        behaviour) silently dropped SOG, font, and glyph scale every texture apply, so the user had
+        to redo them. rebuild_overlay_from_snapshot rebuilds EVERYTHING editable — SOG + per-element
+        layout (pos/size/color/uppercase/font/glyph-scale) + the 2K-shadow/teal-bar hides — in a
+        SINGLE load_dram + SINGLE apply_dram (the old path did up to 4 loads + 3 re-encodes)."""
+        return self._sblay.rebuild_overlay_from_snapshot(snap, shadow, teal, game_dir, self._log_q.put)
+
     def _iff_apply_all_work(self, iff, edits, game_dir, compact=True, progress=None):
         """Apply every edited texture of ONE multi-texture asset from a clean base: preserve the
         scoreclock layout for overlay_static.iff, mirror jersey twins to the front-end copy, and
@@ -6783,9 +7022,7 @@ class App(tk.Tk):
         snap = shadow = teal = None
         if is_overlay:
             try:
-                snap = self._sblay.capture_snapshot(game_dir)
-                shadow = self._sblay.scorebug_logo_hidden(game_dir)
-                teal = self._sblay.teal_bar_hidden(game_dir)
+                snap, shadow, teal = self._sblay.capture_overlay_state(game_dir)
                 self._log_q.put(f"  snapshotted scoreclock layout ({len(snap)} elements) to restore after")
             except Exception as ce:
                 self._log_q.put(f"  (layout snapshot skipped: {ce})")
@@ -6797,15 +7034,7 @@ class App(tk.Tk):
         self._log_q.put(f"  {status}")
         if is_overlay and snap:
             try:
-                led = self._sblay.snapshot_edits(snap, game_dir)
-                if led:
-                    self._sblay.apply_edits(led, game_dir, self._log_q.put)
-                if shadow:
-                    self._sblay.set_scorebug_logo_hidden(True, game_dir, self._log_q.put)
-                if teal:
-                    self._sblay.set_teal_bar_hidden(True, game_dir, self._log_q.put)
-                self._log_q.put(f"  restored scoreclock layout ({len(led)} element edit(s)"
-                                f"{', 2K hidden' if shadow else ''}{', teal hidden' if teal else ''})")
+                self._log_q.put("  " + self._sbl_restore_overlay_layout(snap, shadow, teal, game_dir))
             except Exception as re:
                 self._log_q.put(f"  (WARNING: layout restore failed — {re})")
         prog(0.75, f"{iff}: syncing front-end copy")

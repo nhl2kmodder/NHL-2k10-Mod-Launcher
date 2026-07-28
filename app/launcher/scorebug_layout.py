@@ -10,9 +10,10 @@ TEXT elements (font-rendered at runtime) draw from the TEXT RECORD TABLE (verifi
 2026-07-16: skeleton-joint edits do nothing — the joints are only the bind pose; this table
 is the baked copy the game consumes):
   text record, stride 0xE0, keyed by [crc32('scorebug_text')][crc32(name)]:
-    +0x00 font hash     +0x04 element name hash
+    +0x00 table key (crc 'scorebug_text')   +0x04 element name hash
     +0x68 X (f32 BE)    +0x6C Y      +0x70 Z      +0x74 W (1.0)
-    +0x7C font size (38.0)   +0x84 second metric (15.0)   +0x88 color u32
+    +0x7C max text width (clip box)   +0x84 second metric (15.0)   +0x88 color u32
+    +0xD8 bind hash     +0xDC FONT hash (corrected 2026-07-28; +0x00 is NOT the font)
   All 10 text elements have a record: team1/team2 (abbrevs), team1/2_score, quarter,
   gameclock1-4, gameclock_semi. The same hash pair also starts the (shorter, stride 0x38)
   anim-binding table records — disambiguated by validating W==1.0 and a sane position.
@@ -42,6 +43,8 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).parent))
 import overlay_editor as oe
 import archive_textures as at
+import scorebug_anim_descs as sad
+import scorebug_add_shots as sas
 
 IFF = "overlay_static.iff"
 
@@ -56,8 +59,29 @@ MESHES = ["logo_away", "logo_home", "team1_colorblur", "team2_colorblur", "team1
 
 # Elements exposed to the user (scorebug_text/dummy/joint13 are rig plumbing). All ten
 # text elements have a draw record — including gameclock4, whose skeleton slot is odd.
+# shots_away/shots_home = the SOG elements added by scorebug_add_shots (2026-07-28);
+# gameclock4 is repurposed as their "Shots" label. Their records live in the RELOCATED
+# table at the end of blob0, found by the same signature scan.
 EDITABLE_TEXT = ["away_abbrev", "team1", "team2", "team1_score", "team2_score", "quarter",
-                 "gameclock1", "gameclock2", "gameclock_semi", "gameclock3", "gameclock4"]
+                 "gameclock1", "gameclock2", "gameclock_semi", "gameclock3", "gameclock4",
+                 "shots_away", "shots_home"]
+# The three SOG elements (Away Shots, Home Shots, and the "SHOTS" label = the repurposed
+# gameclock4 record) are JOINTLESS — they render straight from their draw record, with no
+# scene joint. The anim TRANSFORM-DESC consts scale lever (set_text_scale_by_bind) only takes
+# effect through a joint, so it is inert for these three (in-game report 2026-07-28: they are
+# the ONLY elements that don't scale in the tab). For them, glyph scale is driven by the draw
+# record's OWN local-matrix diagonal instead (m00 @+0x38 = X, m11 @+0x4C = Y; stock 1.0).
+SOG_JOINTLESS = {"shots_away", "shots_home", "gameclock4"}
+TXMATRIX_M00 = 0x38            # local 4x4 matrix diagonal: X-scale (m00), Y-scale (m11 @+0x4C)
+TXMATRIX_M11 = 0x4C
+# Record +0xB0 (big-endian u32) = a per-element UPPERCASE flag applied at text-draw time: the
+# rendered glyphs are forced to caps, independent of the string source. PROVEN by the stock
+# pattern — the only two elements that are always caps in-game (the two team abbreviations:
+# records away_abbrev + team2) are the only records with this flag == 1; every other text record
+# has 0. Setting it on the "Shots" label (gameclock4) -> "SHOTS"; on the PERIOD element -> "1ST"/
+# "2ND"/"3RD". NOTE the period is rendered by record 'team1_score' (its bind is QUARTER); the
+# record literally named 'quarter' binds a CLOCK DIGIT, not the period (2K reused record names).
+UPPERCASE_FLAG = 0xB0
 # away_abbrev = the AWAY team abbreviation. Its draw record has a BLANK font/name hash (0x0), so
 # it can't be found by name — it sits exactly one record (0xE0) BEFORE team2, same size (38), same
 # row. Identified structurally in _find_text_records. (The user's "go back one" hunch was right.)
@@ -102,7 +126,8 @@ LABELS = {
     "gameclock3": "Clock — digit 4",
     "team1_score": "Period",
     "glint_separator": "Bottom Cyan Separator Bar 1", "glint_separator1": "Bottom Cyan Separator Bar 2",
-    "gameclock4": "Extra text (not shown in this scoreclock) TODO remove",
+    "gameclock4": "Shots Label (\"Shots\")",
+    "shots_away": "Away Shots (SOG)", "shots_home": "Home Shots (SOG)",
     "logo_2k_mesh": "2K/SN logo panel", "glow_cylinder_color": "Bottom glow bar",
     "glow_white": "White glow",
 }
@@ -116,7 +141,10 @@ STOCK_POS = {
     "quarter": (-24.6701, -150.92),
     "gameclock1": (-16.2205, -150.92), "gameclock2": (-11.5774, -150.92),
     "gameclock_semi": (-7.19409, -150.92), "gameclock3": (1.2977, -150.92),
-    "gameclock4": (-183.193, 13.5165),
+    # SOG row (authored 2026-07-28, not 2K stock): gameclock4 = the "Shots" label between
+    # the two counters. (gameclock4's 2K-pristine pos was (-183.193, 13.5165), unused.)
+    "gameclock4": (-118.0, -166.0),
+    "shots_away": (-145.0, -166.0), "shots_home": (-75.0, -166.0),
     "logo_away": (-160.183, -156.738), "logo_home": (-71.7836, -156.738),
     "team1_colorblur": (-76.9628, -166.104), "team2_colorblur": (-165.967, -166.104),
     "team1_color": (-76.9628, -166.071), "team1_glint1": (-93.0074, -166.071),
@@ -136,7 +164,9 @@ STOCK_META = {
     "gameclock2": {"size": 7, "color": "#FFFFFF"},
     "gameclock_semi": {"size": 7, "color": "#FFFFFF"},
     "gameclock3": {"size": 7, "color": "#FFFFFF"},
-    "gameclock4": {"size": 169.5, "color": "#FFFFFF"},
+    "gameclock4": {"size": 48, "color": "#FFFFFF"},     # "Shots" label: 48 = untruncated width
+    "shots_away": {"size": 20, "color": "#FFFFFF"},
+    "shots_home": {"size": 20, "color": "#FFFFFF"},
     "logo_away": {"w": 50.4626, "h": 20.4645}, "logo_home": {"w": 50.4626, "h": 20.4645},
     "team1_colorblur": {"w": 86.0079, "h": 9.12473},
     "team2_colorblur": {"w": 86.2834, "h": 9.12473},
@@ -182,47 +212,76 @@ def _find_text_skeleton(dram):
     raise ValueError("scorebug text skeleton not found in overlay_static DRAM")
 
 
-# Per-element FONT: a text draw record starts with its font-family hash @+0x00 (stock =
-# "scorebug_text"). The game ships the same typeface at multiple sizes as separate font resources —
-# so repointing +0x00 to a bigger/smaller font is how you get PER-ELEMENT sizing (there is no scale
-# field; see the 2026-07-21 notes). FONTS maps a friendly size label -> resource name; the record's
-# +0x00 is set to crc(resource). "Normal" = the stock scorebug_text. avenir_heavy_24/40 already exist
-# in the data; custom sizes (Scoreclock_Small/Large) get their own font resources when we build them.
+# Per-element FONT (corrected 2026-07-28): the font hash is the record's LAST dword @+0xDC —
+# NOT +0x00 (that is the record-table key, always crc('scorebug_text'); the old +0x00 claim
+# came from misreading the key). Per Function_83C9EDA0 (the record property parser), the font
+# property (key 0xBF045BDB) stores either an inline name string or a precomputed crc hash; the
+# baked scorebug records store the hash @+0xDC. Stock census (record dump 2026-07-28):
+#   3DD873F2 = abbrevs + scores font   (name unknown — Avenir Heavy, large)
+#   F57C40A5 = clock digits + period   (name unknown)
+#   4A63F778 = crc('avenir_heavy_24')  (the SOG/"Shots" elements)
+#   1B5494E7 = crc('avenir_heavy_40')  (loaded in-context: used by the shootout scene)
+# FONTS maps a friendly label -> hash; +0xDC is repointed to redirect an element's font.
+# FONT SYSTEM SOLVED 2026-07-28: the full font-instance registry lives in english.iff
+# blob0 @0x129000-0x12CC90 — 103 alias entries, each [utf16 name][hash @name+0x40]
+# [base-font hash +0x44][1.0f +0x48][scaleX +0x4C][scaleY +0x50], stride 0x90, over
+# 8 base typefaces (avenir_heavy_24/40, avenir_roman_18/22, avenir_light_40,
+# avenir_black_95, arial_black_20, prison_aoe; atlases in english blob1). Stock
+# scorebug: 3DD873F2='AVENIR_HEAVY_24' (avenir_heavy_24 @0.5), F57C40A5=
+# 'AVENIR_ROMAN_22' (avenir_roman_22 @0.5). Any registry hash is assignable —
+# this is a curated pick spanning sizes/typefaces.
 FONTS = {
-    "Normal":            "scorebug_text",
-    "Small (Avenir 24)": "avenir_heavy_24",
-    "Large (Avenir 40)": "avenir_heavy_40",
+    "Stock Large (abbrev/score)": 0x3DD873F2,   # AVENIR_HEAVY_24: avenir_heavy_24 @0.5
+    "Stock Clock (clock/period)": 0xF57C40A5,   # AVENIR_ROMAN_22: avenir_roman_22 @0.5
+    "Avenir Heavy 24 (Shots)":    0x4A63F778,   # avenir_heavy_24 @0.5
+    "Avenir Heavy 20 (small)":    0x4D0E3361,   # avenir_heavy_40 @0.25
+    "Avenir Heavy 40 (large)":    0x1B5494E7,   # avenir_heavy_40 @0.5
+    "Avenir Roman 18":            0x493F7EF2,   # avenir_roman_18 @0.5
+    "Avenir Light 40":            0xA35DE24A,   # avenir_light_40 @0.5
+    "Avenir Black 95 (huge)":     0x88D8C0D8,   # avenir_black_95 @0.5
+    "Arial Black 20":             0xDBDC8608,   # arial_black_20 @0.5
+    "Stencil (LREGULAR 28)":      0x4DB6F1D5,   # prison_aoe @0.74
+    "Stratum2 40 (big heavy)":    0x6A9B0A7A,   # avenir_heavy_40 @0.9
 }
-_FONT_HASH = {label: _crc(res) for label, res in FONTS.items()}
+_FONT_HASH = dict(FONTS)
 _HASH_FONT = {h: label for label, h in _FONT_HASH.items()}
-_ALL_FONT_HASHES = list(_FONT_HASH.values())
+# Stock +0xDC per element, for restore/factory.
+_STOCK_FONT = {
+    "away_abbrev": 0x3DD873F2, "team1": 0x3DD873F2, "team2": 0x3DD873F2,
+    "team2_score": 0x3DD873F2,
+    "team1_score": 0xF57C40A5, "quarter": 0xF57C40A5, "gameclock1": 0xF57C40A5,
+    "gameclock2": 0xF57C40A5, "gameclock_semi": 0xF57C40A5, "gameclock3": 0xF57C40A5,
+    "gameclock4": 0x4A63F778, "shots_away": 0x4A63F778, "shots_home": 0x4A63F778,
+}
+# The record-table key @+0x00 (identical for every record; away_abbrev's is 0).
+_RECORD_KEY = _crc("scorebug_text")
 
 
 def _find_text_records(dram):
     """{name: record_offset} in the consumed text-draw table (stride 0xE0). Keyed by
-    [font hash @+0x00][name hash @+0x04]; the font hash may be ANY of the known fonts (repointing it
-    is how per-element sizing works), so try each. The same pair also opens the 0x38-stride
-    anim-binding records, so a candidate only counts with W==1.0 @+0x74 + a plausible pos @+0x68."""
+    [crc('scorebug_text') @+0x00][name hash @+0x04] — the +0x00 dword is the constant table
+    key, NOT the font (font = +0xDC; corrected 2026-07-28). The same pair also opens the
+    0x1C-stride anim-desc records, so a candidate only counts with W==1.0 @+0x74 + a
+    plausible pos @+0x68 (the record table also precedes the desc table in the blob)."""
     recs = {}
     for nm in EDITABLE_TEXT:
         if nm == "away_abbrev":
             continue                         # no name hash — resolved structurally below
-        nameh = struct.pack(">I", _crc(nm))
-        for fonth in _ALL_FONT_HASHES:       # stock scorebug_text first, then repointed fonts
-            sig = struct.pack(">I", fonth) + nameh
-            p = dram.find(sig)
-            while p >= 0:
-                one, zero = struct.unpack_from(">fI", dram, p + 0x60)
-                x, y, z, w = struct.unpack_from(">4f", dram, p + 0x68)
-                size = struct.unpack_from(">f", dram, p + 0x7C)[0]
-                if (one == 1.0 and zero == 0 and w == 1.0 and 0.5 <= size <= 500
-                        and abs(x) < 2000 and abs(y) < 2000 and -100 < z < 100):
-                    recs[nm] = p
-                    break
-                p = dram.find(sig, p + 4)
-            if nm in recs:
+        sig = struct.pack(">II", _RECORD_KEY, _crc(nm))
+        p = dram.find(sig)
+        while p >= 0:
+            one, zero = struct.unpack_from(">fI", dram, p + 0x60)
+            x, y, z, w = struct.unpack_from(">4f", dram, p + 0x68)
+            size = struct.unpack_from(">f", dram, p + 0x7C)[0]
+            if (one == 1.0 and zero == 0 and w == 1.0 and 0.5 <= size <= 500
+                    and abs(x) < 2000 and abs(y) < 2000 and -100 < z < 100):
+                recs[nm] = p
                 break
+            p = dram.find(sig, p + 4)
         if nm not in recs:
+            # the SOG elements only exist after scorebug_add_shots — absence is normal
+            if nm in ("shots_away", "shots_home"):
+                continue
             raise ValueError(f"text draw record not found for {nm}")
     # away_abbrev: blank-hash draw record exactly one stride (0xE0) before team2 — same body
     # (pos +0x68, size +0x7C, colour +0x89) so it edits like any other text element.
@@ -298,7 +357,13 @@ def _mesh_vertices(dram, start, end):
 def list_elements(gdir):
     """Element rows. text: {name,label,kind,x,y,size,color '#RRGGBB'}; mesh: {name,label,
     kind,x,y (vertex centroid), w,h (bbox), n (vertex count)}."""
-    dram, meta = oe.load_dram(IFF, gdir)
+    dram, _meta = oe.load_dram(IFF, gdir)
+    return list_elements_from_dram(bytes(dram))
+
+
+def list_elements_from_dram(dram):
+    """No-I/O core of list_elements: build rows from an ALREADY-decoded blob0 buffer. Lets a
+    single-load rebuild read the CURRENT in-memory state instead of paying another ~2min load."""
     dram = bytes(dram)
     rows = []
     trecs = _find_text_records(dram)
@@ -315,13 +380,32 @@ def list_elements(gdir):
         if jn and jn in joints:              # the (dead-for-position) draw-record matrix row
             x, y = struct.unpack_from(">2f", dram, joints[jn] + 0x1C)
         size = struct.unpack_from(">f", dram, o + 0x7C)[0]
-        sx = struct.unpack_from(">f", dram, o + 0x38)[0]     # glyph scale (matrix m00 / m11, stock 1.0)
-        sy = struct.unpack_from(">f", dram, o + 0x4C)[0]
-        fonth = struct.unpack_from(">I", dram, o)[0]         # per-element font family (== size lever)
+        fonth = struct.unpack_from(">I", dram, o + 0xDC)[0]  # per-element font hash (+0xDC)
+        # glyph scale = the anim transform desc's constant channels (consts[3]/[4]); shown
+        # as a factor of the element's stock const (1.1 or 1.2). Lookup is by BIND hash —
+        # the desc raw names are shifted authoring labels (see scorebug_anim_descs).
+        if nm in SOG_JOINTLESS:
+            # jointless SOG: scale is the record's own matrix diagonal (stock 1.0), not consts
+            ax = struct.unpack_from(">f", dram, o + TXMATRIX_M00)[0]
+            ay = struct.unpack_from(">f", dram, o + TXMATRIX_M11)[0]
+            sx, sy = ax, ay
+            stock_sc = 1.0
+        else:
+            stock_sc = sad.STOCK_TXSCALE.get(nm)
+            cur_sc = sad.get_text_scale_by_bind(dram, struct.unpack_from(">I", dram, o + 0xD8)[0])
+            if stock_sc and cur_sc:
+                sx, sy = cur_sc[0] / stock_sc, cur_sc[1] / stock_sc
+                ax, ay = cur_sc                          # absolute consts (the user-facing number)
+            else:
+                sx = sy = 1.0
+                ax = ay = stock_sc or 0.0
         a, r, g, b = struct.unpack_from(">4B", dram, o + 0x88)
+        upper = bool(struct.unpack_from(">I", dram, o + UPPERCASE_FLAG)[0])
         rows.append({"name": nm, "label": LABELS.get(nm, nm), "kind": "text",
                      "x": x, "y": y, "n": 1, "size": size, "scale_x": sx, "scale_y": sy,
-                     "font": _HASH_FONT.get(fonth, "Normal"), "font_hash": fonth,
+                     "scale_ax": ax, "scale_ay": ay,     # absolute glyph-scale consts
+                     "stock_scale": stock_sc or 0.0, "uppercase": upper,
+                     "font": _HASH_FONT.get(fonth, f"0x{fonth:08X}"), "font_hash": fonth,
                      "color": f"#{r:02X}{g:02X}{b:02X}"})
     for nm, (s, e) in _find_mesh_blocks(dram).items():
         vs = _mesh_vertices(dram, s, e)
@@ -335,35 +419,169 @@ def list_elements(gdir):
     return rows
 
 
+def _snapshot_from_rows(rows):
+    """Build the re-appliable layout dict from element rows. EVERYTHING editable is captured so
+    nothing is silently dropped on rebuild: text -> {kind,x,y,size,color,uppercase,font_hash,
+    scale_x,scale_y}; mesh -> {kind,x,y,w,h}."""
+    snap = {}
+    for r in rows:
+        if r["kind"] == "text":
+            snap[r["name"]] = {"kind": "text", "x": r["x"], "y": r["y"],
+                               "size": float(r.get("size", 0) or 0),
+                               "color": r.get("color", "#FFFFFF"),
+                               "uppercase": bool(r.get("uppercase", False)),
+                               "font_hash": int(r.get("font_hash", 0) or 0),
+                               "scale_x": float(r.get("scale_x", 1) or 1),
+                               "scale_y": float(r.get("scale_y", 1) or 1)}
+        else:
+            snap[r["name"]] = {"kind": "mesh", "x": r["x"], "y": r["y"],
+                               "w": float(r.get("w", 0) or 0), "h": float(r.get("h", 0) or 0)}
+    return snap
+
+
 def capture_snapshot(gdir):
     """ABSOLUTE layout of every element in the CURRENT overlay_static, as a re-appliable record.
     Used to PRESERVE the scoreclock layout across a clean texture apply: ensure_clean() resets the
     whole file (wiping the layout in blob0), so a texture apply must snapshot the layout first and
-    restore it after. text -> {kind,x,y,size,color}; mesh -> {kind,x,y,w,h}."""
-    snap = {}
+    restore it after."""
     try:
-        for r in list_elements(gdir):
-            if r["kind"] == "text":
-                snap[r["name"]] = {"kind": "text", "x": r["x"], "y": r["y"],
-                                   "size": float(r.get("size", 0) or 0),
-                                   "color": r.get("color", "#FFFFFF")}
-            else:
-                snap[r["name"]] = {"kind": "mesh", "x": r["x"], "y": r["y"],
-                                   "w": float(r.get("w", 0) or 0), "h": float(r.get("h", 0) or 0)}
+        return _snapshot_from_rows(list_elements(gdir))
     except Exception:
         return {}
-    return snap
+
+
+def capture_overlay_state(gdir):
+    """SINGLE load_dram: snapshot the full layout AND read the 2K-shadow / teal-bar hide flags in
+    ONE decode (was 3 separate ~2min loads: capture_snapshot + scorebug_logo_hidden + teal_bar_
+    hidden). Returns (snap, shadow_hidden, teal_hidden) — feed straight to rebuild_overlay_from_
+    snapshot() after a clean texture apply."""
+    dram, _meta = oe.load_dram(IFF, gdir)
+    dram = bytes(dram)
+    try:
+        snap = _snapshot_from_rows(list_elements_from_dram(dram))
+    except Exception:
+        snap = {}
+    return snap, _mesh_index_hidden_in_dram(dram, "logo_2k_mesh"), _teal_bar_hidden_in_dram(dram)
+
+
+def snapshot_has_sog(snap):
+    """True if the captured layout includes the Shots-on-Goal mod (the two cloned SOG records).
+    ensure_clean() wipes SOG, so a texture apply must re-run the SOG mod before restoring layout."""
+    return bool(snap) and ("shots_away" in snap or "shots_home" in snap)
+
+
+def sog_present(gdir):
+    """True if the Shots-on-Goal mod is already applied to overlay_static.iff (both cloned
+    scorebug records present). The Scoreclock tab is file-driven, so this == 'the tab lists SOG'."""
+    try:
+        names = {r["name"] for r in list_elements(gdir)}
+    except Exception:
+        return False
+    return "shots_away" in names and "shots_home" in names
+
+
+def _apply_sog_xex(gdir, log=print):
+    """Apply the XEX bind rows for SOG to default.xex. Idempotent (returns 'already patched'
+    when present). The rows live in default.xex/.sogbak and survive overlay clean rebuilds, so a
+    lost-SOG file usually still has these — re-applying is cheap and safe."""
+    import scorebug_xex_rows as sxr
+    xex = str(Path(gdir) / "default.xex")
+    try:
+        st = sxr.apply(xex)
+        log(f"  XEX bind rows: {st}")
+        return st
+    except Exception as e:
+        log(f"  XEX bind rows FAILED: {e}")
+        return f"failed: {e}"
+
+
+def install_sog(gdir, log=print):
+    """(Re)install the Shots-on-Goal mod. SOG is an ADDED element set (two records cloned from
+    gameclock4 + their anim descs), NOT stock — a clean/re-extract of overlay_static.iff drops it,
+    and the file-driven Scoreclock tab then can't list it. This restores it in ONE load + ONE
+    encode (scorebug_add_shots.build + scorebug_anim_descs.build in a shared buffer, matching the
+    optimized rebuild path) plus the idempotent XEX bind rows. No-op on the overlay if already
+    present (still verifies the XEX side). Returns a one-line status."""
+    dram, meta = oe.load_dram(IFF, gdir)
+    dram = bytearray(dram)
+    names = {r["name"] for r in list_elements_from_dram(bytes(dram))}
+    if "shots_away" in names and "shots_home" in names:
+        xstatus = _apply_sog_xex(gdir, log)
+        return f"Shots-on-Goal already present — overlay unchanged (XEX: {xstatus})"
+    log("  adding Shots-on-Goal records + anim descs…")
+    sas.build(dram)          # +2 cloned shots records (in place, grows buffer)
+    sad.build(dram)          # + their opacity/transform anim descs (in place)
+    oe.apply_dram(bytes(dram), meta, IFF, gdir, log)
+    xstatus = _apply_sog_xex(gdir, log)
+    return f"Shots-on-Goal installed — overlay written (XEX: {xstatus})"
+
+
+def rebuild_overlay_from_snapshot(snap, shadow, teal, gdir, log=print):
+    """Rebuild the ENTIRE scoreclock state onto a freshly-cleaned overlay_static in ONE load_dram
+    + ONE apply_dram — the optimized restore path. The old restore did up to 4 loads + 3 encodes
+    (scorebug_add_shots.apply + scorebug_anim_descs.apply + snapshot_edits' list + apply_edits,
+    plus a load/encode per hide); each load_dram/apply_dram is a ~2min DRAM decode/re-encode. Here
+    we decode once, mutate the shared buffer, encode once:
+
+      1. re-add SOG (scorebug_add_shots.build + scorebug_anim_descs.build) if the snapshot had it —
+         the file is stock right now (post ensure_clean), exactly what those builders require. Both
+         build() mutate the bytearray in place. XEX bind rows live in default.xex (untouched by
+         ensure_clean) so they are NOT rebuilt here.
+      2. re-apply every per-element edit (pos/size/color/uppercase/font/glyph-scale) — computed
+         against the just-modified in-memory buffer so it sees the SOG records.
+      3. re-apply the 2K-shadow and teal-bar hides.
+
+    Doing (1)+(2) in-memory is equivalent to the old apply→reload→apply chain (the DRAM codec is a
+    lossless round-trip, and each builder already took original-meta + a grown buffer). Returns a
+    one-line status."""
+    if not snap:
+        return "no scoreclock layout to restore"
+    dram, meta = oe.load_dram(IFF, gdir)
+    dram = bytearray(dram)
+    parts = []
+    if snapshot_has_sog(snap):
+        log("  re-adding Shots-on-Goal mod (wiped by clean rebuild)…")
+        sas.build(dram)          # +2 cloned shots records (in place, grows buffer)
+        sad.build(dram)          # + their opacity/transform anim descs (in place)
+        parts.append("SOG re-added")
+    edits = snapshot_edits_from_dram(snap, bytes(dram))
+    if edits:
+        _apply_edits_to_dram(edits, dram, log)
+    parts.append(f"{len(edits)} element edit(s)")
+    if shadow:
+        _set_mesh_index_hidden_in_dram(dram, "logo_2k_mesh", True, gdir, log)
+        parts.append("2K hidden")
+    if teal:
+        _set_teal_bar_hidden_in_dram(dram, True, gdir, log)
+        parts.append("teal hidden")
+    oe.apply_dram(bytes(dram), meta, IFF, gdir, log)
+    return "restored scoreclock layout (" + ", ".join(parts) + ")"
 
 
 def snapshot_edits(snap, gdir):
     """apply_edits() deltas that turn the CURRENT overlay_static into `snap` (the captured layout).
     Call AFTER ensure_clean()+texture apply — the file is back to stock layout, so these deltas
     re-apply exactly what the user had. Returns {} when nothing differs (stock layout)."""
-    edits = {}
     try:
         cur = {r["name"]: r for r in list_elements(gdir)}
     except Exception:
         return {}
+    return _snapshot_edits_against(snap, cur)
+
+
+def snapshot_edits_from_dram(snap, dram):
+    """snapshot_edits computed against an ALREADY-decoded blob0 buffer (no reload) — used by the
+    single-load rebuild after it has re-added SOG in memory, so the deltas see the SOG records."""
+    try:
+        cur = {r["name"]: r for r in list_elements_from_dram(dram)}
+    except Exception:
+        return {}
+    return _snapshot_edits_against(snap, cur)
+
+
+def _snapshot_edits_against(snap, cur):
+    """Shared core: diff captured layout `snap` against current rows `cur` -> apply_edits deltas."""
+    edits = {}
     for nm, a in (snap or {}).items():
         r = cur.get(nm)
         if not r:
@@ -378,6 +596,17 @@ def snapshot_edits(snap, gdir):
             ac = (a.get("color") or "").lstrip("#"); rc = (r.get("color") or "").lstrip("#")
             if len(ac) >= 6 and ac.upper() != rc.upper():
                 ed["color"] = tuple(int(ac[i:i + 2], 16) for i in (0, 2, 4))
+            if bool(a.get("uppercase", False)) != bool(r.get("uppercase", False)):
+                ed["uppercase"] = bool(a.get("uppercase", False))
+            if int(a.get("font_hash", 0) or 0) and \
+               int(a["font_hash"]) != int(r.get("font_hash", 0) or 0):
+                ed["font"] = int(a["font_hash"])       # per-element font (+0xDC)
+            # glyph scale: scale_x/scale_y are already in apply_edits' sx/sy units
+            # (jointless SOG = absolute matrix diagonal; jointed = factor-of-stock).
+            asx, asy = float(a.get("scale_x", 1) or 1), float(a.get("scale_y", 1) or 1)
+            rsx, rsy = float(r.get("scale_x", 1) or 1), float(r.get("scale_y", 1) or 1)
+            if abs(asx - rsx) > 1e-4: ed["sx"] = asx
+            if abs(asy - rsy) > 1e-4: ed["sy"] = asy
         else:
             rw = r.get("w", 0) or 0.0; rh = r.get("h", 0) or 0.0
             if rw > 1e-6 and abs(float(a.get("w", rw)) / rw - 1) > 1e-4: ed["sx"] = float(a["w"]) / rw
@@ -403,6 +632,14 @@ def apply_edits(edits, gdir, log=print):
     Text position writes joint pos2 @+0x1C (the consumed copy, live-verified 2026-07-16)
     plus pos1 and the tableC matrix row so every copy stays coherent."""
     dram, meta = oe.load_dram(IFF, gdir)
+    _apply_edits_to_dram(edits, dram, log)
+    return oe.apply_dram(dram, meta, IFF, gdir, log)
+
+
+def _apply_edits_to_dram(edits, dram, log=print):
+    """No-I/O core of apply_edits: mutate an in-memory blob0 bytearray IN PLACE (no load/apply).
+    Lets the single-load rebuild fold the layout edits into a shared buffer. `dram` must be a
+    mutable bytearray. Returns it."""
     trecs = _find_text_records(bytes(dram))
     joints = _find_text_skeleton(bytes(dram))
     blocks = _find_mesh_blocks(bytes(dram))
@@ -427,18 +664,33 @@ def apply_edits(edits, gdir, log=print):
                         struct.pack_into(">2f", dram, j + poff, jx + dx, jy + dy)
                 log(f"  text  {nm}: pos ({x:.2f},{y:.2f}) -> ({x + dx:.2f},{y + dy:.2f})")
             if "sx" in ed or "sy" in ed:             # explicit scale (incl. resetting to 1.0)
-                # Glyph SCALE via the draw record's local transform-matrix diagonal (m00 @+0x38 = X,
-                # m11 @+0x4C = Y; stock identity 1.0) — the width field (+0x7C) only clips, it can't
-                # resize glyphs, so this is the real scale lever. Also widen +0x7C by the X factor so
-                # enlarged glyphs don't hit the ellipsis-truncation ("DE…"). The matrix's translation
-                # row is a dead copy (position comes from the joint), so whether the game consumes its
-                # SCALE is being verified in-game — this is the current hypothesis for font sizing.
-                struct.pack_into(">f", dram, o + 0x38, sx)
-                struct.pack_into(">f", dram, o + 0x4C, sy)
-                w0 = STOCK_META.get(nm, {}).get("size")
-                if w0:
-                    struct.pack_into(">f", dram, o + 0x7C, w0 * sx)
-                log(f"  text  {nm}: glyph scale ×{sx:g}/{sy:g} (matrix diagonal + clip box)")
+                if nm in SOG_JOINTLESS:
+                    # Jointless SOG elements: the anim-consts lever is inert (no joint to drive),
+                    # so scale rides the draw record's OWN local-matrix diagonal. sx/sy arrive as
+                    # absolute factors (stock diagonal = 1.0). Only the axes present are written.
+                    if "sx" in ed:
+                        struct.pack_into(">f", dram, o + TXMATRIX_M00, float(ed["sx"]))
+                    if "sy" in ed:
+                        struct.pack_into(">f", dram, o + TXMATRIX_M11, float(ed["sy"]))
+                    mx = struct.unpack_from(">f", dram, o + TXMATRIX_M00)[0]
+                    my = struct.unpack_from(">f", dram, o + TXMATRIX_M11)[0]
+                    log(f"  text  {nm}: glyph scale -> {mx:g}/{my:g} (record matrix diagonal)")
+                else:
+                    # Glyph SCALE: the element's anim TRANSFORM DESC constant channels
+                    # ([tx,ty,tz,sx,sy,sz]; stock 1.1/1.2 — see scorebug_anim_descs). sx/sy
+                    # arrive as FACTORS of stock; written value = stock * factor (the absolute
+                    # const the UI shows). ONLY the axes present in the edit are written — an
+                    # omitted axis keeps its CURRENT const (a single-axis edit used to clobber
+                    # the other axis back to stock). Nothing else is touched: no matrix-diagonal
+                    # write and NO automatic +0x7C clip-width change (width is user-controlled).
+                    stock_sc = sad.STOCK_TXSCALE.get(nm)
+                    bindh = struct.unpack_from(">I", dram, o + 0xD8)[0]
+                    cur = sad.get_text_scale_by_bind(dram, bindh) if stock_sc else None
+                    if stock_sc and cur:
+                        ax = stock_sc * float(ed["sx"]) if "sx" in ed else cur[0]
+                        ay = stock_sc * float(ed["sy"]) if "sy" in ed else cur[1]
+                        sad.set_text_scale_by_bind(dram, bindh, ax, ay)
+                        log(f"  text  {nm}: glyph scale -> {ax:g}/{ay:g} (bind-paired anim consts)")
             if "size" in ed:
                 # +0x7C is the text's MAX WIDTH (clip box), NOT a font size: enlarging it does nothing
                 # (the string already fits) and shrinking it makes the game ellipsis-truncate ("DE…").
@@ -449,10 +701,14 @@ def apply_edits(edits, gdir, log=print):
                 r, g, bl = (int(c) & 0xFF for c in ed["color"])
                 struct.pack_into(">3B", dram, o + 0x89, r, g, bl)   # keep byte0 as authored
                 log(f"  text  {nm}: color -> #{r:02X}{g:02X}{bl:02X}")
-            if "font" in ed:                          # per-element FONT (== size): repoint +0x00
+            if "font" in ed:                          # per-element FONT: repoint the hash @+0xDC
                 fh = int(ed["font"]) & 0xFFFFFFFF
-                struct.pack_into(">I", dram, o, fh)
+                struct.pack_into(">I", dram, o + 0xDC, fh)
                 log(f"  text  {nm}: font -> {_HASH_FONT.get(fh, hex(fh))}")
+            if "uppercase" in ed:                     # +0xB0 render-time UPPERCASE flag (u32)
+                uv = 1 if ed["uppercase"] else 0
+                struct.pack_into(">I", dram, o + UPPERCASE_FLAG, uv)
+                log(f"  text  {nm}: uppercase -> {'ON' if uv else 'off'} (+0xB0)")
         elif nm in blocks:
             vs = _mesh_vertices(bytes(dram), *blocks[nm])
             if not vs:
@@ -472,7 +728,7 @@ def apply_edits(edits, gdir, log=print):
             log(f"  mesh  {nm}: {len(vs)} vertices {' + '.join(what) or 'unchanged'}")
         else:
             raise ValueError(f"unknown scorebug element: {nm}")
-    return oe.apply_dram(dram, meta, IFF, gdir, log)
+    return dram
 
 
 def apply_moves(moves, gdir, log=print):
@@ -611,19 +867,24 @@ def mesh_vertexbuf_hidden(name, gdir):
     return not any(dram[r[0]:r[1]])
 
 
-def mesh_index_hidden(name, gdir):
-    """True if this mesh's index buffer is currently all-zero (mesh disabled)."""
-    dram, _ = oe.load_dram(IFF, gdir)
+def _mesh_index_hidden_in_dram(dram, name):
+    """No-I/O core of mesh_index_hidden: read hide-state from an already-decoded blob0 buffer."""
     r = _mesh_index_range(bytes(dram), name)
     if not r or r[1] <= r[0]:
         return False
     return not any(dram[r[0]:r[1]])
 
 
-def set_mesh_index_hidden(name, hide, gdir, log=print):
-    """Hide a mesh by zeroing its index buffer (all triangles degenerate → invisible), or restore
-    from the one-time byte backup. Blob0 (DRAM) edit via the proven apply_dram path."""
-    dram, meta = oe.load_dram(IFF, gdir)
+def mesh_index_hidden(name, gdir):
+    """True if this mesh's index buffer is currently all-zero (mesh disabled)."""
+    dram, _ = oe.load_dram(IFF, gdir)
+    return _mesh_index_hidden_in_dram(bytes(dram), name)
+
+
+def _set_mesh_index_hidden_in_dram(dram, name, hide, gdir, log=print):
+    """No-I/O core of set_mesh_index_hidden: zero (hide) / restore a mesh's index buffer in an
+    in-memory blob0 bytearray IN PLACE. Still touches the tiny byte-backup file (needed to reverse
+    a hide) but never load/apply_dram. `dram` must be a mutable bytearray."""
     r = _mesh_index_range(bytes(dram), name)
     if not r or r[1] <= r[0]:
         raise ValueError(f"{name}: index buffer not found")
@@ -640,6 +901,14 @@ def set_mesh_index_hidden(name, hide, gdir, log=print):
         orig = bpath.read_bytes()
         dram[s:s + len(orig)] = orig
         log(f"  {name}: index buffer restored")
+    return dram
+
+
+def set_mesh_index_hidden(name, hide, gdir, log=print):
+    """Hide a mesh by zeroing its index buffer (all triangles degenerate → invisible), or restore
+    from the one-time byte backup. Blob0 (DRAM) edit via the proven apply_dram path."""
+    dram, meta = oe.load_dram(IFF, gdir)
+    _set_mesh_index_hidden_in_dram(dram, name, hide, gdir, log)
     return oe.apply_dram(dram, meta, IFF, gdir, log)
 
 
@@ -701,20 +970,25 @@ def _bar_backup(gdir):
     return Path(gdir) / "scoreclock_barvertexalpha.json"
 
 
-def teal_bar_hidden(gdir):
-    """True if the bottom bar's per-vertex alpha is currently all zero (bar transparent)."""
-    dram, _ = oe.load_dram(IFF, gdir)
+def _teal_bar_hidden_in_dram(dram):
+    """No-I/O core of teal_bar_hidden: read hide-state from an already-decoded blob0 buffer."""
     offs = _bar_alpha_offsets(bytes(dram))
     if not offs:
         return False
     return all(dram[o] == 0 for o in offs)
 
 
-def set_teal_bar_hidden(hide, gdir, log=print):
-    """Hide (zero) or restore the bottom cyan bar's 16 per-vertex alpha bytes. Reversible via a
-    one-time JSON backup of the original bytes. In-place blob0 edit via apply_dram."""
+def teal_bar_hidden(gdir):
+    """True if the bottom bar's per-vertex alpha is currently all zero (bar transparent)."""
+    dram, _ = oe.load_dram(IFF, gdir)
+    return _teal_bar_hidden_in_dram(bytes(dram))
+
+
+def _set_teal_bar_hidden_in_dram(dram, hide, gdir, log=print):
+    """No-I/O core of set_teal_bar_hidden: zero (hide) / restore the bottom bar's 16 per-vertex
+    alpha bytes in an in-memory blob0 bytearray IN PLACE. Touches only the tiny JSON backup, never
+    load/apply_dram. `dram` must be a mutable bytearray."""
     import json
-    dram, meta = oe.load_dram(IFF, gdir)
     offs = _bar_alpha_offsets(bytes(dram))
     if not offs:
         raise ValueError("bottom bar vertices not found in overlay_static blob0")
@@ -736,6 +1010,14 @@ def set_teal_bar_hidden(hide, gdir, log=print):
             for o, v in zip(offs, stock):
                 dram[o] = v
             log("  bottom bar: per-vertex alpha restored to stock (no backup found)")
+    return dram
+
+
+def set_teal_bar_hidden(hide, gdir, log=print):
+    """Hide (zero) or restore the bottom cyan bar's 16 per-vertex alpha bytes. Reversible via a
+    one-time JSON backup of the original bytes. In-place blob0 edit via apply_dram."""
+    dram, meta = oe.load_dram(IFF, gdir)
+    _set_teal_bar_hidden_in_dram(dram, hide, gdir, log)
     return oe.apply_dram(dram, meta, IFF, gdir, log)
 
 
@@ -772,22 +1054,25 @@ def effective_rows(rows, edits):
                 r["size"] = float(ed["size"])
             if "color" in ed:
                 r["color"] = "#%02X%02X%02X" % tuple(int(c) & 0xFF for c in ed["color"])
+            if "uppercase" in ed:
+                r["uppercase"] = bool(ed["uppercase"])
         out.append(r)
     return out
 
 
 # Elements the game re-anchors at draw time (their scene coords don't match on-screen spot).
-RUNTIME_PLACED = {"gameclock4", "quarter"}
+RUNTIME_PLACED = {"quarter"}
 
 # Representative glyph drawn for each text element in the preview (no live data at edit time).
 PREVIEW_TOKEN = {
-    "away_abbrev": "ANA",   # away team abbreviation (blank-hash record before team2)
+    "away_abbrev": "AWA",   # away team abbreviation (blank-hash record before team2)
     "team1": "0",           # away score (red)
     "team2": "HOM",         # home abbrev (green)
     "team2_score": "0",     # home score (cyan)
-    "quarter": "1", "gameclock1": "8", "gameclock_semi": "5",   # clock "1 8 : 5 2"
-    "gameclock2": ":", "gameclock3": "2",
+    "quarter": "2", "gameclock1": "0", "gameclock_semi": "0",   # clock "1 8 : 5 2"
+    "gameclock2": ":", "gameclock3": "0",
     "team1_score": "1st",   # period text (teal), far right
+    "shots_away": "0", "gameclock4": "Shots", "shots_home": "0",   # SOG row ("Shots"->caps via Uppercase toggle)
 }
 
 
@@ -842,6 +1127,10 @@ SCREEN_LAYOUT = {
     "team1_glint2":    (0.605, 0.77, 0.045, 0.030),
     "glint_separator": (0.290, 0.92, 0.200, 0.028),
     "glint_separator1": (0.560, 0.92, 0.120, 0.028),
+    # SOG row (added 2026-07-28): away # / "Shots" label / home #, below the main strip
+    "shots_away":      (0.375, 0.80, 0.030, 0.34),
+    "gameclock4":      (0.455, 0.80, 0.055, 0.34),
+    "shots_home":      (0.585, 0.80, 0.030, 0.34),
 }
 
 # Scene-unit -> strip-fraction, for showing a move at roughly the right magnitude.
@@ -896,9 +1185,13 @@ def preview_layout(rows, edits, factory=False):
             color = _norm_color(ed["color"]) if "color" in ed else (cur_color or "#FFFFFF")
         changed = bool(ed) or (sp is not None
                                and (abs(eff_x - sp[0]) > 0.01 or abs(eff_y - sp[1]) > 0.01))
+        token = PREVIEW_TOKEN.get(nm, "")
+        up = ed["uppercase"] if "uppercase" in ed else r.get("uppercase", False)
+        if up:
+            token = token.upper()
         out.append({
             "name": nm, "label": r["label"], "kind": r["kind"],
-            "token": PREVIEW_TOKEN.get(nm, ""), "color": color,
+            "token": token, "color": color,
             "cx": cx, "cy": cy, "w": w, "h": h,
             "gcx": bx, "gcy": byc, "gw": bw, "gh": bh,
             "changed": changed or hidden, "hidden": hidden,
@@ -985,9 +1278,9 @@ def restore_stock(gdir, log=print):
             if "size" in m and abs(r["size"] - m["size"]) > 0.01:
                 ed["size"] = m["size"]
             if abs(r.get("scale_x", 1) - 1) > 0.001 or abs(r.get("scale_y", 1) - 1) > 0.001:
-                ed["sx"] = 1.0; ed["sy"] = 1.0      # reset glyph scale to stock (matrix identity)
-            _sfh = 0 if nm == "away_abbrev" else _crc("scorebug_text")   # reset font (== size) to stock
-            if r.get("font_hash", _sfh) != _sfh:
+                ed["sx"] = 1.0; ed["sy"] = 1.0      # reset glyph scale to stock consts
+            _sfh = _STOCK_FONT.get(nm)              # reset font (+0xDC) to stock
+            if _sfh is not None and r.get("font_hash", _sfh) != _sfh:
                 ed["font"] = _sfh
             # NOTE: colour is intentionally NOT reset — it's the field users most often set by
             # hand, so "restore layout" leaves recolours alone. Reset colour per-element via the
@@ -1023,9 +1316,9 @@ def factory_edits(gdir):
             if "size" in m and abs(r["size"] - m["size"]) > 0.01:
                 ed["size"] = m["size"]
             if abs(r.get("scale_x", 1) - 1) > 0.001 or abs(r.get("scale_y", 1) - 1) > 0.001:
-                ed["sx"] = 1.0; ed["sy"] = 1.0      # reset glyph scale to stock (matrix identity)
-            _sfh = 0 if nm == "away_abbrev" else _crc("scorebug_text")   # reset font (== size) to stock
-            if r.get("font_hash", _sfh) != _sfh:
+                ed["sx"] = 1.0; ed["sy"] = 1.0      # reset glyph scale to stock consts
+            _sfh = _STOCK_FONT.get(nm)              # reset font (+0xDC) to stock
+            if _sfh is not None and r.get("font_hash", _sfh) != _sfh:
                 ed["font"] = _sfh
             if "color" in m and r["color"].upper() != m["color"].upper():
                 c = m["color"].lstrip("#")

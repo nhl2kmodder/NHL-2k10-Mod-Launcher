@@ -2537,9 +2537,12 @@ def replace_at(iff, vram_off, w, h, fmt, edited_path, game_dir, log=print, tiled
     arc, off, size, idx, f3 = loc
     with open(game_dir / arc, "rb") as f:
         f.seek(off); res = bytearray(f.read(size))
-    if res[:4] == b"\xff\x3b\xef\x94":
-        # ff3bef94 scene: its textures live in the RAW file tail (catalog raw=1 records), not in a
-        # compressed VRAM blob — this path would corrupt the DRAM tree. Raw replace TBD.
+    if res[:4] == b"\xff\x3b\xef\x94" and \
+            len([b for b in _walk_blobs(res, size) if b["dec"]]) < 2:
+        # RAW ff3bef94 scene (disc_* arenas): a lone compressed DRAM tree + raw texture tail. Its
+        # textures live in the RAW tail (catalog raw=1 records), not in a compressed VRAM blob —
+        # this path would corrupt the DRAM tree. Raw replace TBD. (Loading.iff shares the magic but
+        # has a real texture blob, so the blob count keeps it on the normal path.)
         raise ValueError(f"{iff}: scene raw-tail texture replace is not supported yet (view/extract only)")
     vb = _big_vram_blob(res, size)
     if not vb:
