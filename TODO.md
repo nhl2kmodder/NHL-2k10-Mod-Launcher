@@ -14,10 +14,7 @@ contributors to jump in. For *how* each system currently works, see `findings/`.
 ## IFF Textures
 - Can we split up `global.iff` (or all IFF files)? Applying changes while looking at 446
   textures takes a long time.
-- Could we **generate our normal maps**? We can see how the existing normal was set up, and
-  we can see our base where the stitching should be. Applies to Uniforms (jersey base +
-  stamps) specifically, but could extend to heads/etc.
-- Discover the remaining IFF files that aren't found (multi-texture packs that don't show up,
+- (In Progress) Discover the remaining IFF files that aren't found (multi-texture packs that don't show up,
   or any in the game files we haven't discovered yet).
   - `led_{team}.iff` is pretty bare — I wonder if there's more to discover there.
   - Not textures specifically, but can we identify the remaining data in these IFF files to
@@ -34,7 +31,7 @@ contributors to jump in. For *how* each system currently works, see `findings/`.
   scorebug.
 
 ## Audio
-- We need a way to **name these files** — at minimum categorize them better. Right now 80,000+
+- (In Progress) We need a way to **name these files** — at minimum categorize them better. Right now 80,000+
   files are hand-named/categorized, which takes too long. Identify a pattern in the offsets,
   or read the TOC while the game is live for authored names / audio banks they pull from.
 - Still possibly some undiscovered assets — ones I haven't noticed yet: Whistles, Posts,
@@ -43,7 +40,7 @@ contributors to jump in. For *how* each system currently works, see `findings/`.
 ## Commentary (Play-by-Play, Color, PA)
 With new rosters, player names don't match (e.g. DeBrusk overwrote a player named Adams, so
 he's always called "Adams"). Fix this in bulk, like we did portraits. Multi-part:
-- Identify the commentary name bank / how it's assigned.
+- (In Progress) Identify the commentary name bank / how it's assigned.
 - Replace all variations of the name (there are multiple).
 - Can we use AI/ML to generate the name? We have full access to the Play-by-Play AND Color
   commentators (two different voices), plus the PA announcer. Could we build 3 voice models
@@ -61,8 +58,7 @@ he's always called "Adams"). Fix this in bulk, like we did portraits. Multi-part
 ## Rosters
 - Lots left to discover in the roster editor.
 - Can we save the roster through the tool when we make changes?
-- Can we show the player portrait when we select them?
-- Find any audio ID / binding for teams and players. I know for custom players, there is a list of first and last names to choose from, if you choose one of those, it is associated with an audio name. (If you type in one that isnt on the list, the game simply does not play audio for you). Real players will have extra audio for them, example, the color commentary will talk about how [x] player has some skill / ability, and how they use it in game. Example, offset 37171000 - "Teams just hate playing against Jordan Tootoo. He's always getting under everyones skin because of his abrasive style.". This is depth that we would like to support eventually (finding tags for star players), but for now we just want to use the created skater flow for all roster players. (Note - there are generic tags like this call for custom players as well, that just say things like "this guy..." instead of specific player names)
+- (In Progress) Find any audio ID / binding for teams and players. I know for custom players, there is a list of first and last names to choose from, if you choose one of those, it is associated with an audio name. (If you type in one that isnt on the list, the game simply does not play audio for you). Real players will have extra audio for them, example, the color commentary will talk about how [x] player has some skill / ability, and how they use it in game. Example, offset 37171000 - "Teams just hate playing against Jordan Tootoo. He's always getting under everyones skin because of his abrasive style.". This is depth that we would like to support eventually (finding tags for star players), but for now we just want to use the created skater flow for all roster players. (Note - there are generic tags like this call for custom players as well, that just say things like "this guy..." instead of specific player names)
 - Identify more team colors (fonts, helmet colors, arena dashers) — only primary and
   secondary discovered so far.
 - Allow us to re-name strings with longer names (ex - "Atlanta" (7 characters) -> "Winnipeg" (8 characters). This was attempted before in a quick/dirty manner, and did not work (the entire file got read incorrectly after - everything shifted with the change). We either have to investigate how to replace in-place or we have to figure out how we can re-direct like we do with textures.
