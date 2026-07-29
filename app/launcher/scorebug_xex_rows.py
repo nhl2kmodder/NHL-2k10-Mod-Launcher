@@ -78,6 +78,26 @@ def apply(xex_path):
     return f"patched in place: table @ {NEW_TABLE_VA:08X}, ids @ {ids_va:08X} (no resize)"
 
 
+def revert(xex_path):
+    """Surgically undo apply(): repoint the registry back to the stock table and re-zero the
+    relocated table in the .reloc tail padding. Safer than restoring .sogbak (which may predate
+    other, unrelated XEX edits). Idempotent — returns 'not patched' when already stock."""
+    xex_path = str(xex_path)
+    data = bytearray(Path(xex_path).read_bytes())
+    reg_off = xex_patch.va_to_offset(xex_path, REGISTRY_PTR_VA)
+    cur = struct.unpack_from(">I", data, reg_off)[0]
+    if cur == OLD_TABLE_VA:
+        return "not patched"
+    if cur != NEW_TABLE_VA:
+        raise RuntimeError(f"registry ptr = {cur:08X}, expected {NEW_TABLE_VA:08X} — not this mod")
+    tbl_off = xex_patch.va_to_offset(xex_path, NEW_TABLE_VA)
+    need = (OLD_TABLE_ROWS + len(NEW_ROWS) + 1) * 16 + len(NEW_ROWS) * 4
+    data[tbl_off:tbl_off + need] = b"\x00" * need
+    struct.pack_into(">I", data, reg_off, OLD_TABLE_VA)
+    Path(xex_path).write_bytes(bytes(data))
+    return f"reverted: registry -> {OLD_TABLE_VA:08X}, relocated table re-zeroed"
+
+
 def restore(xex_path):
     bak = str(xex_path) + ".sogbak"
     if not Path(bak).exists():

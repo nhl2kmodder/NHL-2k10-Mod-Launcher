@@ -6,10 +6,87 @@ The flat XEX uses XEX2 BASIC compression (file_format_info key 0x3FF, comp_type 
 a list of (data_size, zero_size) blocks. Each block stores data_size bytes in the file then
 zero_size zero-bytes that exist only in memory (BSS compaction) — so VA->offset is NOT linear.
 """
+import shutil
 import struct
+import subprocess
+import sys
 from pathlib import Path
 
 IMAGE_BASE_DEFAULT = 0x82000000
+
+
+def get_comp_type(xex_path):
+    """(enc_type, comp_type) from the file_format_info header. comp_type 1 = basic (flat, what
+    every VA patcher here needs); 2 = LZX-compressed (the stock disc/retail form)."""
+    data = Path(xex_path).read_bytes()
+    if data[:4] != b"XEX2":
+        raise ValueError("not an XEX2 file")
+    count = struct.unpack_from(">I", data, 0x14)[0]
+    for i in range(count):
+        key, val = struct.unpack_from(">II", data, 0x18 + i*8)
+        if key == 0x000003FF:
+            _sz, enc_type, comp_type = struct.unpack_from(">IHH", data, val)
+            return enc_type, comp_type
+    raise ValueError("no file_format_info (0x3FF) header")
+
+
+def find_xextool(game_dir=None):
+    """Locate xextool.exe: launcher tools\\ (next to the frozen exe / dev tree), the game folder,
+    then PATH. Returns '' if absent."""
+    cands = []
+    try:
+        cands.append(Path(sys.executable).parent / "tools" / "xextool.exe")   # frozen exe dir
+    except Exception:
+        pass
+    cands.append(Path(__file__).resolve().parent.parent / "tools" / "xextool.exe")  # dev tree
+    if game_dir:
+        cands.append(Path(game_dir) / "xextool.exe")
+    for c in cands:
+        if c.is_file():
+            return str(c)
+    return shutil.which("xextool") or ""
+
+
+def ensure_flat(xex_path, game_dir=None, log=print):
+    """Make sure `xex_path` is the FLAT (basic-compression, unencrypted) form every VA patcher
+    here requires. A stock retail default.xex ships LZX-compressed (comp_type 2, usually
+    encrypted); the game runs either form identically under Xenia, so converting in place is
+    safe. Conversion shells out to XexTool (-c u -e u); the original file is kept once as
+    <xex>.compressed.orig. Returns a one-line status; raises with a friendly message when the
+    file is compressed and XexTool can't be found/run."""
+    xex_path = Path(xex_path)
+    enc, comp = get_comp_type(xex_path)
+    if comp == 1 and enc == 0:
+        return "already flat"
+    tool = find_xextool(game_dir)
+    if not tool:
+        raise ValueError(
+            f"default.xex is compressed (comp_type={comp}) and xextool.exe was not found — "
+            "place xextool.exe in the launcher's tools folder or the game folder")
+    bak = xex_path.with_suffix(xex_path.suffix + ".compressed.orig")
+    if not bak.exists():
+        shutil.copyfile(xex_path, bak)
+    tmp = xex_path.with_suffix(xex_path.suffix + ".flat_tmp")
+    try:
+        r = subprocess.run(
+            [tool, "-c", "u", "-e", "u", "-o", str(tmp), str(xex_path)],
+            capture_output=True, text=True, timeout=120,
+            creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
+        if r.returncode != 0 or not tmp.is_file() or tmp.stat().st_size == 0:
+            raise ValueError(f"XexTool failed (rc={r.returncode}): "
+                             f"{(r.stdout or '').strip()[-200:]} {(r.stderr or '').strip()[-200:]}")
+        enc2, comp2 = get_comp_type(tmp)
+        if comp2 != 1:
+            raise ValueError(f"XexTool output still comp_type={comp2} — aborting")
+        parse_basic_blocks(tmp)                       # full sanity: block list parses
+        shutil.move(str(tmp), str(xex_path))
+    finally:
+        if tmp.exists():
+            try: tmp.unlink()
+            except OSError: pass
+    log(f"  default.xex auto-flattened (was comp_type={comp}, enc={enc}); "
+        f"original kept as {bak.name}")
+    return f"auto-flattened from comp_type={comp} (original kept as {bak.name})"
 
 
 def parse_basic_blocks(xex_path):

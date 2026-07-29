@@ -4547,9 +4547,11 @@ class App(tk.Tk):
                   "Conflicts (same item changed both ends) are previewed so you choose which to keep.\n"
                   "• Audio Names = just naming/category/sample-rate (small, git-friendly JSON).\n"
                   "• Mod Pack = everything: audio names + replacement WAVs + replacement textures "
-                  "+ roster edits (team colours / arena names / team names). Audio & textures stage "
+                  "+ roster edits (team colours / arena names / team names) + your Scoreclock "
+                  "(layout, Shots-on-Goal, hides, screen anchor). Audio & textures stage "
                   "into Modified (review, then Patch); roster edits apply straight onto your "
-                  "Roster.ROS so you can share them without shipping your players/ratings.")
+                  "Roster.ROS so you can share them without shipping your players/ratings; the "
+                  "scoreclock replays onto the recipient's game files and lands as a preset too.")
         ).grid(row=13, column=0, columnspan=3, sticky=W, pady=(2, 8))
         share = ttk.Frame(outer); share.grid(row=14, column=0, columnspan=3, sticky=W)
         ttk.Button(share, text="Export Audio Names…", command=self._export_names).pack(side=LEFT, padx=(0, 4))
@@ -4559,6 +4561,9 @@ class App(tk.Tk):
                    command=self._export_modpack).pack(side=LEFT, padx=4)
         ttk.Button(share, text="Import Mod Pack…", style="Accent.TButton",
                    command=self._import_modpack).pack(side=LEFT, padx=4)
+        ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
+        ttk.Button(share, text="Revert Mod Pack…",
+                   command=self._revert_modpack).pack(side=LEFT, padx=4)
 
     # ── Share & Merge (mod packs / audio-name files) ──────────────────────────
 
@@ -4597,12 +4602,13 @@ class App(tk.Tk):
         """Unity-style checkbox picker with Type / Team / Category filters. Returns the SELECTED
         items (default: all checked), or None if cancelled. `items` = [{section,key,label,team,
         category, status?}]. Click the ✔ column (or press Space) to toggle a row; the filters narrow
-        the view; Check All / Uncheck All apply to the CURRENTLY VISIBLE rows."""
+        the view; Check All / Uncheck All apply to the CURRENTLY VISIBLE rows. An item may carry
+        "checked": False to start unchecked (opt-in rows, e.g. the slow scoreclock capture)."""
         if not items:
             return []
         dlg = Toplevel(self); dlg.title(title)
         dlg.geometry("900x600"); dlg.transient(self); dlg.grab_set()
-        checked = [True] * len(items)
+        checked = [bool(it.get("checked", True)) for it in items]
         result = {"ok": False}
 
         top = ttk.Frame(dlg, padding=(12, 10)); top.pack(fill=X)
@@ -4615,8 +4621,9 @@ class App(tk.Tk):
         v_type = StringVar(value="All"); v_team = StringVar(value="All"); v_cat = StringVar(value="All")
         fb = ttk.Frame(dlg, padding=(12, 0, 12, 6)); fb.pack(fill=X)
         ttk.Label(fb, text="Type:").pack(side=LEFT)
-        ttk.Combobox(fb, textvariable=v_type, values=["All", "Audio", "Texture", "Roster"],
-                     state="readonly", width=9).pack(side=LEFT, padx=(3, 12))
+        ttk.Combobox(fb, textvariable=v_type,
+                     values=["All", "Audio", "Texture", "Roster", "Scoreclock"],
+                     state="readonly", width=10).pack(side=LEFT, padx=(3, 12))
         ttk.Label(fb, text="Team:").pack(side=LEFT)
         ttk.Combobox(fb, textvariable=v_team, values=teams, state="readonly",
                      width=8).pack(side=LEFT, padx=(3, 12))
@@ -4638,6 +4645,8 @@ class App(tk.Tk):
             it = items[i]
             if it["section"] == "roster":
                 return ("roster", "Roster")                          # league-wide field groups
+            if it["section"] == "scoreclock":
+                return ("scoreclock", "Scoreclock")                  # single whole-mod row
             if it["section"] == "tex":
                 return ("tex", str(it["key"]).split("/")[0])          # the .iff folder
             return ("aud", it.get("category") or "Audio")
@@ -4645,6 +4654,8 @@ class App(tk.Tk):
             kind, gid = g
             if kind == "roster":
                 return "Roster (applied over your Roster.ROS)"
+            if kind == "scoreclock":
+                return "Scoreclock (applied onto your game files)"
             if kind == "tex":
                 return _labelmap.get(gid, gid)                        # friendly asset name
             return f"Audio — {gid}" if gid != "Audio" else "Audio"
@@ -4680,6 +4691,7 @@ class App(tk.Tk):
             if t == "Audio" and it["section"] not in ("meta", "audio"): return False
             if t == "Texture" and it["section"] != "tex": return False
             if t == "Roster" and it["section"] != "roster": return False
+            if t == "Scoreclock" and it["section"] != "scoreclock": return False
             if v_team.get() != "All" and it.get("team", "") != v_team.get(): return False
             if v_cat.get() != "All" and it.get("category", "") != v_cat.get(): return False
             return True
@@ -4779,6 +4791,18 @@ class App(tk.Tk):
                 items += mp.local_roster_items(ros_path)     # Team Colours / Arena / Team Names
             except Exception as e:
                 self._log(f"[modpack] roster scan skipped: {e}")
+        game_dir = self._get_game_root()                     # Scoreclock (captured at export time)
+        try:                                                 # the iff lives INSIDE the archives -> TOC lookup
+            sc_ok = bool(game_dir) and bool(archtex.resolve("overlay_static.iff", game_dir))
+        except Exception:
+            sc_ok = False
+        if sc_ok:
+            sc_item = mp.scoreclock_export_item()
+            sc_item["checked"] = False                       # opt-in: capture costs ~2 min
+            sc_item["label"] += "   [auto-includes overlay_static textures; adds ~2 min]"
+            items.append(sc_item)
+        else:
+            game_dir = None
         if not items:
             messagebox.showinfo("Export Mod Pack",
                 "No modified files to export.\n\nEdit some textures/audio (or set a Roster.ROS on the "
@@ -4795,16 +4819,21 @@ class App(tk.Tk):
             filetypes=[("Mod Pack", "*" + mp.PACK_EXT), ("Zip", "*.zip")])
         if not p: return
         keys = {(it["section"], it["key"]) for it in sel}
+        with_sc = any(s == "scoreclock" for s, _ in keys)
         self._log(f"─── Export Mod Pack ({len(sel)} item(s)) ───")
         def work():
             try:
-                res = mp.export_selected(root, p, keys, ros_path=ros_path)
+                res = mp.export_selected(root, p, keys, ros_path=ros_path,
+                                         game_dir=game_dir if with_sc else None,
+                                         log=self._log_q.put)
                 self._log_q.put(f"Mod Pack: {res['audio_meta']} names, {res['audio_wav']} "
                                 f"audio, {res['textures']} texture(s), {res['roster']} roster "
-                                f"group(s) → {Path(p).name}")
+                                f"group(s), scoreclock: {'yes' if res['scoreclock'] else 'no'} "
+                                f"→ {Path(p).name}")
             except Exception as e:
                 self._log_q.put(f"Export failed: {e}")
-        self._run_in_thread(work, op_label="Building Mod Pack…")
+        self._run_in_thread(work, op_label="Building Mod Pack…" +
+                            (" (capturing scoreclock, ~2 min)" if with_sc else ""))
 
     def _import_modpack(self):
         root = self._get_root()
@@ -4827,6 +4856,70 @@ class App(tk.Tk):
                 self._merge_with_selection(pend[0], pend[1], "Mod Pack")
         self._run_in_thread(work, op_label="Reading Mod Pack…", on_done=done)
 
+    def _revert_modpack(self):
+        """Undo a previously-imported mod pack: reset every asset it touched back to the pristine
+        .orig bytes (archives + staged files), restore original audio streams, and surgically undo
+        the scoreclock XEX patches. Per-ASSET granularity — the confirm dialog says so."""
+        if self._op_busy():
+            return
+        root = self._get_root()
+        game_dir = self._get_game_root()
+        if not root or not game_dir:
+            messagebox.showerror("Revert Mod Pack",
+                "Set the game files folder in Settings first."); return
+        p = filedialog.askopenfilename(
+            title="Revert Mod Pack",
+            filetypes=[("Mod Pack", "*" + mp.PACK_EXT), ("Zip", "*.zip"), ("All", "*.*")])
+        if not p: return
+        try:
+            inv = mp.read_pack_contents(p)
+            iffs, skipped = mp.revert_iffs_for_pack(inv["tex_rels"], scoreclock=bool(inv["scoreclock"]))
+        except Exception as e:
+            messagebox.showerror("Revert Mod Pack", f"Could not read pack:\n{e}"); return
+        if not iffs and not inv["audio_keys"] and not inv["scoreclock"]:
+            messagebox.showinfo("Revert Mod Pack",
+                "This pack contains nothing revertible (no textures/audio/scoreclock)."); return
+        lines = []
+        if iffs:
+            lines.append(f"• {len(iffs)} asset(s) reset to pristine (archives + staged files):\n   "
+                         + ", ".join(iffs[:8]) + ("…" if len(iffs) > 8 else ""))
+        if skipped:
+            lines.append(f"• {len(skipped)} texture folder(s) can't be mapped and will be skipped")
+        if inv["audio_keys"]:
+            lines.append(f"• {len(inv['audio_keys'])} audio stream(s) restored to original")
+        if inv["scoreclock"]:
+            lines.append("• Scoreclock: layout back to stock, SOG + screen-anchor XEX patches undone")
+        if inv["roster"]:
+            lines.append("• Roster values are NOT revertible — restore your own ROS backup")
+        if not messagebox.askyesno("Revert Mod Pack",
+                "Revert everything this pack touched?\n\n" + "\n".join(lines) +
+                "\n\n⚠ Per-ASSET granularity: your OWN edits to these same assets are reverted "
+                "too. Continue?"):
+            return
+        self._log(f"─── Revert Mod Pack: {Path(p).name} ───")
+        def work():
+            try:
+                self._revert_result = (mp.revert_pack(root, game_dir, p, self._log_q.put), None)
+            except Exception as e:
+                self._revert_result = (None, str(e))
+        def done():
+            counts, err = getattr(self, "_revert_result", (None, "unknown"))
+            self._revert_result = None
+            if err:
+                self._log(f"[modpack] revert FAILED — {err}")
+                messagebox.showerror("Revert failed", err); return
+            if counts.get("scoreclock") and getattr(self, "_sbl_rows", None):
+                self._sbl_pending = {}
+                self._sbl_load()                    # scene reset -> re-read the pristine file
+            notes = ("\n\n" + "\n".join(counts["notes"])) if counts.get("notes") else ""
+            self._log(f"Reverted: {counts['tex_assets']} asset(s), {counts['audio']} audio, "
+                      f"scoreclock: {'yes' if counts['scoreclock'] else 'no'}")
+            messagebox.showinfo("Revert complete",
+                f"Assets reverted: {counts['tex_assets']}   Audio: {counts['audio']}   "
+                f"Scoreclock: {'yes' if counts['scoreclock'] else 'no'}{notes}\n\n"
+                "Relaunch the game to see the original look.")
+        self._run_in_thread(work, op_label="Reverting mod pack…", on_done=done)
+
     def _merge_with_selection(self, items, zip_path, what):
         """Show every incoming item with a checkbox (all checked by default), then apply the checked
         ones. A checked CONFLICT takes the incoming ('theirs') copy; 'same' items are no-ops."""
@@ -4847,9 +4940,11 @@ class App(tk.Tk):
             messagebox.showinfo("Import", "Nothing selected — nothing imported."); return
         root = self._get_root()
         if not root: return
+        sc_rows = [it for it in sel if it["section"] == "scoreclock"]
+        rest = [it for it in sel if it["section"] != "scoreclock"]
         decisions = {f'{it["section"]}|{it["key"]}': "theirs" for it in sel if it["status"] == "conflict"}
         try:
-            counts = mp.apply_items(root, sel, decisions, zip_path=zip_path,
+            counts = mp.apply_items(root, rest, decisions, zip_path=zip_path,
                                     ros_path=self._current_roster_path(), log=self._log)
         except Exception as e:
             messagebox.showerror("Import failed", str(e)); return
@@ -4859,14 +4954,115 @@ class App(tk.Tk):
                   f"+{counts['tex']} textures, +{counts['roster']} roster group(s)")
         roster_note = ("\n\nRoster edits were written straight to your Roster.ROS (backups made) — "
                        "restart the game to see them." if counts["roster"] else "")
+        tex_folders = sorted({Path(it["key"]).parent.as_posix() for it in rest
+                              if it["section"] == "tex" and it["status"] != "same"})
+        sc = sc_rows[0]["incoming"] if sc_rows else None
+        bg_note = ""
+        if tex_folders or sc:
+            parts = []
+            if tex_folders: parts.append("imported textures are being applied to the game archives")
+            if sc:          parts.append("the scoreclock is being replayed onto your game files")
+            bg_note = ("\n\nNow finishing in the background (a few minutes): " + "; ".join(parts) +
+                       ". Watch the log — you'll get a message when it's done.")
         messagebox.showinfo("Import complete",
             f"Names: {counts['meta']}   Audio: {counts['audio']}   Textures: {counts['tex']}   "
-            f"Roster: {counts['roster']}\n\n"
-            "Replacements are staged in your Extracted folder — review, then Apply All Mods."
-            + roster_note)
+            f"Roster: {counts['roster']}"
+            + ("\n\nAudio replacements are staged — use Apply All Mods to patch them."
+               if counts["audio"] else "")
+            + roster_note + bg_note)
         if counts["roster"] and Path(self._v_roster.get().strip() or "x").is_file():
             try: self._teams_load()          # refresh the Teams grid from the patched save
             except Exception: pass
+        if tex_folders or sc:
+            self._import_finalize(sc, tex_folders, zip_path)
+
+    def _import_finalize(self, sc, tex_folders, zip_path):
+        """Background finish of a mod-pack import: (1) apply the just-imported texture files of
+        every touched asset into the game archives (same clean-base path as Apply All), then
+        (2) replay the scoreclock section (DRAM rebuild + auto-flatten + XEX patches) and save it
+        as a preset. Textures go FIRST — the overlay texture apply resets blob0, so the layout
+        rebuild must come after (and the texture pass skips its own snapshot/restore then)."""
+        game_dir = self._get_game_root()
+        root = self._get_root()
+        if not game_dir or not root:
+            messagebox.showerror("Import",
+                "Set the game files folder in Settings, then re-import the pack."); return
+        # touched folders -> candidate catalog assets (a folder like Logos/ hosts MANY iffs;
+        # only those with an actual edited file on disk get applied)
+        cand = []
+        if tex_folders:
+            fset = set(tex_folders)
+            for iff in sorted({r["iff"] for r in self._iff_catalog}):
+                try:
+                    if archtex.asset_iff(iff) in fset or archtex._legacy_asset_iff(iff) in fset:
+                        cand.append(iff)
+                except Exception:
+                    pass
+        preset_name = f"Imported — {Path(zip_path).stem}" if zip_path else "Imported scoreclock"
+        def work():
+            applied, sc_status, err = 0, None, None
+            try:
+                for iff in cand:
+                    recs, edits = self._iff_all_edits(iff, root)
+                    edits = [e for e in edits if archtex.is_edited(root, Path(e["path"]))]
+                    try:
+                        if edits:
+                            self._log_q.put(f"  applying {iff} ({len(edits)} texture(s))…")
+                            self._iff_apply_all_work(iff, edits, game_dir, compact=False,
+                                                     preserve_overlay=(sc is None))
+                            applied += 1
+                        elif not recs:
+                            p = archtex.find_any_edit(root, iff, None)
+                            if p and archtex.is_edited(root, p):
+                                self._log_q.put(f"  applying {iff}…")
+                                archtex.ensure_clean(iff, game_dir, self._log_q.put)
+                                self._log_q.put(f"  {archtex.replace(iff, str(p), game_dir, self._log_q.put)}")
+                                self._iff_mirror_jersey(iff, [(0, str(p))], game_dir)
+                                applied += 1
+                    except Exception as te:
+                        self._log_q.put(f"  ERROR applying {iff}: {te}")
+                if applied:
+                    try:                                  # reclaim orphans from the reset+apply
+                        self._log_q.put(f"  {archtex.compact_1b(game_dir, self._log_q.put)}")
+                    except Exception as ce:
+                        self._log_q.put(f"  (compact skipped: {ce})")
+                if sc:
+                    sc_status = mp.apply_scoreclock(game_dir, sc, self._log_q.put)
+            except Exception as e:
+                err = str(e)
+            self._imp_fin_result = (applied, sc_status, err)
+        def done():
+            applied, sc_status, err = getattr(self, "_imp_fin_result", (0, None, "unknown"))
+            self._imp_fin_result = None
+            if err:
+                self._log(f"[modpack] import finish FAILED — {err}")
+                messagebox.showerror("Import finish failed", err); return
+            lines = []
+            if tex_folders:
+                lines.append(f"Textures applied to the game archives ({applied} asset(s)).")
+            if sc_status:
+                self._log(f"[modpack] scoreclock: {sc_status}")
+                try:                              # save the imported look as a loadable preset
+                    data = self._sbl_presets_read()
+                    data[preset_name] = mp.scoreclock_preset_snapshot(sc)
+                    self._sbl_presets_write(data)
+                    if hasattr(self, "_sbl_preset_cb"):
+                        self._sbl_preset_refresh(select=preset_name)
+                    lines.append(f"Scoreclock applied — saved as preset “{preset_name}”.")
+                except Exception as e:
+                    self._log(f"[modpack] scoreclock preset save failed: {e}")
+                    lines.append("Scoreclock applied.")
+                if getattr(self, "_sbl_rows", None):  # tab had the scene loaded -> now stale
+                    self._sbl_pending = {}
+                    self._sbl_load()                  # background re-read of the rebuilt file
+                if sc.get("anchor"):
+                    lines.append("Note: the screen anchor also moves the instant-replay watermark.")
+                if "FAILED" in sc_status:
+                    lines.append("⚠ Part of the scoreclock failed — check the log.")
+            messagebox.showinfo("Import finished",
+                                "\n\n".join(lines) + "\n\nRelaunch the game to see it.")
+            self._prompt_restart_if_running()
+        self._run_in_thread(work, op_label="Finishing import (applying to game files)…", on_done=done)
 
     def _run_merge(self, items, zip_path, what):
         """Auto-apply NEW items, resolve CONFLICTs via a dialog, then apply. Shared by both
@@ -7006,11 +7202,15 @@ class App(tk.Tk):
         SINGLE load_dram + SINGLE apply_dram (the old path did up to 4 loads + 3 re-encodes)."""
         return self._sblay.rebuild_overlay_from_snapshot(snap, shadow, teal, game_dir, self._log_q.put)
 
-    def _iff_apply_all_work(self, iff, edits, game_dir, compact=True, progress=None):
+    def _iff_apply_all_work(self, iff, edits, game_dir, compact=True, progress=None,
+                            preserve_overlay=True):
         """Apply every edited texture of ONE multi-texture asset from a clean base: preserve the
         scoreclock layout for overlay_static.iff, mirror jersey twins to the front-end copy, and
         (optionally) compact. Shared by the single 'Apply to IFF' and the multi-select batch so both
-        take the IDENTICAL path. `progress` (optional) = fn(frac 0..1, note) for a stage-level bar."""
+        take the IDENTICAL path. `progress` (optional) = fn(frac 0..1, note) for a stage-level bar.
+        preserve_overlay=False skips the overlay snapshot/restore — ONLY for callers that rebuild
+        the scoreclock layout themselves right after (the modpack import), where the capture+restore
+        pair would be pure wasted decode time."""
         def prog(f, note):
             if progress:
                 progress(f, note)
@@ -7019,8 +7219,9 @@ class App(tk.Tk):
         # edit on a prior apply corrupts it — so ALWAYS reset to clean, but PRESERVE the scoreclock
         # layout across it: snapshot, ensure_clean, apply fresh, then re-apply the layout.
         is_overlay = iff.lower() == "overlay_static.iff"
+        keep_layout = is_overlay and preserve_overlay
         snap = shadow = teal = None
-        if is_overlay:
+        if keep_layout:
             try:
                 snap, shadow, teal = self._sblay.capture_overlay_state(game_dir)
                 self._log_q.put(f"  snapshotted scoreclock layout ({len(snap)} elements) to restore after")
@@ -7032,7 +7233,7 @@ class App(tk.Tk):
         status = archtex.replace_many(iff, edits, game_dir, self._log_q.put,
                                       prefer_lossless=(False if is_overlay else self._v_iff_lossless.get()))
         self._log_q.put(f"  {status}")
-        if is_overlay and snap:
+        if keep_layout and snap:
             try:
                 self._log_q.put("  " + self._sbl_restore_overlay_layout(snap, shadow, teal, game_dir))
             except Exception as re:

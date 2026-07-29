@@ -271,47 +271,63 @@ def folders_with_edits(extracted_dir: Path) -> list[Path]:
     return edited_folders
 
 
-def revert_extract(root, name, rec_list=None, clean_dir=None, log=print):
+def revert_extract(root, name, rec_list=None, clean_dir=None, log=print, remove_png=False):
     """Re-extract `name` from the CLEAN game files back into Extracted/ (undo edits, refresh the
     hash so it counts as unedited again). rec_list = list_textures(name) or None for single/primary.
+    remove_png=True also deletes any sibling .png with the same stem as each recovered .dds —
+    PNGs outrank DDS everywhere edits are resolved, so a leftover PNG would keep masking the
+    pristine file (used by mod-pack revert; the IFF tab's Extract Original stays non-destructive).
     Returns the number of files rewritten."""
     ex = extracted_root(root)
     folder = asset_iff(name)
     out_dir = ex / folder
     n = 0
+
+    def _drop_png(dds_path):
+        if not remove_png:
+            return
+        png = Path(dds_path).with_suffix(".png")
+        if png.exists():
+            try:
+                png.unlink()
+                log(f"  removed stale {png.name} (masked the recovered original .dds)")
+            except Exception as pe:
+                log(f"  WARNING: couldn't remove {png.name}: {pe}")
+
     if rec_list:
         for r, pth in extract_all_textures(name, out_dir, clean_dir):
-            mark_extracted(root, pth); n += 1
+            mark_extracted(root, pth); _drop_png(pth); n += 1
     else:
         out = out_dir / texture_filename(name, None)
         extract_dds(name, out, clean_dir)
-        mark_extracted(root, out); n += 1
+        mark_extracted(root, out); _drop_png(out); n += 1
     log(f"  reverted {name} -> Extracted/{folder}/ ({n} file(s) from clean)")
     return n
 
 
 # ── edit-file search across the new Extracted/ + legacy Modified//Original/ ──
 def _find_edit_in_dir(folder_dir, name, rec=None):
-    """The user's edit file for this texture inside ONE folder, or None (current + legacy names)."""
+    """The user's edit file for this texture inside ONE folder, or None (current + legacy names).
+    PNG wins over DDS when both exist — the PNG is the file the user actually edits."""
     folder_dir = Path(folder_dir)
     base = folder_dir / texture_filename(name, rec)
-    for cand in (base, base.with_suffix(".png")):
+    for cand in (base.with_suffix(".png"), base):
         if cand.exists():
             return cand
     if rec is not None and "index" in rec and not rec.get("label"):     # legacy t{idx}_{w}x{h}.*
-        for ext in ("dds", "png"):
+        for ext in ("png", "dds"):
             g = sorted(folder_dir.glob(f"t{rec['index']:02d}_*.{ext}"))
             if g:
                 return g[0]
     if rec is not None and rec.get("index") == 0 and rec.get("label"):  # decal sheet = old primary
         stem = name[:-4] if name.lower().endswith(".iff") else name
-        for nm2 in (stem + ".dds", stem + ".png"):
+        for nm2 in (stem + ".png", stem + ".dds"):
             c = folder_dir / nm2
             if c.exists():
                 return c
     if rec is None:                                    # legacy single-primary name (e.g. logo_bos.dds)
         stem = name[:-4] if name.lower().endswith(".iff") else name
-        for nm2 in (stem + ".dds", stem + ".png"):
+        for nm2 in (stem + ".png", stem + ".dds"):
             c = folder_dir / nm2
             if c.exists():
                 return c
@@ -2087,11 +2103,11 @@ def find_edit_file(folder_dir, name: str, rec=None):
     dimensions were dropped from the filename are still found. Dims are never parsed from the name."""
     folder_dir = Path(folder_dir)
     base = folder_dir / texture_filename(name, rec)        # e.g. t10.dds  (or cover.dds / stem.dds)
-    for cand in (base, base.with_suffix(".png")):
+    for cand in (base.with_suffix(".png"), base):          # PNG wins when both exist (the edited file)
         if cand.exists():
             return cand
     if rec is not None and "index" in rec and not rec.get("label"):   # legacy t{idx}_{w}x{h}.*
-        for ext in ("dds", "png"):
+        for ext in ("png", "dds"):
             g = sorted(folder_dir.glob(f"t{rec['index']:02d}_*.{ext}"))
             if g:
                 return g[0]
@@ -2104,15 +2120,15 @@ def find_edit_file(folder_dir, name: str, rec=None):
     legdir = legroot / _legacy_asset_iff(name)
     if legdir != folder_dir and legdir.is_dir():
         if rec is not None and rec.get("label"):
-            names = [rec["label"] + ".dds", rec["label"] + ".png"]
+            names = [rec["label"] + ".png", rec["label"] + ".dds"]
             if rec.get("index") == 0:                       # decal sheet was the old 'primary'
                 stem = name[:-4] if name.lower().endswith(".iff") else name
-                names += [stem + ".dds", stem + ".png"]
+                names += [stem + ".png", stem + ".dds"]
         elif rec is not None:
-            names = [f"t{rec['index']:02d}.dds", f"t{rec['index']:02d}.png"]
+            names = [f"t{rec['index']:02d}.png", f"t{rec['index']:02d}.dds"]
         else:
             stem = name[:-4] if name.lower().endswith(".iff") else name
-            names = [stem + ".dds", stem + ".png"]
+            names = [stem + ".png", stem + ".dds"]
         for nm2 in names:
             cand = legdir / nm2
             if cand.exists():
