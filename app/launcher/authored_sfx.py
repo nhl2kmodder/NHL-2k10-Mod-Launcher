@@ -184,8 +184,8 @@ BANK_CATEGORY = {
     # instead: every one of the 89 transcribes as the arena PA announcer.
     #   paintro.iff      "And now, your Vancouver Canucks!"                    (49, 3.9-6.5 s)
     #   loading_audio.iff "Alright Canucks fans, it's hockey time! …"          (40, 6.1-11.8 s)
-    "paintro.iff": "PA_English",
-    "loading_audio.iff": "PA_English",
+    "paintro.iff": "PA",
+    "loading_audio.iff": "PA",
 }
 
 
@@ -229,7 +229,12 @@ def team_for(name: str, bank: str = "") -> str:
 #: mirrors CATEGORY_FOLDER in the launcher for exactly the categories this module emits, so these
 #: WAVs land in the same folders as every other extracted sound
 FOLDER = {"Whistle": "SFX", "Arena_SFX": "SFX", "SFX": "SFX", "Crowd_Ambient": "Crowd_Ambient",
-          "Goal_SFX": "Goal_SFX", "PA_English": "PA", "Unsorted": "Unknown"}
+          "Goal_SFX": "Goal_SFX", "PA": "PA", "Unsorted": "Unknown",
+          # legacy: these were emitted as categories before, so a names file written by an older
+          # build can still carry them. They are not categories -- "French" describes the track,
+          # not a bucket -- so nothing emits them any more, but the mapping stays so old data
+          # still folders correctly instead of falling through to Unknown.
+          "PA_English": "PA", "PA_French": "PA"}
 
 
 def display_name(snd: dict) -> str:

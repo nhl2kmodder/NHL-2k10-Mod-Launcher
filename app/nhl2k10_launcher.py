@@ -210,6 +210,13 @@ CATEGORY_FOLDER: dict = {
     "BIP_Music":           "BIP_Music",
     "Organ_Crowd":         "Organ_Crowd",
     "PP_SFX":              "SFX",
+    # "PA" itself was missing from this table while the two *sub*-labels were here, so every row
+    # actually categorised "PA" — 17,191 of them, the whole PA announcer bank — fell through to
+    # "Unknown" and extracted into Unknown/ while PA/ held only the 135 rows that happened to
+    # carry the older PA_English/PA_French labels.
+    "PA":                  "PA",
+    # legacy labels: nothing emits these any more (they are not categories — "French" describes
+    # the track, not a bucket), but a names file written by an older build still carries them.
     "PA_English":          "PA",
     "PA_French":           "PA",
     "Crowd_Ambient":       "Crowd_Ambient",
