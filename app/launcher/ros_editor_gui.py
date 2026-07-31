@@ -26,9 +26,19 @@ TYPES = ["u8", "i8", "u16", "i16", "u32", "i32", "f32", "hex"]
 # colour palette at +0x130..+0x1A0 (each u32 = 0xRRGGBBAA); +0x158/+0x15C/+0x160 are the 3 team
 # recolour colours the goalie system uses. More fields (names, ratings) need serializer RE / in-game
 # diffs — the file uses its own serialization, distinct from the live-memory record layout.
+#
+# +0xB1/+0xB3 are the announcer "audio name" ids (findings 16): the id the commentary and PA
+# systems resolve to a recorded name. 0xFFFF = no recording = announcer stays silent for that
+# half of the name. They are shown here because they are the only readable link between a
+# player and the name-call audio, but note the in-game caveat recorded in findings 16: for
+# players who already shipped with the game, editing these bytes in the FILE does not change
+# what the announcer says (the game re-resolves from the roster string pool and reassigns the
+# ids on save). Treat them as diagnostic, not as a working switch.
 DEFAULT_FIELDS = {
     "0x1E159C31": (
-        [{"name": "const20", "off": 0x11C, "type": "u32"}]
+        [{"name": "const20", "off": 0x11C, "type": "u32"},
+         {"name": "audio_last", "off": 0xB1, "type": "u16"},
+         {"name": "audio_first", "off": 0xB3, "type": "u16"}]
         + [{"name": ("recolor_%d" % ((o - 0x158) // 4 + 1)) if 0x158 <= o <= 0x160 else "color_%02d" % ((o - 0x130) // 4),
             "off": o, "type": "hex", "len": 4} for o in range(0x130, 0x1A4, 4)]
     ),
@@ -67,9 +77,18 @@ class RosEditorFrame(ttk.Frame):
     def _defs(self):
         if not self.chunk:
             return []
+        import copy
         if self.chunk.name not in self.fielddefs:           # seed pre-mapped fields on first open
-            import copy
             self.fielddefs[self.chunk.name] = copy.deepcopy(DEFAULT_FIELDS.get(self.chunk.name, []))
+        else:
+            # Anyone who has opened this table before already has a saved field list, so seeding
+            # only on first open means newly mapped fields never reach them. Add the ones they are
+            # missing (matched on offset, so a field they renamed themselves is left alone).
+            have = {f.get("off") for f in self.fielddefs[self.chunk.name]}
+            add = [f for f in DEFAULT_FIELDS.get(self.chunk.name, []) if f["off"] not in have]
+            if add:
+                self.fielddefs[self.chunk.name].extend(copy.deepcopy(add))
+                self._save_fielddefs()
         return self.fielddefs[self.chunk.name]
 
     # ── UI ──

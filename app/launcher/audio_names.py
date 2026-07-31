@@ -6,7 +6,10 @@ Data (launcher/data/, see resources.data_path):
                             (parsed from the 30 arena_*.iff + gamedata.iff directories).
   audio_authored_names.json bank-centric inventory of the hash-name directories found in
                             crowdloops/pasfx/paintro/sfx_arena*.bnk/... (crc32 name hashes,
-                            552/1385 cracked to authored names as of 2026-07-18).
+                            886/1385 cracked to authored names).
+                            NOT read here -- this module only ever loaded audio_bank_refs.json,
+                            which is why the authored SFX had no rows in the Audio tab for so
+                            long. launcher/authored_sfx.py is what consumes it.
 
 The Audio tab uses bank_tags()/bank_search() to show a "Bank / Team" column and to let the
 Team dropdown + search box match team arena audio (e.g. every 1B stream Vancouver's bank

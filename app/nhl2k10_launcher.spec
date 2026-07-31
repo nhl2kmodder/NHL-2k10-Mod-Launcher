@@ -32,7 +32,7 @@ _required = [
     'team_iff_catalog.csv', 'discovered_assets.csv', 'portrait_key_map.json',
     'global_iff_runtime_map.csv', 'fe_components.json', 'fe_uniform_map.json',
     'frontend_logo_tile_map.json', 'team_fields.json', 'jersey_map.json',
-    'live_offsets.json',
+    'live_offsets.json', 'audio_authored_names.json', 'authored_sfx_labels.json',
 ]
 _have = {p.name for p in data_src.glob('*') if p.is_file()} if data_src.is_dir() else set()
 _gone = [f for f in _required if f not in _have]
@@ -77,14 +77,25 @@ a = Analysis(
     hiddenimports=['numpy', 'PIL', 'PIL.Image', 'PIL.ImageTk',
                    'nhl2k10_trace_dump', 'decode_e4837_fixed',
                    'encode_e4837_lazy', 'encode_dxt5', 'archive_textures',
-                   'bank_parser', 'audio_names', 'modpack', 'xenia_mem', 'live_capture', 'f0985030',
+                   'bank_parser', 'audio_names', 'authored_sfx', 'modpack', 'xenia_mem',
+                   'live_capture', 'f0985030',
                    'goalie_equipment', 'customasset', 'roster_editor', 'ros_file', 'ros_editor_gui',
                    'ros_live_editor', 'team_colors', 'team_fields', 'team_fields_gui', 'colorpick', 'jerseys',
                    'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime']
                   + _scipy_hidden,
     hookspath=[],
     runtime_hooks=[],
-    excludes=[],
+    # scipy is here for exactly THREE functions -- distance_transform_edt (archive_textures,
+    # encode_dxt5), gaussian_filter and sobel (normal_stitcher) -- all from scipy.ndimage. The
+    # full package is ~114 MB on disk and PyInstaller was packing all of it, which is dead weight
+    # in a ONEFILE build: every launch unpacks the whole payload to %TEMP% and Defender rescans it
+    # after every rebuild. Dropping the unused subpackages removes ~92 MB of that.
+    # ndimage genuinely needs scipy._lib, scipy.linalg and scipy.special -- verified by importing
+    # the three functions with everything below blocked -- so those stay.
+    excludes=['scipy.stats', 'scipy.optimize', 'scipy.sparse', 'scipy.signal',
+              'scipy.interpolate', 'scipy.spatial', 'scipy.integrate', 'scipy.io',
+              'scipy.fft', 'scipy.fftpack', 'scipy.cluster', 'scipy.odr',
+              'scipy.constants', 'scipy.datasets', 'scipy.differentiate'],
     noarchive=False,
 )
 

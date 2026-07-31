@@ -1,0 +1,364 @@
+{
+ "_note": "Labels for authored sounds whose real asset name is unknown. Transcribed from the audio (faster-whisper small) and fuzzy-matched to the 30 NHL teams -- these are DESCRIPTIONS, not authored names: crc32(name) does NOT equal the directory hash. Real, hash-verified names live in audio_authored_names.json.",
+ "banks": {
+  "paintro.iff": {
+   "0x00BF0908": {
+    "name": "PA_Intro_Olympic_Belarus",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x07D2CD11": {
+    "name": "PA_Intro_St_Louis_Blues",
+    "category": "PA_English",
+    "team": "St. Louis Blues"
+   },
+   "0x19A43849": {
+    "name": "PA_Intro_Olympic_German",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x1EC9FC50": {
+    "name": "PA_Intro_Detroit_Red_Wings",
+    "category": "PA_English",
+    "team": "Detroit Red Wings"
+   },
+   "0x21E29E18": {
+    "name": "PA_Intro_Vancouver_Canucks",
+    "category": "PA_English",
+    "team": "Vancouver Canucks"
+   },
+   "0x268F5A01": {
+    "name": "PA_Intro_AllStars_Eastern_Conference",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x2B925ACB": {
+    "name": "PA_Intro_Olympic_Ukrainian",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x2CFF9ED2": {
+    "name": "PA_Intro_Olympic_Czech_Republic",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x32896B8A": {
+    "name": "PA_Intro_AllStars_North_American",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x35E4AF93": {
+    "name": "PA_Intro_Florida_Panthers",
+    "category": "PA_English",
+    "team": "Florida Panthers"
+   },
+   "0x458E5B1C": {
+    "name": "PA_Intro_Olympic_Canadian",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x51886A97": {
+    "name": "PA_Intro_Olympic_Austrian",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x5BF8AE44": {
+    "name": "PA_Intro_AllStars_World",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x5C956A5D": {
+    "name": "PA_Intro_Olympic_Russian",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x69CECCC6": {
+    "name": "PA_Intro_Olympic_Swiss",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x77B8399E": {
+    "name": "PA_Intro_Olympic_French",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x7B4832C4": {
+    "name": "PA_Intro_Olympic_Finnish",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x87C0ADEA": {
+    "name": "PA_Intro_Minnesota_Wild",
+    "category": "PA_English",
+    "team": "Minnesota Wild"
+   },
+   "0x8E76E1C1": {
+    "name": "PA_Intro_Olympic_Unidentified",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x976DD080": {
+    "name": "PA_Intro_Carolina_Hurricanes",
+    "category": "PA_English",
+    "team": "Carolina Hurricanes"
+   },
+   "0x99B658B2": {
+    "name": "PA_Intro_AllStars_Western_Conference",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0x9EDB9CAB": {
+    "name": "PA_Intro_Philadelphia_Flyers",
+    "category": "PA_English",
+    "team": "Philadelphia Flyers"
+   },
+   "0xA55BB202": {
+    "name": "PA_Intro_Chicago_Blackhawks",
+    "category": "PA_English",
+    "team": "Chicago Blackhawks"
+   },
+   "0xAB803A30": {
+    "name": "PA_Intro_Tampa_Bay_Lightning",
+    "category": "PA_English",
+    "team": "Tampa Bay Lightning"
+   },
+   "0xACEDFE29": {
+    "name": "PA_Intro_Olympic_United_States",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0xB5F6CF68": {
+    "name": "PA_Intro_Los_Angeles_Kings",
+    "category": "PA_English",
+    "team": "Los Angeles Kings"
+   },
+   "0xB8EBCFA2": {
+    "name": "PA_Intro_Columbus_Blue_Jackets",
+    "category": "PA_English",
+    "team": "Columbus Blue Jackets"
+   },
+   "0xBC408343": {
+    "name": "PA_Intro_Pittsburgh_Penguins",
+    "category": "PA_English",
+    "team": "Pittsburgh Penguins"
+   },
+   "0xBF860BBB": {
+    "name": "PA_Intro_San_Jose_Sharks",
+    "category": "PA_English",
+    "team": "San Jose Sharks"
+   },
+   "0xC2F1FFFE": {
+    "name": "PA_Intro_New_Jersey_Devils",
+    "category": "PA_English",
+    "team": "New Jersey Devils"
+   },
+   "0xC8813B2D": {
+    "name": "PA_Intro_Ottawa_Senators",
+    "category": "PA_English",
+    "team": "Ottawa Senators"
+   },
+   "0xCB47B3D5": {
+    "name": "PA_Intro_Toronto_Maple_Leafs",
+    "category": "PA_English",
+    "team": "Toronto Maple Leafs"
+   },
+   "0xCFECFF34": {
+    "name": "PA_Intro_Calgary_Flames",
+    "category": "PA_English",
+    "team": "Calgary Flames"
+   },
+   "0xD25C8294": {
+    "name": "PA_Intro_Boston_Bruins",
+    "category": "PA_English",
+    "team": "Boston Bruins"
+   },
+   "0xDBEACEBF": {
+    "name": "PA_Intro_Olympic_Slovakian",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0xDC870AA6": {
+    "name": "PA_Intro_Phoenix_Coyotes",
+    "category": "PA_English",
+    "team": "Phoenix Coyotes"
+   },
+   "0xE9DCAC3D": {
+    "name": "PA_Intro_Washington_Capitals",
+    "category": "PA_English",
+    "team": "Washington Capitals"
+   },
+   "0xEEB16824": {
+    "name": "PA_Intro_Home_Team",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0xF0C79D7C": {
+    "name": "PA_Intro_Olympic_Swedish",
+    "category": "PA_English",
+    "team": ""
+   },
+   "0xF7AA5965": {
+    "name": "PA_Intro_Edmonton_Oilers",
+    "category": "PA_English",
+    "team": "Edmonton Oilers"
+   },
+   "0x42E39F05": {
+    "name": "PA_Intro_Nashville_Predators",
+    "category": "PA_English",
+    "team": "Nashville Predators"
+   },
+   "0xE06AE016": {
+    "name": "PA_Intro_Atlanta_Thrashers",
+    "category": "PA_English",
+    "team": "Atlanta Thrashers"
+   },
+   "0xB29B0B71": {
+    "name": "PA_Intro_Buffalo_Sabres",
+    "category": "PA_English",
+    "team": "Buffalo Sabres"
+   },
+   "0x70D5FD87": {
+    "name": "PA_Intro_Dallas_Stars",
+    "category": "PA_English",
+    "team": "Dallas Stars"
+   },
+   "0xF971D157": {
+    "name": "PA_Intro_NY_Islanders",
+    "category": "PA_English",
+    "team": "NY Islanders"
+   },
+   "0x6EA308DF": {
+    "name": "PA_Intro_NY_Rangers",
+    "category": "PA_English",
+    "team": "NY Rangers"
+   },
+   "0xC59C3BE7": {
+    "name": "PA_Intro_Colorado_Avalanche",
+    "category": "PA_English",
+    "team": "Colorado Avalanche"
+   }
+  },
+  "loading_audio.iff": {
+   "0x022DD27F": {
+    "name": "PA_Hype_New_Jersey_Devils",
+    "category": "PA_English",
+    "team": "New Jersey Devils"
+   },
+   "0x05401666": {
+    "name": "PA_Hype_Toronto_Maple_Leafs",
+    "category": "PA_English",
+    "team": "Toronto Maple Leafs"
+   },
+   "0x1B36E33E": {
+    "name": "PA_Hype_Florida_Panthers",
+    "category": "PA_English",
+    "team": "Florida Panthers"
+   },
+   "0x1C5B2727": {
+    "name": "PA_Hype_Minnesota_Wild",
+    "category": "PA_English",
+    "team": "Minnesota Wild"
+   },
+   "0x301BB0FD": {
+    "name": "PA_Hype_Vancouver_Canucks",
+    "category": "PA_English",
+    "team": "Vancouver Canucks"
+   },
+   "0x40714472": {
+    "name": "PA_Hype_San_Jose_Sharks",
+    "category": "PA_English",
+    "team": "San Jose Sharks"
+   },
+   "0x43AF3C6D": {
+    "name": "PA_Hype_Carolina_Hurricanes",
+    "category": "PA_English",
+    "team": "Carolina Hurricanes"
+   },
+   "0x6B5C17B1": {
+    "name": "PA_Hype_Detroit_Red_Wings",
+    "category": "PA_English",
+    "team": "Detroit Red Wings"
+   },
+   "0x6C31D3A8": {
+    "name": "PA_Hype_Nashville_Predators",
+    "category": "PA_English",
+    "team": "Nashville Predators"
+   },
+   "0x752AE2E9": {
+    "name": "PA_Hype_Los_Angeles_Kings",
+    "category": "PA_English",
+    "team": "Los Angeles Kings"
+   },
+   "0x8552769D": {
+    "name": "PA_Hype_Chicago_Blackhawks",
+    "category": "PA_English",
+    "team": "Chicago Blackhawks"
+   },
+   "0x8CE43AB6": {
+    "name": "PA_Hype_NY_Islanders",
+    "category": "PA_English",
+    "team": "NY Islanders"
+   },
+   "0x95FF0BF7": {
+    "name": "PA_Hype_Tampa_Bay_Lightning",
+    "category": "PA_English",
+    "team": "Tampa Bay Lightning"
+   },
+   "0x9B2483C5": {
+    "name": "PA_Hype_Buffalo_Sabres",
+    "category": "PA_English",
+    "team": "Buffalo Sabres"
+   },
+   "0xA417116A": {
+    "name": "PA_Hype_Montreal_Canadiens",
+    "category": "PA_English",
+    "team": "Montreal Canadiens"
+   },
+   "0xA7C96975": {
+    "name": "PA_Hype_Washington_Capitals",
+    "category": "PA_English",
+    "team": "Washington Capitals"
+   },
+   "0xADA15D41": {
+    "name": "PA_Hype_Philadelphia_Flyers",
+    "category": "PA_English",
+    "team": "Philadelphia Flyers"
+   },
+   "0xAE7F255E": {
+    "name": "PA_Hype_Ottawa_Senators",
+    "category": "PA_English",
+    "team": "Ottawa Senators"
+   },
+   "0xD31021FC": {
+    "name": "PA_Hype_Edmonton_Oilers",
+    "category": "PA_English",
+    "team": "Edmonton Oilers"
+   },
+   "0xDDCBA9CE": {
+    "name": "PA_Hype_St_Louis_Blues",
+    "category": "PA_English",
+    "team": "St. Louis Blues"
+   },
+   "0xEC23B353": {
+    "name": "PA_Hype_Colorado_Avalanche",
+    "category": "PA_English",
+    "team": "Colorado Avalanche"
+   },
+   "0xF255460B": {
+    "name": "PA_Hype_Boston_Bruins",
+    "category": "PA_English",
+    "team": "Boston Bruins"
+   },
+   "0xF5388212": {
+    "name": "PA_Hype_Phoenix_Coyotes",
+    "category": "PA_English",
+    "team": "Phoenix Coyotes"
+   },
+   "0xFBE30A20": {
+    "name": "PA_Hype_Columbus_Blue_Jackets",
+    "category": "PA_English",
+    "team": "Columbus Blue Jackets"
+   }
+  }
+ }
+}

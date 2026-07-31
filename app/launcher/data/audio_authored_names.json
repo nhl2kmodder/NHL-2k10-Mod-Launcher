@@ -1,8 +1,8 @@
 {
  "version": 1,
- "generated": "2026-07-18",
- "comment": "Sound-name hash directories recovered from audio bank IFFs. Each bank IFF carries 20-byte entries [crc32(name)][0x1AEDDA1F][2][ref][wave_off]; names hash with plain zlib crc32 (Str_Hash @0x84113740 = CRC32 of the wide string's ASCII bytes, no uppercasing). 'name' is the cracked authored name (null = hash not yet cracked). wave_off is relative to the owning container (scene-container banks embed waves; pasfx/paintro/loading_audio pair with a same-stem .cdf wave container). In-container wave codec is NOT the 1A/1B XMA2 packing (undecoded as of 2026-07-18).",
- "named": 552,
+ "generated": "2026-07-30",
+ "comment": "Sound-name hash directories recovered from audio bank IFFs. Each bank IFF carries 20-byte entries [crc32(name)][0x1AEDDA1F][2][ref][wave_off]; names hash with plain zlib crc32 (Str_Hash @0x84113740 = CRC32 of the wide string's ASCII bytes, no uppercasing). 'name' is the cracked authored name (null = hash not yet cracked). wave_off is relative to the owning container (scene-container banks embed waves; pasfx/paintro/loading_audio pair with a same-stem .cdf wave container). In-container wave codec is NOT the 1A/1B XMA2 packing (undecoded as of 2026-07-18). 2026-07-30: pasfx.iff cracked 14/14 -- the names are the team PA sound effects, and they are the same strings the gamedata sound-event table @0x22239C stores (crc32(name.upper()) there, crc32(name) here), with an `_NN` take suffix added in the audio. pasfx.cdf (0B @0x40469800, 635496 B) holds the waves: 14 x [0x2C descriptor][XMA2 data], descriptor = channels@+0x00, sample_rate@+0x10 (0xAC44 = 44100 Hz), data size@+0x18, total samples@+0x24; the data begins with an ordinary XMA2 packet, so the in-container codec IS XMA2, just 44.1 kHz. The remaining sfx_arena*.bnk names were cracked by hashing every UTF-16BE/ASCII string in gamedata + the XEX with an `_NN` take suffix (crack_from_gamedata.py).",
+ "named": 886,
  "total": 1385,
  "banks": {
   "bootup_audio.iff": {
@@ -551,85 +551,85 @@
    "sounds": [
     {
      "hash": "0x0FCFDCC9",
-     "name": null,
+     "name": "sharks-goal_01",
      "wave_off": "0x83800",
      "entry_off": "0x369480A0"
     },
     {
      "hash": "0x42154AB3",
-     "name": null,
+     "name": "ducks-goal-siren_01",
      "wave_off": "0x32000",
      "entry_off": "0x369480B4"
     },
     {
      "hash": "0x5160EBE4",
-     "name": null,
+     "name": "bruins-siren_01",
      "wave_off": "0xC000",
      "entry_off": "0x369480C8"
     },
     {
      "hash": "0x643092A1",
-     "name": null,
+     "name": "coyotes-growl_01",
      "wave_off": "0x25800",
      "entry_off": "0x369480DC"
     },
     {
      "hash": "0x7E7EE17C",
-     "name": null,
+     "name": "predators-growl_02",
      "wave_off": "0x77800",
      "entry_off": "0x369480F0"
     },
     {
      "hash": "0x9470C398",
-     "name": null,
+     "name": "blue-jackets-canon_01",
      "wave_off": "0x0",
      "entry_off": "0x36948104"
     },
     {
      "hash": "0x96C68D73",
-     "name": null,
+     "name": "sharks-goal_02",
      "wave_off": "0x8B000",
      "entry_off": "0x36948118"
     },
     {
      "hash": "0xB532BBA8",
-     "name": null,
+     "name": "kings-bells_01",
      "wave_off": "0x52000",
      "entry_off": "0x3694812C"
     },
     {
      "hash": "0xC1721E69",
-     "name": null,
+     "name": "panthers-growl_01",
      "wave_off": "0x67000",
      "entry_off": "0x36948140"
     },
     {
      "hash": "0xC69AEC4C",
-     "name": null,
+     "name": "hurricanes-goal_01",
      "wave_off": "0x42000",
      "entry_off": "0x36948154"
     },
     {
      "hash": "0xE1C1BDE5",
-     "name": null,
+     "name": "sharks-goal_03",
      "wave_off": "0x93000",
      "entry_off": "0x36948168"
     },
     {
      "hash": "0xE1FA499D",
-     "name": null,
+     "name": "cheechoo-train_01",
      "wave_off": "0x1B800",
      "entry_off": "0x3694817C"
     },
     {
      "hash": "0xE777B0C6",
-     "name": null,
+     "name": "predators-growl_01",
      "wave_off": "0x6C000",
      "entry_off": "0x36948190"
     },
     {
      "hash": "0xF50EDE4A",
-     "name": null,
+     "name": "hurricanes-thunder-faceoff_01",
      "wave_off": "0x4B000",
      "entry_off": "0x369481A4"
     }
@@ -1454,7 +1454,7 @@
     },
     {
      "hash": "0x021B9F4E",
-     "name": null,
+     "name": "zamboni-hit-zambonii_01",
      "wave_off": "0x32F800",
      "entry_off": "0x37EF6CF4"
     },
@@ -1466,7 +1466,7 @@
     },
     {
      "hash": "0x02B679AD",
-     "name": null,
+     "name": "ohh-small-front_03",
      "wave_off": "0x5CC800",
      "entry_off": "0x37EF6D1C"
     },
@@ -1484,7 +1484,7 @@
     },
     {
      "hash": "0x06FFFA34",
-     "name": null,
+     "name": "against-boards_02",
      "wave_off": "0xC5800",
      "entry_off": "0x37EF6D58"
     },
@@ -1514,7 +1514,7 @@
     },
     {
      "hash": "0x0C98DB4E",
-     "name": null,
+     "name": "ohh-large-front_03",
      "wave_off": "0x67F000",
      "entry_off": "0x37EF6DBC"
     },
@@ -1532,7 +1532,7 @@
     },
     {
      "hash": "0x0D9BE1B2",
-     "name": null,
+     "name": "stick-hit-stick_02",
      "wave_off": "0xBD4800",
      "entry_off": "0x37EF6DF8"
     },
@@ -1544,7 +1544,7 @@
     },
     {
      "hash": "0x0E0E5161",
-     "name": null,
+     "name": "rampup-def-rear_01",
      "wave_off": "0x4B4000",
      "entry_off": "0x37EF6E20"
     },
@@ -1574,7 +1574,7 @@
     },
     {
      "hash": "0x12AF5675",
-     "name": null,
+     "name": "punch-soft_02",
      "wave_off": "0x62000",
      "entry_off": "0x37EF6E84"
     },
@@ -1592,7 +1592,7 @@
     },
     {
      "hash": "0x14BE603E",
-     "name": null,
+     "name": "stick-lift_03",
      "wave_off": "0x143000",
      "entry_off": "0x37EF6EC0"
     },
@@ -1610,7 +1610,7 @@
     },
     {
      "hash": "0x182D57FF",
-     "name": null,
+     "name": "skate-sweet_01",
      "wave_off": "0x149000",
      "entry_off": "0x37EF6EFC"
     },
@@ -1628,7 +1628,7 @@
     },
     {
      "hash": "0x1F4093E6",
-     "name": null,
+     "name": "skate-sweet_05",
      "wave_off": "0x154000",
      "entry_off": "0x37EF6F38"
     },
@@ -1646,7 +1646,7 @@
     },
     {
      "hash": "0x1FE1FEFC",
-     "name": null,
+     "name": "check-boards-med_03",
      "wave_off": "0xB8C800",
      "entry_off": "0x37EF6F74"
     },
@@ -1658,7 +1658,7 @@
     },
     {
      "hash": "0x21E73672",
-     "name": null,
+     "name": "cheer-lrg-short-front_01",
      "wave_off": "0x281800",
      "entry_off": "0x37EF6F9C"
     },
@@ -1676,7 +1676,7 @@
     },
     {
      "hash": "0x252E113F",
-     "name": null,
+     "name": "shoot-catch-soft_03",
      "wave_off": "0x35A800",
      "entry_off": "0x37EF6FD8"
     },
@@ -1700,7 +1700,7 @@
     },
     {
      "hash": "0x2840C68E",
-     "name": null,
+     "name": "crowd-cheer-med-front_02",
      "wave_off": "0x8AF800",
      "entry_off": "0x37EF7028"
     },
@@ -1724,7 +1724,7 @@
     },
     {
      "hash": "0x2AE9B126",
-     "name": null,
+     "name": "check-boards-soft_03",
      "wave_off": "0xB6E000",
      "entry_off": "0x37EF7078"
     },
@@ -1736,7 +1736,7 @@
     },
     {
      "hash": "0x2C94D67F",
-     "name": null,
+     "name": "grunt-check_02",
      "wave_off": "0xB4B800",
      "entry_off": "0x37EF70A0"
     },
@@ -1748,7 +1748,7 @@
     },
     {
      "hash": "0x2F47C940",
-     "name": null,
+     "name": "check-body-med_03",
      "wave_off": "0xF01000",
      "entry_off": "0x37EF70C8"
     },
@@ -1778,7 +1778,7 @@
     },
     {
      "hash": "0x31646523",
-     "name": null,
+     "name": "ohh-large-rear_02",
      "wave_off": "0x616800",
      "entry_off": "0x37EF712C"
     },
@@ -1886,7 +1886,7 @@
     },
     {
      "hash": "0x4044E45E",
-     "name": null,
+     "name": "puck-hit-boards-soft_01",
      "wave_off": "0xB9A000",
      "entry_off": "0x37EF7294"
     },
@@ -1940,7 +1940,7 @@
     },
     {
      "hash": "0x466355B5",
-     "name": null,
+     "name": "ohh-large-rear_03",
      "wave_off": "0x62C800",
      "entry_off": "0x37EF7348"
     },
@@ -1970,7 +1970,7 @@
     },
     {
      "hash": "0x4C66D4DE",
-     "name": null,
+     "name": "cheer-lrg-short-rear_02",
      "wave_off": "0x1DE800",
      "entry_off": "0x37EF73AC"
     },
@@ -1988,13 +1988,13 @@
     },
     {
      "hash": "0x5156A329",
-     "name": null,
+     "name": "rampup-def-front_01",
      "wave_off": "0x51C000",
      "entry_off": "0x37EF73E8"
     },
     {
      "hash": "0x522921A9",
-     "name": null,
+     "name": "shoot-catch-soft_02",
      "wave_off": "0x357800",
      "entry_off": "0x37EF73FC"
     },
@@ -2036,7 +2036,7 @@
     },
     {
      "hash": "0x5840F9D6",
-     "name": null,
+     "name": "check-body-med_02",
      "wave_off": "0xEF9000",
      "entry_off": "0x37EF7488"
     },
@@ -2066,19 +2066,19 @@
     },
     {
      "hash": "0x5B93E6E9",
-     "name": null,
+     "name": "grunt-check_03",
      "wave_off": "0xB4F800",
      "entry_off": "0x37EF74EC"
     },
     {
      "hash": "0x5C4745E0",
-     "name": null,
+     "name": "puck-hit-goal-soft_01",
      "wave_off": "0x33B800",
      "entry_off": "0x37EF7500"
     },
     {
      "hash": "0x5D47E591",
-     "name": null,
+     "name": "ohh-small-rear_01",
      "wave_off": "0x561800",
      "entry_off": "0x37EF7514"
     },
@@ -2090,13 +2090,13 @@
     },
     {
      "hash": "0x5DDA03D1",
-     "name": null,
+     "name": "crowd-cheer-med-rear_02",
      "wave_off": "0x842000",
      "entry_off": "0x37EF753C"
     },
     {
      "hash": "0x5DEE81B0",
-     "name": null,
+     "name": "check-boards-soft_02",
      "wave_off": "0xB67000",
      "entry_off": "0x37EF7550"
     },
@@ -2120,13 +2120,13 @@
     },
     {
      "hash": "0x63143128",
-     "name": null,
+     "name": "body-bump-soft_01",
      "wave_off": "0xB41000",
      "entry_off": "0x37EF75A0"
     },
     {
      "hash": "0x63B950A8",
-     "name": null,
+     "name": "stick-lift_02",
      "wave_off": "0x140000",
      "entry_off": "0x37EF75B4"
     },
@@ -2138,7 +2138,7 @@
     },
     {
      "hash": "0x65A866E3",
-     "name": null,
+     "name": "punch-soft_03",
      "wave_off": "0x63000",
      "entry_off": "0x37EF75DC"
     },
@@ -2150,7 +2150,7 @@
     },
     {
      "hash": "0x6847A370",
-     "name": null,
+     "name": "skate-sweet_04",
      "wave_off": "0x151800",
      "entry_off": "0x37EF7604"
     },
@@ -2168,7 +2168,7 @@
     },
     {
      "hash": "0x68E6CE6A",
-     "name": null,
+     "name": "check-boards-med_02",
      "wave_off": "0xB84000",
      "entry_off": "0x37EF7640"
     },
@@ -2192,7 +2192,7 @@
     },
     {
      "hash": "0x6EEBD8D3",
-     "name": null,
+     "name": "cheer-small-rear_01",
      "wave_off": "0x6CB800",
      "entry_off": "0x37EF7690"
     },
@@ -2210,7 +2210,7 @@
     },
     {
      "hash": "0x700C0563",
-     "name": null,
+     "name": "zamboni-hit-wall_01",
      "wave_off": "0xB35800",
      "entry_off": "0x37EF76CC"
     },
@@ -2222,7 +2222,7 @@
     },
     {
      "hash": "0x71F8CAA2",
-     "name": null,
+     "name": "against-boards_03",
      "wave_off": "0xD1000",
      "entry_off": "0x37EF76F4"
     },
@@ -2246,7 +2246,7 @@
     },
     {
      "hash": "0x74599400",
-     "name": null,
+     "name": "cheer-small-front_01",
      "wave_off": "0x783000",
      "entry_off": "0x37EF7744"
     },
@@ -2264,7 +2264,7 @@
     },
     {
      "hash": "0x75B1493B",
-     "name": null,
+     "name": "ohh-small-front_02",
      "wave_off": "0x5BD000",
      "entry_off": "0x37EF7780"
     },
@@ -2282,19 +2282,19 @@
     },
     {
      "hash": "0x7A7736E3",
-     "name": null,
+     "name": "cheer-large-front_01",
      "wave_off": "0xA61000",
      "entry_off": "0x37EF77BC"
     },
     {
      "hash": "0x7A9CD124",
-     "name": null,
+     "name": "stick-hit-stick_03",
      "wave_off": "0xBDA000",
      "entry_off": "0x37EF77D0"
     },
     {
      "hash": "0x7B9FEBD8",
-     "name": null,
+     "name": "ohh-large-front_02",
      "wave_off": "0x66E000",
      "entry_off": "0x37EF77E4"
     },
@@ -2306,13 +2306,13 @@
     },
     {
      "hash": "0x80E5B9FF",
-     "name": null,
+     "name": "cheer-small-rear_03",
      "wave_off": "0x711800",
      "entry_off": "0x37EF780C"
     },
     {
      "hash": "0x81240645",
-     "name": null,
+     "name": "skate-sweet_02",
      "wave_off": "0x14C000",
      "entry_off": "0x37EF7820"
     },
@@ -2324,7 +2324,7 @@
     },
     {
      "hash": "0x8649C25C",
-     "name": null,
+     "name": "skate-sweet_06",
      "wave_off": "0x156800",
      "entry_off": "0x37EF7848"
     },
@@ -2372,7 +2372,7 @@
     },
     {
      "hash": "0x8BA607CF",
-     "name": null,
+     "name": "punch-soft_01",
      "wave_off": "0x60800",
      "entry_off": "0x37EF78E8"
     },
@@ -2396,7 +2396,7 @@
     },
     {
      "hash": "0x9492B008",
-     "name": null,
+     "name": "stick-hit-stick_01",
      "wave_off": "0xBD0000",
      "entry_off": "0x37EF7938"
     },
@@ -2426,7 +2426,7 @@
     },
     {
      "hash": "0x9A57F52C",
-     "name": null,
+     "name": "cheer-small-front_03",
      "wave_off": "0x7CA000",
      "entry_off": "0x37EF799C"
     },
@@ -2438,7 +2438,7 @@
     },
     {
      "hash": "0x9BC109DB",
-     "name": null,
+     "name": "cheer-large-rear_01",
      "wave_off": "0x951000",
      "entry_off": "0x37EF79C4"
     },
@@ -2450,7 +2450,7 @@
     },
     {
      "hash": "0x9FF6AB8E",
-     "name": null,
+     "name": "against-boards_01",
      "wave_off": "0xB8800",
      "entry_off": "0x37EF79EC"
     },
@@ -2468,7 +2468,7 @@
     },
     {
      "hash": "0xA3822F8C",
-     "name": null,
+     "name": "puck-hit-player-stick_01",
      "wave_off": "0xAA000",
      "entry_off": "0x37EF7A28"
     },
@@ -2504,13 +2504,13 @@
     },
     {
      "hash": "0xA86D3499",
-     "name": null,
+     "name": "ohh-large-rear_01",
      "wave_off": "0x600000",
      "entry_off": "0x37EF7AA0"
     },
     {
      "hash": "0xA8A757B9",
-     "name": null,
+     "name": "punch-swish_01",
      "wave_off": "0x15D800",
      "entry_off": "0x37EF7AB4"
     },
@@ -2564,7 +2564,7 @@
     },
     {
      "hash": "0xB1499734",
-     "name": null,
+     "name": "crowd-cheer-med-front_01",
      "wave_off": "0x889000",
      "entry_off": "0x37EF7B68"
     },
@@ -2582,7 +2582,7 @@
     },
     {
      "hash": "0xB34984BD",
-     "name": null,
+     "name": "ohh-small-rear_03",
      "wave_off": "0x588000",
      "entry_off": "0x37EF7BA4"
     },
@@ -2618,7 +2618,7 @@
     },
     {
      "hash": "0xB59D87C5",
-     "name": null,
+     "name": "grunt-check_01",
      "wave_off": "0xB47800",
      "entry_off": "0x37EF7C1C"
     },
@@ -2648,13 +2648,13 @@
     },
     {
      "hash": "0xB8EE67C8",
-     "name": null,
+     "name": "cheer-lrg-short-front_02",
      "wave_off": "0x2B7000",
      "entry_off": "0x37EF7C80"
     },
     {
      "hash": "0xB9266126",
-     "name": null,
+     "name": "rampup-off-front_01",
      "wave_off": "0x45C000",
      "entry_off": "0x37EF7C94"
     },
@@ -2672,7 +2672,7 @@
     },
     {
      "hash": "0xBB4A849C",
-     "name": null,
+     "name": "shoot-catch-soft_04",
      "wave_off": "0x35E000",
      "entry_off": "0x37EF7CD0"
     },
@@ -2708,7 +2708,7 @@
     },
     {
      "hash": "0xBED36884",
-     "name": null,
+     "name": "puck-goalie-body_01",
      "wave_off": "0xDC0000",
      "entry_off": "0x37EF7D48"
     },
@@ -2726,7 +2726,7 @@
     },
     {
      "hash": "0xC149A86C",
-     "name": null,
+     "name": "check-body-med_01",
      "wave_off": "0xEF2000",
      "entry_off": "0x37EF7D84"
     },
@@ -2744,7 +2744,7 @@
     },
     {
      "hash": "0xC44EB42B",
-     "name": null,
+     "name": "ohh-small-rear_02",
      "wave_off": "0x575000",
      "entry_off": "0x37EF7DC0"
     },
@@ -2756,25 +2756,25 @@
     },
     {
      "hash": "0xC4D3526B",
-     "name": null,
+     "name": "crowd-cheer-med-rear_01",
      "wave_off": "0x81C800",
      "entry_off": "0x37EF7DE8"
     },
     {
      "hash": "0xC4E7D00A",
-     "name": null,
+     "name": "check-boards-soft_01",
      "wave_off": "0xB5E800",
      "entry_off": "0x37EF7DFC"
     },
     {
      "hash": "0xC5F7734A",
-     "name": null,
+     "name": "grunt-check_04",
      "wave_off": "0xB53800",
      "entry_off": "0x37EF7E10"
     },
     {
      "hash": "0xC6186D26",
-     "name": null,
+     "name": "rampup-off-rear_01",
      "wave_off": "0x400000",
      "entry_off": "0x37EF7E24"
     },
@@ -2786,7 +2786,7 @@
     },
     {
      "hash": "0xC6ED8A79",
-     "name": null,
+     "name": "puck-hit-goal-hard_01",
      "wave_off": "0x348800",
      "entry_off": "0x37EF7E4C"
     },
@@ -2822,7 +2822,7 @@
     },
     {
      "hash": "0xCB207013",
-     "name": null,
+     "name": "shoot-catch-soft_01",
      "wave_off": "0x354000",
      "entry_off": "0x37EF7EC4"
     },
@@ -2846,7 +2846,7 @@
     },
     {
      "hash": "0xCDF9D704",
-     "name": null,
+     "name": "zamboni-scrape-wall_01",
      "wave_off": "0x320000",
      "entry_off": "0x37EF7F14"
     },
@@ -2900,7 +2900,7 @@
     },
     {
      "hash": "0xD56F8564",
-     "name": null,
+     "name": "cheer-lrg-short-rear_01",
      "wave_off": "0x1A9800",
      "entry_off": "0x37EF7FC8"
     },
@@ -2924,7 +2924,7 @@
     },
     {
      "hash": "0xD94DB5E4",
-     "name": null,
+     "name": "puck-hit-boards-soft_02",
      "wave_off": "0xB9E800",
      "entry_off": "0x37EF8018"
     },
@@ -2990,7 +2990,7 @@
     },
     {
      "hash": "0xE296BA62",
-     "name": null,
+     "name": "ohh-large-front_01",
      "wave_off": "0x65C800",
      "entry_off": "0x37EF80F4"
     },
@@ -3026,7 +3026,7 @@
     },
     {
      "hash": "0xECB81881",
-     "name": null,
+     "name": "ohh-small-front_01",
      "wave_off": "0x5AD800",
      "entry_off": "0x37EF816C"
     },
@@ -3038,7 +3038,7 @@
     },
     {
      "hash": "0xED50C5BA",
-     "name": null,
+     "name": "cheer-small-front_02",
      "wave_off": "0x7A6000",
      "entry_off": "0x37EF8194"
     },
@@ -3062,7 +3062,7 @@
     },
     {
      "hash": "0xF14EF2CA",
-     "name": null,
+     "name": "skate-sweet_07",
      "wave_off": "0x159000",
      "entry_off": "0x37EF81E4"
     },
@@ -3080,7 +3080,7 @@
     },
     {
      "hash": "0xF1EF9FD0",
-     "name": null,
+     "name": "check-boards-med_01",
      "wave_off": "0xB7C000",
      "entry_off": "0x37EF8220"
     },
@@ -3110,7 +3110,7 @@
     },
     {
      "hash": "0xF62336D3",
-     "name": null,
+     "name": "skate-sweet_03",
      "wave_off": "0x14E800",
      "entry_off": "0x37EF8284"
     },
@@ -3122,7 +3122,7 @@
     },
     {
      "hash": "0xF7E28969",
-     "name": null,
+     "name": "cheer-small-rear_02",
      "wave_off": "0x6ED000",
      "entry_off": "0x37EF82AC"
     },
@@ -3134,7 +3134,7 @@
     },
     {
      "hash": "0xFAB00112",
-     "name": null,
+     "name": "stick-lift_01",
      "wave_off": "0x13D000",
      "entry_off": "0x37EF82D4"
     },
@@ -3146,7 +3146,7 @@
     },
     {
      "hash": "0xFBCCF340",
-     "name": null,
+     "name": "punch-soft_04",
      "wave_off": "0x64800",
      "entry_off": "0x37EF82FC"
     },
@@ -3187,7 +3187,7 @@
     },
     {
      "hash": "0x021B9F4E",
-     "name": null,
+     "name": "zamboni-hit-zambonii_01",
      "wave_off": "0x330000",
      "entry_off": "0x38E4C4F4"
     },
@@ -3199,7 +3199,7 @@
     },
     {
      "hash": "0x02B679AD",
-     "name": null,
+     "name": "ohh-small-front_03",
      "wave_off": "0x5BB800",
      "entry_off": "0x38E4C51C"
     },
@@ -3217,7 +3217,7 @@
     },
     {
      "hash": "0x06FFFA34",
-     "name": null,
+     "name": "against-boards_02",
      "wave_off": "0xC5800",
      "entry_off": "0x38E4C558"
     },
@@ -3247,7 +3247,7 @@
     },
     {
      "hash": "0x0C98DB4E",
-     "name": null,
+     "name": "ohh-large-front_03",
      "wave_off": "0x65F000",
      "entry_off": "0x38E4C5BC"
     },
@@ -3265,7 +3265,7 @@
     },
     {
      "hash": "0x0D9BE1B2",
-     "name": null,
+     "name": "stick-hit-stick_02",
      "wave_off": "0xB9E800",
      "entry_off": "0x38E4C5F8"
     },
@@ -3277,7 +3277,7 @@
     },
     {
      "hash": "0x0E0E5161",
-     "name": null,
+     "name": "rampup-def-rear_01",
      "wave_off": "0x4B3000",
      "entry_off": "0x38E4C620"
     },
@@ -3307,7 +3307,7 @@
     },
     {
      "hash": "0x12AF5675",
-     "name": null,
+     "name": "punch-soft_02",
      "wave_off": "0x62000",
      "entry_off": "0x38E4C684"
     },
@@ -3325,7 +3325,7 @@
     },
     {
      "hash": "0x14BE603E",
-     "name": null,
+     "name": "stick-lift_03",
      "wave_off": "0x142000",
      "entry_off": "0x38E4C6C0"
     },
@@ -3343,7 +3343,7 @@
     },
     {
      "hash": "0x182D57FF",
-     "name": null,
+     "name": "skate-sweet_01",
      "wave_off": "0x147800",
      "entry_off": "0x38E4C6FC"
     },
@@ -3361,7 +3361,7 @@
     },
     {
      "hash": "0x1F4093E6",
-     "name": null,
+     "name": "skate-sweet_05",
      "wave_off": "0x152800",
      "entry_off": "0x38E4C738"
     },
@@ -3379,7 +3379,7 @@
     },
     {
      "hash": "0x1FE1FEFC",
-     "name": null,
+     "name": "check-boards-med_03",
      "wave_off": "0xB5C800",
      "entry_off": "0x38E4C774"
     },
@@ -3391,7 +3391,7 @@
     },
     {
      "hash": "0x21E73672",
-     "name": null,
+     "name": "cheer-lrg-short-front_01",
      "wave_off": "0x28D800",
      "entry_off": "0x38E4C79C"
     },
@@ -3409,7 +3409,7 @@
     },
     {
      "hash": "0x252E113F",
-     "name": null,
+     "name": "shoot-catch-soft_03",
      "wave_off": "0x35B800",
      "entry_off": "0x38E4C7D8"
     },
@@ -3433,7 +3433,7 @@
     },
     {
      "hash": "0x2840C68E",
-     "name": null,
+     "name": "crowd-cheer-med-front_02",
      "wave_off": "0x8B3800",
      "entry_off": "0x38E4C828"
     },
@@ -3457,7 +3457,7 @@
     },
     {
      "hash": "0x2AE9B126",
-     "name": null,
+     "name": "check-boards-soft_03",
      "wave_off": "0xB3B000",
      "entry_off": "0x38E4C878"
     },
@@ -3469,7 +3469,7 @@
     },
     {
      "hash": "0x2C94D67F",
-     "name": null,
+     "name": "grunt-check_02",
      "wave_off": "0xB19800",
      "entry_off": "0x38E4C8A0"
     },
@@ -3481,7 +3481,7 @@
     },
     {
      "hash": "0x2F47C940",
-     "name": null,
+     "name": "check-body-med_03",
      "wave_off": "0xEBD800",
      "entry_off": "0x38E4C8C8"
     },
@@ -3511,7 +3511,7 @@
     },
     {
      "hash": "0x31646523",
-     "name": null,
+     "name": "ohh-large-rear_02",
      "wave_off": "0x5F6800",
      "entry_off": "0x38E4C92C"
     },
@@ -3619,7 +3619,7 @@
     },
     {
      "hash": "0x4044E45E",
-     "name": null,
+     "name": "puck-hit-boards-soft_01",
      "wave_off": "0xB6A000",
      "entry_off": "0x38E4CA94"
     },
@@ -3673,7 +3673,7 @@
     },
     {
      "hash": "0x466355B5",
-     "name": null,
+     "name": "ohh-large-rear_03",
      "wave_off": "0x60B000",
      "entry_off": "0x38E4CB48"
     },
@@ -3703,7 +3703,7 @@
     },
     {
      "hash": "0x4C66D4DE",
-     "name": null,
+     "name": "cheer-lrg-short-rear_02",
      "wave_off": "0x1EA000",
      "entry_off": "0x38E4CBAC"
     },
@@ -3721,13 +3721,13 @@
     },
     {
      "hash": "0x5156A329",
-     "name": null,
+     "name": "rampup-def-front_01",
      "wave_off": "0x503800",
      "entry_off": "0x38E4CBE8"
     },
     {
      "hash": "0x522921A9",
-     "name": null,
+     "name": "shoot-catch-soft_02",
      "wave_off": "0x358000",
      "entry_off": "0x38E4CBFC"
     },
@@ -3769,7 +3769,7 @@
     },
     {
      "hash": "0x5840F9D6",
-     "name": null,
+     "name": "check-body-med_02",
      "wave_off": "0xEB6800",
      "entry_off": "0x38E4CC88"
     },
@@ -3799,19 +3799,19 @@
     },
     {
      "hash": "0x5B93E6E9",
-     "name": null,
+     "name": "grunt-check_03",
      "wave_off": "0xB1D800",
      "entry_off": "0x38E4CCEC"
     },
     {
      "hash": "0x5C4745E0",
-     "name": null,
+     "name": "puck-hit-goal-soft_01",
      "wave_off": "0x33D000",
      "entry_off": "0x38E4CD00"
     },
     {
      "hash": "0x5D47E591",
-     "name": null,
+     "name": "ohh-small-rear_01",
      "wave_off": "0x53D800",
      "entry_off": "0x38E4CD14"
     },
@@ -3823,13 +3823,13 @@
     },
     {
      "hash": "0x5DDA03D1",
-     "name": null,
+     "name": "crowd-cheer-med-rear_02",
      "wave_off": "0x81A800",
      "entry_off": "0x38E4CD3C"
     },
     {
      "hash": "0x5DEE81B0",
-     "name": null,
+     "name": "check-boards-soft_02",
      "wave_off": "0xB33800",
      "entry_off": "0x38E4CD50"
     },
@@ -3853,13 +3853,13 @@
     },
     {
      "hash": "0x63143128",
-     "name": null,
+     "name": "body-bump-soft_01",
      "wave_off": "0xB0E800",
      "entry_off": "0x38E4CDA0"
     },
     {
      "hash": "0x63B950A8",
-     "name": null,
+     "name": "stick-lift_02",
      "wave_off": "0x13F800",
      "entry_off": "0x38E4CDB4"
     },
@@ -3871,7 +3871,7 @@
     },
     {
      "hash": "0x65A866E3",
-     "name": null,
+     "name": "punch-soft_03",
      "wave_off": "0x63000",
      "entry_off": "0x38E4CDDC"
     },
@@ -3883,7 +3883,7 @@
     },
     {
      "hash": "0x6847A370",
-     "name": null,
+     "name": "skate-sweet_04",
      "wave_off": "0x150000",
      "entry_off": "0x38E4CE04"
     },
@@ -3901,7 +3901,7 @@
     },
     {
      "hash": "0x68E6CE6A",
-     "name": null,
+     "name": "check-boards-med_02",
      "wave_off": "0xB54800",
      "entry_off": "0x38E4CE40"
     },
@@ -3925,7 +3925,7 @@
     },
     {
      "hash": "0x6EEBD8D3",
-     "name": null,
+     "name": "cheer-small-rear_01",
      "wave_off": "0x69F800",
      "entry_off": "0x38E4CE90"
     },
@@ -3943,7 +3943,7 @@
     },
     {
      "hash": "0x700C0563",
-     "name": null,
+     "name": "zamboni-hit-wall_01",
      "wave_off": "0xB02800",
      "entry_off": "0x38E4CECC"
     },
@@ -3955,7 +3955,7 @@
     },
     {
      "hash": "0x71F8CAA2",
-     "name": null,
+     "name": "against-boards_03",
      "wave_off": "0xD1000",
      "entry_off": "0x38E4CEF4"
     },
@@ -3979,7 +3979,7 @@
     },
     {
      "hash": "0x74599400",
-     "name": null,
+     "name": "cheer-small-front_01",
      "wave_off": "0x745800",
      "entry_off": "0x38E4CF44"
     },
@@ -3997,7 +3997,7 @@
     },
     {
      "hash": "0x75B1493B",
-     "name": null,
+     "name": "ohh-small-front_02",
      "wave_off": "0x5A7000",
      "entry_off": "0x38E4CF80"
     },
@@ -4015,19 +4015,19 @@
     },
     {
      "hash": "0x7A7736E3",
-     "name": null,
+     "name": "cheer-large-front_01",
      "wave_off": "0xA26000",
      "entry_off": "0x38E4CFBC"
     },
     {
      "hash": "0x7A9CD124",
-     "name": null,
+     "name": "stick-hit-stick_03",
      "wave_off": "0xBA4800",
      "entry_off": "0x38E4CFD0"
     },
     {
      "hash": "0x7B9FEBD8",
-     "name": null,
+     "name": "ohh-large-front_02",
      "wave_off": "0x64E000",
      "entry_off": "0x38E4CFE4"
     },
@@ -4039,13 +4039,13 @@
     },
     {
      "hash": "0x80E5B9FF",
-     "name": null,
+     "name": "cheer-small-rear_03",
      "wave_off": "0x6E8800",
      "entry_off": "0x38E4D00C"
     },
     {
      "hash": "0x81240645",
-     "name": null,
+     "name": "skate-sweet_02",
      "wave_off": "0x14A800",
      "entry_off": "0x38E4D020"
     },
@@ -4057,7 +4057,7 @@
     },
     {
      "hash": "0x8649C25C",
-     "name": null,
+     "name": "skate-sweet_06",
      "wave_off": "0x155000",
      "entry_off": "0x38E4D048"
     },
@@ -4105,7 +4105,7 @@
     },
     {
      "hash": "0x8BA607CF",
-     "name": null,
+     "name": "punch-soft_01",
      "wave_off": "0x60800",
      "entry_off": "0x38E4D0E8"
     },
@@ -4129,7 +4129,7 @@
     },
     {
      "hash": "0x9492B008",
-     "name": null,
+     "name": "stick-hit-stick_01",
      "wave_off": "0xB9A000",
      "entry_off": "0x38E4D138"
     },
@@ -4159,7 +4159,7 @@
     },
     {
      "hash": "0x9A57F52C",
-     "name": null,
+     "name": "cheer-small-front_03",
      "wave_off": "0x78D800",
      "entry_off": "0x38E4D19C"
     },
@@ -4171,7 +4171,7 @@
     },
     {
      "hash": "0x9BC109DB",
-     "name": null,
+     "name": "cheer-large-rear_01",
      "wave_off": "0x943800",
      "entry_off": "0x38E4D1C4"
     },
@@ -4183,7 +4183,7 @@
     },
     {
      "hash": "0x9FF6AB8E",
-     "name": null,
+     "name": "against-boards_01",
      "wave_off": "0xB8800",
      "entry_off": "0x38E4D1EC"
     },
@@ -4201,7 +4201,7 @@
     },
     {
      "hash": "0xA3822F8C",
-     "name": null,
+     "name": "puck-hit-player-stick_01",
      "wave_off": "0xAA800",
      "entry_off": "0x38E4D228"
     },
@@ -4237,13 +4237,13 @@
     },
     {
      "hash": "0xA86D3499",
-     "name": null,
+     "name": "ohh-large-rear_01",
      "wave_off": "0x5E1000",
      "entry_off": "0x38E4D2A0"
     },
     {
      "hash": "0xA8A757B9",
-     "name": null,
+     "name": "punch-swish_01",
      "wave_off": "0x15C000",
      "entry_off": "0x38E4D2B4"
     },
@@ -4297,7 +4297,7 @@
     },
     {
      "hash": "0xB1499734",
-     "name": null,
+     "name": "crowd-cheer-med-front_01",
      "wave_off": "0x884800",
      "entry_off": "0x38E4D368"
     },
@@ -4315,7 +4315,7 @@
     },
     {
      "hash": "0xB34984BD",
-     "name": null,
+     "name": "ohh-small-rear_03",
      "wave_off": "0x571000",
      "entry_off": "0x38E4D3A4"
     },
@@ -4351,7 +4351,7 @@
     },
     {
      "hash": "0xB59D87C5",
-     "name": null,
+     "name": "grunt-check_01",
      "wave_off": "0xB15800",
      "entry_off": "0x38E4D41C"
     },
@@ -4381,13 +4381,13 @@
     },
     {
      "hash": "0xB8EE67C8",
-     "name": null,
+     "name": "cheer-lrg-short-front_02",
      "wave_off": "0x2C3800",
      "entry_off": "0x38E4D480"
     },
     {
      "hash": "0xB9266126",
-     "name": null,
+     "name": "rampup-off-front_01",
      "wave_off": "0x465000",
      "entry_off": "0x38E4D494"
     },
@@ -4405,7 +4405,7 @@
     },
     {
      "hash": "0xBB4A849C",
-     "name": null,
+     "name": "shoot-catch-soft_04",
      "wave_off": "0x35F000",
      "entry_off": "0x38E4D4D0"
     },
@@ -4441,7 +4441,7 @@
     },
     {
      "hash": "0xBED36884",
-     "name": null,
+     "name": "puck-goalie-body_01",
      "wave_off": "0xD8A000",
      "entry_off": "0x38E4D548"
     },
@@ -4459,7 +4459,7 @@
     },
     {
      "hash": "0xC149A86C",
-     "name": null,
+     "name": "check-body-med_01",
      "wave_off": "0xEB0800",
      "entry_off": "0x38E4D584"
     },
@@ -4477,7 +4477,7 @@
     },
     {
      "hash": "0xC44EB42B",
-     "name": null,
+     "name": "ohh-small-rear_02",
      "wave_off": "0x55C800",
      "entry_off": "0x38E4D5C0"
     },
@@ -4489,25 +4489,25 @@
     },
     {
      "hash": "0xC4D3526B",
-     "name": null,
+     "name": "crowd-cheer-med-rear_01",
      "wave_off": "0x7EC000",
      "entry_off": "0x38E4D5E8"
     },
     {
      "hash": "0xC4E7D00A",
-     "name": null,
+     "name": "check-boards-soft_01",
      "wave_off": "0xB2D000",
      "entry_off": "0x38E4D5FC"
     },
     {
      "hash": "0xC5F7734A",
-     "name": null,
+     "name": "grunt-check_04",
      "wave_off": "0xB21800",
      "entry_off": "0x38E4D610"
     },
     {
      "hash": "0xC6186D26",
-     "name": null,
+     "name": "rampup-off-rear_01",
      "wave_off": "0x409800",
      "entry_off": "0x38E4D624"
     },
@@ -4519,7 +4519,7 @@
     },
     {
      "hash": "0xC6ED8A79",
-     "name": null,
+     "name": "puck-hit-goal-hard_01",
      "wave_off": "0x34B800",
      "entry_off": "0x38E4D64C"
     },
@@ -4555,7 +4555,7 @@
     },
     {
      "hash": "0xCB207013",
-     "name": null,
+     "name": "shoot-catch-soft_01",
      "wave_off": "0x354800",
      "entry_off": "0x38E4D6C4"
     },
@@ -4579,7 +4579,7 @@
     },
     {
      "hash": "0xCDF9D704",
-     "name": null,
+     "name": "zamboni-scrape-wall_01",
      "wave_off": "0x31F800",
      "entry_off": "0x38E4D714"
     },
@@ -4633,7 +4633,7 @@
     },
     {
      "hash": "0xD56F8564",
-     "name": null,
+     "name": "cheer-lrg-short-rear_01",
      "wave_off": "0x1B5000",
      "entry_off": "0x38E4D7C8"
     },
@@ -4657,7 +4657,7 @@
     },
     {
      "hash": "0xD94DB5E4",
-     "name": null,
+     "name": "puck-hit-boards-soft_02",
      "wave_off": "0xB6F800",
      "entry_off": "0x38E4D818"
     },
@@ -4723,7 +4723,7 @@
     },
     {
      "hash": "0xE296BA62",
-     "name": null,
+     "name": "ohh-large-front_01",
      "wave_off": "0x63D000",
      "entry_off": "0x38E4D8F4"
     },
@@ -4759,7 +4759,7 @@
     },
     {
      "hash": "0xECB81881",
-     "name": null,
+     "name": "ohh-small-front_01",
      "wave_off": "0x58E000",
      "entry_off": "0x38E4D96C"
     },
@@ -4771,7 +4771,7 @@
     },
     {
      "hash": "0xED50C5BA",
-     "name": null,
+     "name": "cheer-small-front_02",
      "wave_off": "0x769800",
      "entry_off": "0x38E4D994"
     },
@@ -4795,7 +4795,7 @@
     },
     {
      "hash": "0xF14EF2CA",
-     "name": null,
+     "name": "skate-sweet_07",
      "wave_off": "0x157800",
      "entry_off": "0x38E4D9E4"
     },
@@ -4813,7 +4813,7 @@
     },
     {
      "hash": "0xF1EF9FD0",
-     "name": null,
+     "name": "check-boards-med_01",
      "wave_off": "0xB4D000",
      "entry_off": "0x38E4DA20"
     },
@@ -4843,7 +4843,7 @@
     },
     {
      "hash": "0xF62336D3",
-     "name": null,
+     "name": "skate-sweet_03",
      "wave_off": "0x14D000",
      "entry_off": "0x38E4DA84"
     },
@@ -4855,7 +4855,7 @@
     },
     {
      "hash": "0xF7E28969",
-     "name": null,
+     "name": "cheer-small-rear_02",
      "wave_off": "0x6C4000",
      "entry_off": "0x38E4DAAC"
     },
@@ -4867,7 +4867,7 @@
     },
     {
      "hash": "0xFAB00112",
-     "name": null,
+     "name": "stick-lift_01",
      "wave_off": "0x13D000",
      "entry_off": "0x38E4DAD4"
     },
@@ -4879,7 +4879,7 @@
     },
     {
      "hash": "0xFBCCF340",
-     "name": null,
+     "name": "punch-soft_04",
      "wave_off": "0x64800",
      "entry_off": "0x38E4DAFC"
     },
@@ -4920,7 +4920,7 @@
     },
     {
      "hash": "0x021B9F4E",
-     "name": null,
+     "name": "zamboni-hit-zambonii_01",
      "wave_off": "0x348800",
      "entry_off": "0x39D594F4"
     },
@@ -4932,7 +4932,7 @@
     },
     {
      "hash": "0x02B679AD",
-     "name": null,
+     "name": "ohh-small-front_03",
      "wave_off": "0x5EC000",
      "entry_off": "0x39D5951C"
     },
@@ -4950,7 +4950,7 @@
     },
     {
      "hash": "0x06FFFA34",
-     "name": null,
+     "name": "against-boards_02",
      "wave_off": "0xC6000",
      "entry_off": "0x39D59558"
     },
@@ -4980,7 +4980,7 @@
     },
     {
      "hash": "0x0C98DB4E",
-     "name": null,
+     "name": "ohh-large-front_03",
      "wave_off": "0x6B8000",
      "entry_off": "0x39D595BC"
     },
@@ -4998,7 +4998,7 @@
     },
     {
      "hash": "0x0D9BE1B2",
-     "name": null,
+     "name": "stick-hit-stick_02",
      "wave_off": "0xC1D800",
      "entry_off": "0x39D595F8"
     },
@@ -5010,7 +5010,7 @@
     },
     {
      "hash": "0x0E0E5161",
-     "name": null,
+     "name": "rampup-def-rear_01",
      "wave_off": "0x505000",
      "entry_off": "0x39D59620"
     },
@@ -5040,7 +5040,7 @@
     },
     {
      "hash": "0x12AF5675",
-     "name": null,
+     "name": "punch-soft_02",
      "wave_off": "0x62000",
      "entry_off": "0x39D59684"
     },
@@ -5058,7 +5058,7 @@
     },
     {
      "hash": "0x14BE603E",
-     "name": null,
+     "name": "stick-lift_03",
      "wave_off": "0x140000",
      "entry_off": "0x39D596C0"
     },
@@ -5076,7 +5076,7 @@
     },
     {
      "hash": "0x182D57FF",
-     "name": null,
+     "name": "skate-sweet_01",
      "wave_off": "0x146000",
      "entry_off": "0x39D596FC"
     },
@@ -5094,7 +5094,7 @@
     },
     {
      "hash": "0x1F4093E6",
-     "name": null,
+     "name": "skate-sweet_05",
      "wave_off": "0x151000",
      "entry_off": "0x39D59738"
     },
@@ -5112,7 +5112,7 @@
     },
     {
      "hash": "0x1FE1FEFC",
-     "name": null,
+     "name": "check-boards-med_03",
      "wave_off": "0xBDD000",
      "entry_off": "0x39D59774"
     },
@@ -5124,7 +5124,7 @@
     },
     {
      "hash": "0x21E73672",
-     "name": null,
+     "name": "cheer-lrg-short-front_01",
      "wave_off": "0x29D000",
      "entry_off": "0x39D5979C"
     },
@@ -5142,7 +5142,7 @@
     },
     {
      "hash": "0x252E113F",
-     "name": null,
+     "name": "shoot-catch-soft_03",
      "wave_off": "0x371800",
      "entry_off": "0x39D597D8"
     },
@@ -5166,7 +5166,7 @@
     },
     {
      "hash": "0x2840C68E",
-     "name": null,
+     "name": "crowd-cheer-med-front_02",
      "wave_off": "0x973800",
      "entry_off": "0x39D59828"
     },
@@ -5190,7 +5190,7 @@
     },
     {
      "hash": "0x2AE9B126",
-     "name": null,
+     "name": "check-boards-soft_03",
      "wave_off": "0xBBC800",
      "entry_off": "0x39D59878"
     },
@@ -5202,7 +5202,7 @@
     },
     {
      "hash": "0x2C94D67F",
-     "name": null,
+     "name": "grunt-check_02",
      "wave_off": "0xB9D800",
      "entry_off": "0x39D598A0"
     },
@@ -5214,7 +5214,7 @@
     },
     {
      "hash": "0x2F47C940",
-     "name": null,
+     "name": "check-body-med_03",
      "wave_off": "0xF4E000",
      "entry_off": "0x39D598C8"
     },
@@ -5244,7 +5244,7 @@
     },
     {
      "hash": "0x31646523",
-     "name": null,
+     "name": "ohh-large-rear_02",
      "wave_off": "0x660000",
      "entry_off": "0x39D5992C"
     },
@@ -5352,7 +5352,7 @@
     },
     {
      "hash": "0x4044E45E",
-     "name": null,
+     "name": "puck-hit-boards-soft_01",
      "wave_off": "0xBE9800",
      "entry_off": "0x39D59A94"
     },
@@ -5406,7 +5406,7 @@
     },
     {
      "hash": "0x466355B5",
-     "name": null,
+     "name": "ohh-large-rear_03",
      "wave_off": "0x674000",
      "entry_off": "0x39D59B48"
     },
@@ -5436,7 +5436,7 @@
     },
     {
      "hash": "0x4C66D4DE",
-     "name": null,
+     "name": "cheer-lrg-short-rear_02",
      "wave_off": "0x202000",
      "entry_off": "0x39D59BAC"
     },
@@ -5454,13 +5454,13 @@
     },
     {
      "hash": "0x5156A329",
-     "name": null,
+     "name": "rampup-def-front_01",
      "wave_off": "0x54F800",
      "entry_off": "0x39D59BE8"
     },
     {
      "hash": "0x522921A9",
-     "name": null,
+     "name": "shoot-catch-soft_02",
      "wave_off": "0x36E000",
      "entry_off": "0x39D59BFC"
     },
@@ -5502,7 +5502,7 @@
     },
     {
      "hash": "0x5840F9D6",
-     "name": null,
+     "name": "check-body-med_02",
      "wave_off": "0xF48000",
      "entry_off": "0x39D59C88"
     },
@@ -5532,19 +5532,19 @@
     },
     {
      "hash": "0x5B93E6E9",
-     "name": null,
+     "name": "grunt-check_03",
      "wave_off": "0xBA1000",
      "entry_off": "0x39D59CEC"
     },
     {
      "hash": "0x5C4745E0",
-     "name": null,
+     "name": "puck-hit-goal-soft_01",
      "wave_off": "0x355800",
      "entry_off": "0x39D59D00"
     },
     {
      "hash": "0x5D47E591",
-     "name": null,
+     "name": "ohh-small-rear_01",
      "wave_off": "0x57D800",
      "entry_off": "0x39D59D14"
     },
@@ -5556,13 +5556,13 @@
     },
     {
      "hash": "0x5DDA03D1",
-     "name": null,
+     "name": "crowd-cheer-med-rear_02",
      "wave_off": "0x8EC800",
      "entry_off": "0x39D59D3C"
     },
     {
      "hash": "0x5DEE81B0",
-     "name": null,
+     "name": "check-boards-soft_02",
      "wave_off": "0xBB5000",
      "entry_off": "0x39D59D50"
     },
@@ -5586,13 +5586,13 @@
     },
     {
      "hash": "0x63143128",
-     "name": null,
+     "name": "body-bump-soft_01",
      "wave_off": "0xB93000",
      "entry_off": "0x39D59DA0"
     },
     {
      "hash": "0x63B950A8",
-     "name": null,
+     "name": "stick-lift_02",
      "wave_off": "0x13D000",
      "entry_off": "0x39D59DB4"
     },
@@ -5604,7 +5604,7 @@
     },
     {
      "hash": "0x65A866E3",
-     "name": null,
+     "name": "punch-soft_03",
      "wave_off": "0x63000",
      "entry_off": "0x39D59DDC"
     },
@@ -5616,7 +5616,7 @@
     },
     {
      "hash": "0x6847A370",
-     "name": null,
+     "name": "skate-sweet_04",
      "wave_off": "0x14E800",
      "entry_off": "0x39D59E04"
     },
@@ -5634,7 +5634,7 @@
     },
     {
      "hash": "0x68E6CE6A",
-     "name": null,
+     "name": "check-boards-med_02",
      "wave_off": "0xBD5800",
      "entry_off": "0x39D59E40"
     },
@@ -5658,7 +5658,7 @@
     },
     {
      "hash": "0x6EEBD8D3",
-     "name": null,
+     "name": "cheer-small-rear_01",
      "wave_off": "0x6F8000",
      "entry_off": "0x39D59E90"
     },
@@ -5676,7 +5676,7 @@
     },
     {
      "hash": "0x700C0563",
-     "name": null,
+     "name": "zamboni-hit-wall_01",
      "wave_off": "0xB87000",
      "entry_off": "0x39D59ECC"
     },
@@ -5688,7 +5688,7 @@
     },
     {
      "hash": "0x71F8CAA2",
-     "name": null,
+     "name": "against-boards_03",
      "wave_off": "0xD1800",
      "entry_off": "0x39D59EF4"
     },
@@ -5712,7 +5712,7 @@
     },
     {
      "hash": "0x74599400",
-     "name": null,
+     "name": "cheer-small-front_01",
      "wave_off": "0x7DB800",
      "entry_off": "0x39D59F44"
     },
@@ -5730,7 +5730,7 @@
     },
     {
      "hash": "0x75B1493B",
-     "name": null,
+     "name": "ohh-small-front_02",
      "wave_off": "0x5D6800",
      "entry_off": "0x39D59F80"
     },
@@ -5748,19 +5748,19 @@
     },
     {
      "hash": "0x7A7736E3",
-     "name": null,
+     "name": "cheer-large-front_01",
      "wave_off": "0xAF3000",
      "entry_off": "0x39D59FBC"
     },
     {
      "hash": "0x7A9CD124",
-     "name": null,
+     "name": "stick-hit-stick_03",
      "wave_off": "0xC24000",
      "entry_off": "0x39D59FD0"
     },
     {
      "hash": "0x7B9FEBD8",
-     "name": null,
+     "name": "ohh-large-front_02",
      "wave_off": "0x6A9000",
      "entry_off": "0x39D59FE4"
     },
@@ -5772,13 +5772,13 @@
     },
     {
      "hash": "0x80E5B9FF",
-     "name": null,
+     "name": "cheer-small-rear_03",
      "wave_off": "0x76B000",
      "entry_off": "0x39D5A00C"
     },
     {
      "hash": "0x81240645",
-     "name": null,
+     "name": "skate-sweet_02",
      "wave_off": "0x149000",
      "entry_off": "0x39D5A020"
     },
@@ -5790,7 +5790,7 @@
     },
     {
      "hash": "0x8649C25C",
-     "name": null,
+     "name": "skate-sweet_06",
      "wave_off": "0x153800",
      "entry_off": "0x39D5A048"
     },
@@ -5838,7 +5838,7 @@
     },
     {
      "hash": "0x8BA607CF",
-     "name": null,
+     "name": "punch-soft_01",
      "wave_off": "0x60800",
      "entry_off": "0x39D5A0E8"
     },
@@ -5862,7 +5862,7 @@
     },
     {
      "hash": "0x9492B008",
-     "name": null,
+     "name": "stick-hit-stick_01",
      "wave_off": "0xC18000",
      "entry_off": "0x39D5A138"
     },
@@ -5892,7 +5892,7 @@
     },
     {
      "hash": "0x9A57F52C",
-     "name": null,
+     "name": "cheer-small-front_03",
      "wave_off": "0x852000",
      "entry_off": "0x39D5A19C"
     },
@@ -5904,7 +5904,7 @@
     },
     {
      "hash": "0x9BC109DB",
-     "name": null,
+     "name": "cheer-large-rear_01",
      "wave_off": "0xA21000",
      "entry_off": "0x39D5A1C4"
     },
@@ -5916,7 +5916,7 @@
     },
     {
      "hash": "0x9FF6AB8E",
-     "name": null,
+     "name": "against-boards_01",
      "wave_off": "0xB9000",
      "entry_off": "0x39D5A1EC"
     },
@@ -5934,7 +5934,7 @@
     },
     {
      "hash": "0xA3822F8C",
-     "name": null,
+     "name": "puck-hit-player-stick_01",
      "wave_off": "0xAA800",
      "entry_off": "0x39D5A228"
     },
@@ -5970,13 +5970,13 @@
     },
     {
      "hash": "0xA86D3499",
-     "name": null,
+     "name": "ohh-large-rear_01",
      "wave_off": "0x64A800",
      "entry_off": "0x39D5A2A0"
     },
     {
      "hash": "0xA8A757B9",
-     "name": null,
+     "name": "punch-swish_01",
      "wave_off": "0x15A800",
      "entry_off": "0x39D5A2B4"
     },
@@ -6030,7 +6030,7 @@
     },
     {
      "hash": "0xB1499734",
-     "name": null,
+     "name": "crowd-cheer-med-front_01",
      "wave_off": "0x943800",
      "entry_off": "0x39D5A368"
     },
@@ -6048,7 +6048,7 @@
     },
     {
      "hash": "0xB34984BD",
-     "name": null,
+     "name": "ohh-small-rear_03",
      "wave_off": "0x5A6800",
      "entry_off": "0x39D5A3A4"
     },
@@ -6084,7 +6084,7 @@
     },
     {
      "hash": "0xB59D87C5",
-     "name": null,
+     "name": "grunt-check_01",
      "wave_off": "0xB99800",
      "entry_off": "0x39D5A41C"
     },
@@ -6114,13 +6114,13 @@
     },
     {
      "hash": "0xB8EE67C8",
-     "name": null,
+     "name": "cheer-lrg-short-front_02",
      "wave_off": "0x2F2800",
      "entry_off": "0x39D5A480"
     },
     {
      "hash": "0xB9266126",
-     "name": null,
+     "name": "rampup-off-front_01",
      "wave_off": "0x495000",
      "entry_off": "0x39D5A494"
     },
@@ -6138,7 +6138,7 @@
     },
     {
      "hash": "0xBB4A849C",
-     "name": null,
+     "name": "shoot-catch-soft_04",
      "wave_off": "0x375000",
      "entry_off": "0x39D5A4D0"
     },
@@ -6174,7 +6174,7 @@
     },
     {
      "hash": "0xBED36884",
-     "name": null,
+     "name": "puck-goalie-body_01",
      "wave_off": "0xE06000",
      "entry_off": "0x39D5A548"
     },
@@ -6192,7 +6192,7 @@
     },
     {
      "hash": "0xC149A86C",
-     "name": null,
+     "name": "check-body-med_01",
      "wave_off": "0xF40800",
      "entry_off": "0x39D5A584"
     },
@@ -6210,7 +6210,7 @@
     },
     {
      "hash": "0xC44EB42B",
-     "name": null,
+     "name": "ohh-small-rear_02",
      "wave_off": "0x590800",
      "entry_off": "0x39D5A5C0"
     },
@@ -6222,25 +6222,25 @@
     },
     {
      "hash": "0xC4D3526B",
-     "name": null,
+     "name": "crowd-cheer-med-rear_01",
      "wave_off": "0x8BD800",
      "entry_off": "0x39D5A5E8"
     },
     {
      "hash": "0xC4E7D00A",
-     "name": null,
+     "name": "check-boards-soft_01",
      "wave_off": "0xBAE800",
      "entry_off": "0x39D5A5FC"
     },
     {
      "hash": "0xC5F7734A",
-     "name": null,
+     "name": "grunt-check_04",
      "wave_off": "0xBA4000",
      "entry_off": "0x39D5A610"
     },
     {
      "hash": "0xC6186D26",
-     "name": null,
+     "name": "rampup-off-rear_01",
      "wave_off": "0x41C000",
      "entry_off": "0x39D5A624"
     },
@@ -6252,7 +6252,7 @@
     },
     {
      "hash": "0xC6ED8A79",
-     "name": null,
+     "name": "puck-hit-goal-hard_01",
      "wave_off": "0x361000",
      "entry_off": "0x39D5A64C"
     },
@@ -6288,7 +6288,7 @@
     },
     {
      "hash": "0xCB207013",
-     "name": null,
+     "name": "shoot-catch-soft_01",
      "wave_off": "0x36A800",
      "entry_off": "0x39D5A6C4"
     },
@@ -6312,7 +6312,7 @@
     },
     {
      "hash": "0xCDF9D704",
-     "name": null,
+     "name": "zamboni-scrape-wall_01",
      "wave_off": "0x339000",
      "entry_off": "0x39D5A714"
     },
@@ -6366,7 +6366,7 @@
     },
     {
      "hash": "0xD56F8564",
-     "name": null,
+     "name": "cheer-lrg-short-rear_01",
      "wave_off": "0x1B7800",
      "entry_off": "0x39D5A7C8"
     },
@@ -6390,7 +6390,7 @@
     },
     {
      "hash": "0xD94DB5E4",
-     "name": null,
+     "name": "puck-hit-boards-soft_02",
      "wave_off": "0xBEE800",
      "entry_off": "0x39D5A818"
     },
@@ -6456,7 +6456,7 @@
     },
     {
      "hash": "0xE296BA62",
-     "name": null,
+     "name": "ohh-large-front_01",
      "wave_off": "0x699000",
      "entry_off": "0x39D5A8F4"
     },
@@ -6492,7 +6492,7 @@
     },
     {
      "hash": "0xECB81881",
-     "name": null,
+     "name": "ohh-small-front_01",
      "wave_off": "0x5C7000",
      "entry_off": "0x39D5A96C"
     },
@@ -6504,7 +6504,7 @@
     },
     {
      "hash": "0xED50C5BA",
-     "name": null,
+     "name": "cheer-small-front_02",
      "wave_off": "0x815800",
      "entry_off": "0x39D5A994"
     },
@@ -6528,7 +6528,7 @@
     },
     {
      "hash": "0xF14EF2CA",
-     "name": null,
+     "name": "skate-sweet_07",
      "wave_off": "0x156000",
      "entry_off": "0x39D5A9E4"
     },
@@ -6546,7 +6546,7 @@
     },
     {
      "hash": "0xF1EF9FD0",
-     "name": null,
+     "name": "check-boards-med_01",
      "wave_off": "0xBCC000",
      "entry_off": "0x39D5AA20"
     },
@@ -6576,7 +6576,7 @@
     },
     {
      "hash": "0xF62336D3",
-     "name": null,
+     "name": "skate-sweet_03",
      "wave_off": "0x14B800",
      "entry_off": "0x39D5AA84"
     },
@@ -6588,7 +6588,7 @@
     },
     {
      "hash": "0xF7E28969",
-     "name": null,
+     "name": "cheer-small-rear_02",
      "wave_off": "0x730000",
      "entry_off": "0x39D5AAAC"
     },
@@ -6600,7 +6600,7 @@
     },
     {
      "hash": "0xFAB00112",
-     "name": null,
+     "name": "stick-lift_01",
      "wave_off": "0x13A000",
      "entry_off": "0x39D5AAD4"
     },
@@ -6612,7 +6612,7 @@
     },
     {
      "hash": "0xFBCCF340",
-     "name": null,
+     "name": "punch-soft_04",
      "wave_off": "0x64800",
      "entry_off": "0x39D5AAFC"
     },
@@ -6653,7 +6653,7 @@
     },
     {
      "hash": "0x021B9F4E",
-     "name": null,
+     "name": "zamboni-hit-zambonii_01",
      "wave_off": "0x349800",
      "entry_off": "0x3ACF1CF4"
     },
@@ -6665,7 +6665,7 @@
     },
     {
      "hash": "0x02B679AD",
-     "name": null,
+     "name": "ohh-small-front_03",
      "wave_off": "0x5FE800",
      "entry_off": "0x3ACF1D1C"
     },
@@ -6683,7 +6683,7 @@
     },
     {
      "hash": "0x06FFFA34",
-     "name": null,
+     "name": "against-boards_02",
      "wave_off": "0xC5800",
      "entry_off": "0x3ACF1D58"
     },
@@ -6713,7 +6713,7 @@
     },
     {
      "hash": "0x0C98DB4E",
-     "name": null,
+     "name": "ohh-large-front_03",
      "wave_off": "0x6B0000",
      "entry_off": "0x3ACF1DBC"
     },
@@ -6731,7 +6731,7 @@
     },
     {
      "hash": "0x0D9BE1B2",
-     "name": null,
+     "name": "stick-hit-stick_02",
      "wave_off": "0xBD4800",
      "entry_off": "0x3ACF1DF8"
     },
@@ -6743,7 +6743,7 @@
     },
     {
      "hash": "0x0E0E5161",
-     "name": null,
+     "name": "rampup-def-rear_01",
      "wave_off": "0x4E1800",
      "entry_off": "0x3ACF1E20"
     },
@@ -6773,7 +6773,7 @@
     },
     {
      "hash": "0x12AF5675",
-     "name": null,
+     "name": "punch-soft_02",
      "wave_off": "0x62000",
      "entry_off": "0x3ACF1E84"
     },
@@ -6791,7 +6791,7 @@
     },
     {
      "hash": "0x14BE603E",
-     "name": null,
+     "name": "stick-lift_03",
      "wave_off": "0x142800",
      "entry_off": "0x3ACF1EC0"
     },
@@ -6809,7 +6809,7 @@
     },
     {
      "hash": "0x182D57FF",
-     "name": null,
+     "name": "skate-sweet_01",
      "wave_off": "0x148000",
      "entry_off": "0x3ACF1EFC"
     },
@@ -6827,7 +6827,7 @@
     },
     {
      "hash": "0x1F4093E6",
-     "name": null,
+     "name": "skate-sweet_05",
      "wave_off": "0x153000",
      "entry_off": "0x3ACF1F38"
     },
@@ -6845,7 +6845,7 @@
     },
     {
      "hash": "0x1FE1FEFC",
-     "name": null,
+     "name": "check-boards-med_03",
      "wave_off": "0xB90800",
      "entry_off": "0x3ACF1F74"
     },
@@ -6857,7 +6857,7 @@
     },
     {
      "hash": "0x21E73672",
-     "name": null,
+     "name": "cheer-lrg-short-front_01",
      "wave_off": "0x290000",
      "entry_off": "0x3ACF1F9C"
     },
@@ -6875,7 +6875,7 @@
     },
     {
      "hash": "0x252E113F",
-     "name": null,
+     "name": "shoot-catch-soft_03",
      "wave_off": "0x376000",
      "entry_off": "0x3ACF1FD8"
     },
@@ -6899,7 +6899,7 @@
     },
     {
      "hash": "0x2840C68E",
-     "name": null,
+     "name": "crowd-cheer-med-front_02",
      "wave_off": "0x969000",
      "entry_off": "0x3ACF2028"
     },
@@ -6923,7 +6923,7 @@
     },
     {
      "hash": "0x2AE9B126",
-     "name": null,
+     "name": "check-boards-soft_03",
      "wave_off": "0xB6F000",
      "entry_off": "0x3ACF2078"
     },
@@ -6935,7 +6935,7 @@
     },
     {
      "hash": "0x2C94D67F",
-     "name": null,
+     "name": "grunt-check_02",
      "wave_off": "0xB4C800",
      "entry_off": "0x3ACF20A0"
     },
@@ -6947,7 +6947,7 @@
     },
     {
      "hash": "0x2F47C940",
-     "name": null,
+     "name": "check-body-med_03",
      "wave_off": "0xEF3800",
      "entry_off": "0x3ACF20C8"
     },
@@ -6977,7 +6977,7 @@
     },
     {
      "hash": "0x31646523",
-     "name": null,
+     "name": "ohh-large-rear_02",
      "wave_off": "0x643800",
      "entry_off": "0x3ACF212C"
     },
@@ -7085,7 +7085,7 @@
     },
     {
      "hash": "0x4044E45E",
-     "name": null,
+     "name": "puck-hit-boards-soft_01",
      "wave_off": "0xB9C800",
      "entry_off": "0x3ACF2294"
     },
@@ -7139,7 +7139,7 @@
     },
     {
      "hash": "0x466355B5",
-     "name": null,
+     "name": "ohh-large-rear_03",
      "wave_off": "0x658000",
      "entry_off": "0x3ACF2348"
     },
@@ -7169,7 +7169,7 @@
     },
     {
      "hash": "0x4C66D4DE",
-     "name": null,
+     "name": "cheer-lrg-short-rear_02",
      "wave_off": "0x203000",
      "entry_off": "0x3ACF23AC"
     },
@@ -7187,13 +7187,13 @@
     },
     {
      "hash": "0x5156A329",
-     "name": null,
+     "name": "rampup-def-front_01",
      "wave_off": "0x537000",
      "entry_off": "0x3ACF23E8"
     },
     {
      "hash": "0x522921A9",
-     "name": null,
+     "name": "shoot-catch-soft_02",
      "wave_off": "0x371800",
      "entry_off": "0x3ACF23FC"
     },
@@ -7235,7 +7235,7 @@
     },
     {
      "hash": "0x5840F9D6",
-     "name": null,
+     "name": "check-body-med_02",
      "wave_off": "0xEEC000",
      "entry_off": "0x3ACF2488"
     },
@@ -7265,19 +7265,19 @@
     },
     {
      "hash": "0x5B93E6E9",
-     "name": null,
+     "name": "grunt-check_03",
      "wave_off": "0xB50800",
      "entry_off": "0x3ACF24EC"
     },
     {
      "hash": "0x5C4745E0",
-     "name": null,
+     "name": "puck-hit-goal-soft_01",
      "wave_off": "0x357800",
      "entry_off": "0x3ACF2500"
     },
     {
      "hash": "0x5D47E591",
-     "name": null,
+     "name": "ohh-small-rear_01",
      "wave_off": "0x58A800",
      "entry_off": "0x3ACF2514"
     },
@@ -7289,13 +7289,13 @@
     },
     {
      "hash": "0x5DDA03D1",
-     "name": null,
+     "name": "crowd-cheer-med-rear_02",
      "wave_off": "0x8E5000",
      "entry_off": "0x3ACF253C"
     },
     {
      "hash": "0x5DEE81B0",
-     "name": null,
+     "name": "check-boards-soft_02",
      "wave_off": "0xB68000",
      "entry_off": "0x3ACF2550"
     },
@@ -7319,13 +7319,13 @@
     },
     {
      "hash": "0x63143128",
-     "name": null,
+     "name": "body-bump-soft_01",
      "wave_off": "0xB42800",
      "entry_off": "0x3ACF25A0"
     },
     {
      "hash": "0x63B950A8",
-     "name": null,
+     "name": "stick-lift_02",
      "wave_off": "0x140000",
      "entry_off": "0x3ACF25B4"
     },
@@ -7337,7 +7337,7 @@
     },
     {
      "hash": "0x65A866E3",
-     "name": null,
+     "name": "punch-soft_03",
      "wave_off": "0x63000",
      "entry_off": "0x3ACF25DC"
     },
@@ -7349,7 +7349,7 @@
     },
     {
      "hash": "0x6847A370",
-     "name": null,
+     "name": "skate-sweet_04",
      "wave_off": "0x150800",
      "entry_off": "0x3ACF2604"
     },
@@ -7367,7 +7367,7 @@
     },
     {
      "hash": "0x68E6CE6A",
-     "name": null,
+     "name": "check-boards-med_02",
      "wave_off": "0xB87000",
      "entry_off": "0x3ACF2640"
     },
@@ -7391,7 +7391,7 @@
     },
     {
      "hash": "0x6EEBD8D3",
-     "name": null,
+     "name": "cheer-small-rear_01",
      "wave_off": "0x6FB800",
      "entry_off": "0x3ACF2690"
     },
@@ -7409,7 +7409,7 @@
     },
     {
      "hash": "0x700C0563",
-     "name": null,
+     "name": "zamboni-hit-wall_01",
      "wave_off": "0xB37000",
      "entry_off": "0x3ACF26CC"
     },
@@ -7421,7 +7421,7 @@
     },
     {
      "hash": "0x71F8CAA2",
-     "name": null,
+     "name": "against-boards_03",
      "wave_off": "0xD1000",
      "entry_off": "0x3ACF26F4"
     },
@@ -7445,7 +7445,7 @@
     },
     {
      "hash": "0x74599400",
-     "name": null,
+     "name": "cheer-small-front_01",
      "wave_off": "0x7D3800",
      "entry_off": "0x3ACF2744"
     },
@@ -7463,7 +7463,7 @@
     },
     {
      "hash": "0x75B1493B",
-     "name": null,
+     "name": "ohh-small-front_02",
      "wave_off": "0x5EF000",
      "entry_off": "0x3ACF2780"
     },
@@ -7481,19 +7481,19 @@
     },
     {
      "hash": "0x7A7736E3",
-     "name": null,
+     "name": "cheer-large-front_01",
      "wave_off": "0xA9B800",
      "entry_off": "0x3ACF27BC"
     },
     {
      "hash": "0x7A9CD124",
-     "name": null,
+     "name": "stick-hit-stick_03",
      "wave_off": "0xBD9800",
      "entry_off": "0x3ACF27D0"
     },
     {
      "hash": "0x7B9FEBD8",
-     "name": null,
+     "name": "ohh-large-front_02",
      "wave_off": "0x69F800",
      "entry_off": "0x3ACF27E4"
     },
@@ -7505,13 +7505,13 @@
     },
     {
      "hash": "0x80E5B9FF",
-     "name": null,
+     "name": "cheer-small-rear_03",
      "wave_off": "0x760000",
      "entry_off": "0x3ACF280C"
     },
     {
      "hash": "0x81240645",
-     "name": null,
+     "name": "skate-sweet_02",
      "wave_off": "0x14B000",
      "entry_off": "0x3ACF2820"
     },
@@ -7523,7 +7523,7 @@
     },
     {
      "hash": "0x8649C25C",
-     "name": null,
+     "name": "skate-sweet_06",
      "wave_off": "0x155800",
      "entry_off": "0x3ACF2848"
     },
@@ -7571,7 +7571,7 @@
     },
     {
      "hash": "0x8BA607CF",
-     "name": null,
+     "name": "punch-soft_01",
      "wave_off": "0x60800",
      "entry_off": "0x3ACF28E8"
     },
@@ -7595,7 +7595,7 @@
     },
     {
      "hash": "0x9492B008",
-     "name": null,
+     "name": "stick-hit-stick_01",
      "wave_off": "0xBCE800",
      "entry_off": "0x3ACF2938"
     },
@@ -7625,7 +7625,7 @@
     },
     {
      "hash": "0x9A57F52C",
-     "name": null,
+     "name": "cheer-small-front_03",
      "wave_off": "0x840000",
      "entry_off": "0x3ACF299C"
     },
@@ -7637,7 +7637,7 @@
     },
     {
      "hash": "0x9BC109DB",
-     "name": null,
+     "name": "cheer-large-rear_01",
      "wave_off": "0x9E5800",
      "entry_off": "0x3ACF29C4"
     },
@@ -7649,7 +7649,7 @@
     },
     {
      "hash": "0x9FF6AB8E",
-     "name": null,
+     "name": "against-boards_01",
      "wave_off": "0xB8800",
      "entry_off": "0x3ACF29EC"
     },
@@ -7667,7 +7667,7 @@
     },
     {
      "hash": "0xA3822F8C",
-     "name": null,
+     "name": "puck-hit-player-stick_01",
      "wave_off": "0xAA000",
      "entry_off": "0x3ACF2A28"
     },
@@ -7703,13 +7703,13 @@
     },
     {
      "hash": "0xA86D3499",
-     "name": null,
+     "name": "ohh-large-rear_01",
      "wave_off": "0x626000",
      "entry_off": "0x3ACF2AA0"
     },
     {
      "hash": "0xA8A757B9",
-     "name": null,
+     "name": "punch-swish_01",
      "wave_off": "0x15C800",
      "entry_off": "0x3ACF2AB4"
     },
@@ -7763,7 +7763,7 @@
     },
     {
      "hash": "0xB1499734",
-     "name": null,
+     "name": "crowd-cheer-med-front_01",
      "wave_off": "0x92F800",
      "entry_off": "0x3ACF2B68"
     },
@@ -7781,7 +7781,7 @@
     },
     {
      "hash": "0xB34984BD",
-     "name": null,
+     "name": "ohh-small-rear_03",
      "wave_off": "0x5AE000",
      "entry_off": "0x3ACF2BA4"
     },
@@ -7817,7 +7817,7 @@
     },
     {
      "hash": "0xB59D87C5",
-     "name": null,
+     "name": "grunt-check_01",
      "wave_off": "0xB48800",
      "entry_off": "0x3ACF2C1C"
     },
@@ -7847,13 +7847,13 @@
     },
     {
      "hash": "0xB8EE67C8",
-     "name": null,
+     "name": "cheer-lrg-short-front_02",
      "wave_off": "0x2F2000",
      "entry_off": "0x3ACF2C80"
     },
     {
      "hash": "0xB9266126",
-     "name": null,
+     "name": "rampup-off-front_01",
      "wave_off": "0x486800",
      "entry_off": "0x3ACF2C94"
     },
@@ -7871,7 +7871,7 @@
     },
     {
      "hash": "0xBB4A849C",
-     "name": null,
+     "name": "shoot-catch-soft_04",
      "wave_off": "0x379800",
      "entry_off": "0x3ACF2CD0"
     },
@@ -7907,7 +7907,7 @@
     },
     {
      "hash": "0xBED36884",
-     "name": null,
+     "name": "puck-goalie-body_01",
      "wave_off": "0xDB5000",
      "entry_off": "0x3ACF2D48"
     },
@@ -7925,7 +7925,7 @@
     },
     {
      "hash": "0xC149A86C",
-     "name": null,
+     "name": "check-body-med_01",
      "wave_off": "0xEE5800",
      "entry_off": "0x3ACF2D84"
     },
@@ -7943,7 +7943,7 @@
     },
     {
      "hash": "0xC44EB42B",
-     "name": null,
+     "name": "ohh-small-rear_02",
      "wave_off": "0x59F000",
      "entry_off": "0x3ACF2DC0"
     },
@@ -7955,25 +7955,25 @@
     },
     {
      "hash": "0xC4D3526B",
-     "name": null,
+     "name": "crowd-cheer-med-rear_01",
      "wave_off": "0x8AD800",
      "entry_off": "0x3ACF2DE8"
     },
     {
      "hash": "0xC4E7D00A",
-     "name": null,
+     "name": "check-boards-soft_01",
      "wave_off": "0xB5F800",
      "entry_off": "0x3ACF2DFC"
     },
     {
      "hash": "0xC5F7734A",
-     "name": null,
+     "name": "grunt-check_04",
      "wave_off": "0xB54800",
      "entry_off": "0x3ACF2E10"
     },
     {
      "hash": "0xC6186D26",
-     "name": null,
+     "name": "rampup-off-rear_01",
      "wave_off": "0x41A800",
      "entry_off": "0x3ACF2E24"
     },
@@ -7985,7 +7985,7 @@
     },
     {
      "hash": "0xC6ED8A79",
-     "name": null,
+     "name": "puck-hit-goal-hard_01",
      "wave_off": "0x364000",
      "entry_off": "0x3ACF2E4C"
     },
@@ -8021,7 +8021,7 @@
     },
     {
      "hash": "0xCB207013",
-     "name": null,
+     "name": "shoot-catch-soft_01",
      "wave_off": "0x36E000",
      "entry_off": "0x3ACF2EC4"
     },
@@ -8045,7 +8045,7 @@
     },
     {
      "hash": "0xCDF9D704",
-     "name": null,
+     "name": "zamboni-scrape-wall_01",
      "wave_off": "0x339000",
      "entry_off": "0x3ACF2F14"
     },
@@ -8099,7 +8099,7 @@
     },
     {
      "hash": "0xD56F8564",
-     "name": null,
+     "name": "cheer-lrg-short-rear_01",
      "wave_off": "0x1AB800",
      "entry_off": "0x3ACF2FC8"
     },
@@ -8123,7 +8123,7 @@
     },
     {
      "hash": "0xD94DB5E4",
-     "name": null,
+     "name": "puck-hit-boards-soft_02",
      "wave_off": "0xBA1800",
      "entry_off": "0x3ACF3018"
     },
@@ -8189,7 +8189,7 @@
     },
     {
      "hash": "0xE296BA62",
-     "name": null,
+     "name": "ohh-large-front_01",
      "wave_off": "0x689000",
      "entry_off": "0x3ACF30F4"
     },
@@ -8225,7 +8225,7 @@
     },
     {
      "hash": "0xECB81881",
-     "name": null,
+     "name": "ohh-small-front_01",
      "wave_off": "0x5DA800",
      "entry_off": "0x3ACF316C"
     },
@@ -8237,7 +8237,7 @@
     },
     {
      "hash": "0xED50C5BA",
-     "name": null,
+     "name": "cheer-small-front_02",
      "wave_off": "0x807000",
      "entry_off": "0x3ACF3194"
     },
@@ -8261,7 +8261,7 @@
     },
     {
      "hash": "0xF14EF2CA",
-     "name": null,
+     "name": "skate-sweet_07",
      "wave_off": "0x158000",
      "entry_off": "0x3ACF31E4"
     },
@@ -8279,7 +8279,7 @@
     },
     {
      "hash": "0xF1EF9FD0",
-     "name": null,
+     "name": "check-boards-med_01",
      "wave_off": "0xB7E000",
      "entry_off": "0x3ACF3220"
     },
@@ -8309,7 +8309,7 @@
     },
     {
      "hash": "0xF62336D3",
-     "name": null,
+     "name": "skate-sweet_03",
      "wave_off": "0x14D800",
      "entry_off": "0x3ACF3284"
     },
@@ -8321,7 +8321,7 @@
     },
     {
      "hash": "0xF7E28969",
-     "name": null,
+     "name": "cheer-small-rear_02",
      "wave_off": "0x72B000",
      "entry_off": "0x3ACF32AC"
     },
@@ -8333,7 +8333,7 @@
     },
     {
      "hash": "0xFAB00112",
-     "name": null,
+     "name": "stick-lift_01",
      "wave_off": "0x13D000",
      "entry_off": "0x3ACF32D4"
     },
@@ -8345,7 +8345,7 @@
     },
     {
      "hash": "0xFBCCF340",
-     "name": null,
+     "name": "punch-soft_04",
      "wave_off": "0x64800",
      "entry_off": "0x3ACF32FC"
     },

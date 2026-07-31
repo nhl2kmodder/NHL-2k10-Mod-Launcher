@@ -38,6 +38,8 @@ REQUIRED = (
     "team_fields.json",              # Teams tab: team-record field defs (seed for %APPDATA% copy)
     "jersey_map.json",               # IFF tab: jersey -> its front-end twin (one edit, both copies)
     "live_offsets.json",             # IFF tab: content-matched tail-texture offsets (rink/arena/led/…)
+    "audio_authored_names.json",     # Audio tab: the gameplay-SFX inventory (authored_sfx.py)
+    "authored_sfx_labels.json",      # Audio tab: transcribed names for the PA banks (see above)
 )
 
 

@@ -29,7 +29,7 @@ Applying names is best-effort: a name longer than its fixed slot in the target s
 (the same in-place constraint the Teams tab enforces), never grown.
 
 Identity keys:
-  audio stream  ->  "<fid>:0x<OFFSET8>"   (resolved through the catalog, robust to renames)
+  audio stream  ->  "<fid>:0x<OFFSET8>"   (resolved through the extract manifest, robust to renames)
   texture       ->  its relative path under Textures/Extracted/  (deterministic filename)
   roster group  ->  the group name ("team_colors" | "arena_names" | "team_names")
   scoreclock    ->  the single key "scoreclock" (whole-mod, all-or-nothing)
@@ -49,8 +49,10 @@ from pathlib import Path
 
 try:
     from . import archive_textures as AT
+    from . import audio_store as AS
 except ImportError:
     import archive_textures as AT
+    import audio_store as AS
 
 try:
     from . import team_colors as TC
@@ -75,21 +77,8 @@ ROSTER_GROUPS = {
 
 # ── small helpers ─────────────────────────────────────────────────────────────
 
-def akey(fid, off):
-    return f"{fid}:0x{off:08X}"
-
-def parse_akey(k):
-    fid, h = k.split(":")
-    return fid, int(h, 16)
-
-def _names_path(root, fid):
-    return Path(root) / f"{fid}_Audio_Names.json"
-
-def _catalog_path(root, fid):
-    return Path(root) / f"{fid}_Audio_Catalog.json"
-
-def _modified_audio(root):
-    return Path(root) / "Modified" / "Audio"
+akey       = AS.akey
+parse_akey = AS.parse_akey
 
 def _load_json(p):
     try:
@@ -119,42 +108,49 @@ def _is_safe_path(base_dir: Path, target_path: Path) -> bool:
 # ── local-state scanners ──────────────────────────────────────────────────────
 
 def load_audio_meta(root):
+    """Shareable per-stream metadata (name / category / sample rate) from Audio_Names.json."""
     meta = {}
-    for fid in FILE_IDS:
-        for k, v in _load_json(_names_path(root, fid)).items():
-            if k.startswith("_") or not isinstance(v, dict):
-                continue
-            try:
-                off = int(k, 16)
-            except ValueError:
-                continue
-            e = {kk: vv for kk, vv in v.items() if kk != "stem" and not kk.startswith("_")}
-            if e:
-                meta[akey(fid, off)] = e
+    entries, _ = AS.load_names(root)
+    for k, v in entries.items():
+        try:
+            AS.parse_akey(k)
+        except Exception:
+            continue
+        e = {kk: vv for kk, vv in v.items() if kk != "stem" and not kk.startswith("_")}
+        if e:
+            meta[k] = e
     return meta
 
 def _catalog_index(root):
+    """(name -> (fid, off), akey -> entry) from the extract manifest.
+
+    `friendly_name`/`_fid` are kept as aliases because pack files written before the layout
+    change carry those field names and still have to import.
+    """
     name2off, off2entry = {}, {}
-    for fid in FILE_IDS:
-        for stem, e in _load_json(_catalog_path(root, fid)).items():
-            off = e.get("offset")
-            if off is None:
-                continue
-            off2entry[akey(fid, off)] = {**e, "_fid": fid}
-            if e.get("friendly_name"):
-                name2off[e["friendly_name"]] = (fid, off)
-            name2off[stem] = (fid, off)
+    for key, e in AS.load_manifest(root).items():
+        try:
+            fid, off = AS.parse_akey(key)
+        except Exception:
+            continue
+        name = e.get("name") or AS.stem_of(e)
+        off2entry[key] = {**e, "_fid": fid, "friendly_name": name,
+                          "stem": AS.stem_of(e)}
+        name2off[name] = (fid, off)
+        name2off[AS.stem_of(e)] = (fid, off)
     return name2off, off2entry
 
 def load_audio_wavs(root):
-    name2off, _ = _catalog_index(root)
+    """akey -> WAV path, for streams the user has actually edited.
+
+    Editing is in place now, so "edited" is the manifest sha1 comparison rather than
+    "a file exists in Modified/Audio/".
+    """
     out = {}
-    base = _modified_audio(root)
-    if base.exists():
-        for p in base.rglob("*.wav"):
-            fo = name2off.get(p.stem)
-            if fo:
-                out[akey(*fo)] = p
+    for key, e in AS.load_manifest(root).items():
+        p = AS.wav_path(root, e)
+        if AS.is_edited(root, e, p):
+            out[key] = p
     return out
 
 def load_textures(root):
@@ -549,20 +545,25 @@ def revert_pack(root, game_dir, pack_path, log=print):
 
     if inv["audio_keys"]:
         _, off2entry = _catalog_index(root)
+        man = AS.load_manifest(root)
+        touched = False
         for key in inv["audio_keys"]:
             try:
                 if _revert_audio_slot(game_dir, key, off2entry, log):
                     counts["audio"] += 1
-                e = off2entry.get(key)                  # delete the staged WAV the import created
-                for cand in ([Path(root) / "Modified" / "Audio" / Path(e["wav"]).parent.name /
-                              f"{e.get('friendly_name') or Path(e['wav']).stem}.wav"]
-                             if e and e.get("wav") else []) + \
-                            [Path(root) / "Modified" / "Audio" / "_imported" /
-                             f"{parse_akey(key)[0]}_{parse_akey(key)[1]:08X}.wav"]:
-                    if cand.is_file():
-                        cand.unlink(); log(f"  removed staged {cand.name}")
+                # The imported WAV overwrote the extracted one in place, so there is no staging
+                # copy to throw away — drop the file and clear its hash instead. The entry then
+                # reads as "not extracted" and Extract puts the restored original back.
+                e = man.get(key)
+                if e:
+                    p = AS.wav_path(root, e)
+                    if p.is_file():
+                        p.unlink(); log(f"  removed imported {p.name}")
+                    e["sha1"] = ""; e.pop("size", None); touched = True
             except Exception as e:
                 log(f"  ERROR reverting audio {key}: {e}")
+        if touched:
+            AS.save_manifest(root, man)
 
     if sc:
         xex = str(game_dir / "default.xex")
@@ -829,31 +830,29 @@ def _should_take(item, decisions):
         return decisions.get(f'{item["section"]}|{item["key"]}') == "theirs"
     return False
 
-def _write_meta(root, meta_by_fid):
-    for fid, entries in meta_by_fid.items():
-        p = _names_path(root, fid)
-        raw = _load_json(p) if p.exists() else {}
-        for oh, e in entries.items():
-            cur = raw.get(oh) if isinstance(raw.get(oh), dict) else {}
-            cur = dict(cur or {})
-            cur.update(e)
-            raw[oh] = cur
-        p.write_text(json.dumps(raw, indent=2), encoding="utf-8")
+def _write_meta(root, meta):
+    """meta: akey -> {field: value}, merged into the single Audio_Names.json."""
+    AS.update_names(root, meta)
 
 def _apply_wav(z, item, root, off2entry, log):
+    """Write an imported WAV straight over the extracted one.
+
+    There is no Modified/ staging tree any more; the extracted WAV *is* the editable copy, and
+    the manifest's pristine sha1 is what makes the import show up as an edit. A stream the
+    recipient hasn't extracted has no path to overwrite, so it lands in _imported/ and gets
+    picked up once they extract that bank.
+    """
     e = off2entry.get(item["key"])
-    if e and e.get("wav"):
-        wr = Path(e["wav"])
-        name = e.get("friendly_name") or wr.stem
-        dest = Path(root) / "Modified" / "Audio" / wr.parent.name / f"{name}.wav"
+    if e:
+        dest = AS.wav_path(root, e)
     else:
         fid, off = parse_akey(item["key"])
-        dest = Path(root) / "Modified" / "Audio" / "_imported" / f"{fid}_{off:08X}.wav"
+        dest = AS.extracted_root(root) / "_imported" / f"{fid}_{off:08X}.wav"
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     with z.open(item["arc"]) as src, open(dest, "wb") as out:
         shutil.copyfileobj(src, out)
-    log(f"  audio  -> Modified/Audio/{dest.parent.name}/{dest.name}")
+    log(f"  audio  -> Audio/Extracted/{AS.rel_wav(root, dest)}")
 
 def _apply_tex(z, item, root, log):
     extracted_base = AT.extracted_root(root)
@@ -873,7 +872,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
     root = Path(root)
     _, off2entry = _catalog_index(root)
     counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "skipped": 0}
-    meta_by_fid = {}
+    meta_writes = {}
     roster_groups = {}
 
     z = zipfile.ZipFile(zip_path, "r") if zip_path else None
@@ -885,8 +884,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                 counts["skipped"] += 1
                 continue
             if it["section"] == "meta":
-                fid, off = parse_akey(it["key"])
-                meta_by_fid.setdefault(fid, {})[f"0x{off:08X}"] = it["incoming"]
+                meta_writes[it["key"]] = it["incoming"]
                 counts["meta"] += 1
             elif it["section"] == "audio" and z is not None:
                 _apply_wav(z, it, root, off2entry, log)
@@ -913,8 +911,8 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
         if z:
             z.close()
 
-    if meta_by_fid:
-        _write_meta(root, meta_by_fid)
+    if meta_writes:
+        _write_meta(root, meta_writes)
     if roster_groups:
         apply_roster(ros_path, roster_groups, log)
 

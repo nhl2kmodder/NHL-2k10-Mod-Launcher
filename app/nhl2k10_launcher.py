@@ -4,7 +4,6 @@ NHL 2k10 Mod Launcher — Audio + Textures + Arena Music
 Unified modding tool for NHL 2k10 (Xbox 360 / Xenia)
 """
 
-import hashlib
 import json
 import mmap
 import os
@@ -34,7 +33,12 @@ from launcher import team_colors as tcol
 from launcher import archive_textures as archtex
 from launcher import bank_parser as bankparse
 from launcher import audio_names as audnames
+from launcher import team_tag
+from launcher import wave_banks as wbanks
+from launcher import audio_store as astore
+from launcher import authored_sfx as asfx
 from launcher import modpack as mp
+from launcher import resources as lres
 from launcher import scorebug_anchors as sbanchor
 
 try:
@@ -214,6 +218,9 @@ CATEGORY_FOLDER: dict = {
     "Pre_Game_Faceoff":    "Pre_Game_Faceoff",
     "Menu_Music":          "Menu_Music",
     "Unknown":             "Unknown",
+    # An older naming pass emitted "Unsorted"; without a row here it fell through to
+    # "Unknown" and the track vanished from the folder its name implied.
+    "Unsorted":            "Unknown",
     "Crowd_Ambient_Short": "Crowd_Ambient",
     "BIP_Music_or_Crowd":  "BIP_Music",
     "SFX_Mid":             "SFX",
@@ -225,6 +232,12 @@ CATEGORY_FOLDER: dict = {
     "PA_or_Commentary":    "PA",
     "ArenaMusic":          "Arena_Music",
     "ArenaMusic_Short":    "Arena_Music",
+    "PxP":                 "Speech_PxP",
+    "Color":               "Speech_Color",
+    "Reporter":            "Speech_Reporter",
+    "Speech_PxP":          "Speech_PxP",
+    "Speech_Color":        "Speech_Color",
+    "Speech_Reporter":     "Speech_Reporter",
 }
 
 CATEGORY_LABELS: dict = {
@@ -237,11 +250,23 @@ CATEGORY_LABELS: dict = {
     "SFX":              "Sound Effects",
     "PA":               "PA Announcer",
     "Crowd_Ambient":    "Crowd Ambient",
-    "Commentary":       "Commentary",
+    "Commentary":       "Commentary (Unsorted)",
     "Pre_Game_Faceoff": "Pre-Game / Faceoff",
     "Menu_Music":       "Menu Music",
     "Unknown":          "Unknown",
+    "Speech_PxP":       "Play-by-Play",
+    "Speech_Color":     "Color Commentary",
+    "Speech_Reporter":  "Rinkside Reporter",
 }
+
+# Folders that belong to the Speech tab (announcer voice work); everything else is
+# plain "Audio" (music / crowd / SFX). "Commentary" = the not-yet-sorted speech bucket.
+SPEECH_FOLDERS = {"Speech_PxP", "Speech_Color", "Speech_Reporter", "PA", "Commentary"}
+
+# Treeview rows inserted per mainloop turn. The audio catalog is ~80k rows; filling it in one
+# pass froze the window for seconds on startup. Small enough to stay responsive, large enough
+# that the per-batch after() overhead doesn't dominate.
+AUDIO_FILL_CHUNK = 400
 
 STEM_RE = re.compile(r"^([0-9A-Fa-f]{8})_(\d+)ch_(\d+)p$")
 
@@ -316,20 +341,14 @@ def save_config(cfg: dict) -> None:
 # Path helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def catalog_path(root: Path, fid: str) -> Path:
-    return root / f"{fid}_Audio_Catalog.json"
-
-def names_path(root: Path, fid: str) -> Path:
-    return root / f"{fid}_Audio_Names.json"
-
 def archive_path(root: Path, fid: str) -> Path:
     return root.parent / fid
 
-def audio_dir(root: Path) -> Path:
-    return root / "Audio"
-
-def modified_audio_dir(root: Path) -> Path:
-    return root / "Modified" / "Audio"
+# Audio on-disk layout lives in launcher/audio_store.py — one Extracted/ tree edited in place,
+# one .extract_manifest.json, one Audio_Names.json. Aliased here so the call sites read short.
+audio_dir       = astore.extracted_root      # Audio/Extracted — where the WAVs actually are
+akey            = astore.akey
+parse_akey      = astore.parse_akey
 
 def category_audio_dir(root: Path, category: str) -> Path:
     folder = CATEGORY_FOLDER.get(category or "", "Unknown")
@@ -339,28 +358,137 @@ def category_audio_dir(root: Path, category: str) -> Path:
 # Audio data helpers
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def load_catalog(path: Path) -> dict:
-    if not path.exists():
-        return {}
+#: Bumped whenever the SHIPPED speech names/categories change in a way that should reach users who
+#: already have an Audio_Names.json. See _refresh_from_seed for what "should reach" means.
+#:   1 -> the original release
+#:   2 -> chatter/streamedchatter re-filed Color -> Crowd_Ambient; lines.bin split into
+#:        Reporter_/Color_ by voice; 9 crowd.bin + placeholder strays renamed
+SEED_VERSION = 3
+
+#: Leading tokens the voice-attribution pass added to lines.bin names. Two names that are equal
+#: after stripping these are the SAME line, reclassified by us -- not a user rename.
+_VOICE_PREFIX_RE = re.compile(r"^(?:PxP|Color|Reporter)_")
+
+#: Machine-generated placeholder names ("Commentary_422", "Whistle_001"). Nobody types these by
+#: hand, so a live entry still carrying one is ours to replace.
+_PLACEHOLDER_RE = re.compile(
+    r"^(?:Commentary|Whistle|PA_English|PA_French|Crowd_Ambient|Crowd_Loop|Unsorted|Unknown"
+    r"|Speech)_\d+$")
+
+
+def load_speech_seed() -> dict:
+    """Bundled starter names for discovered speech streams (play-by-play name calls etc.).
+
+    The shipped file is keyed archive-id -> offset-hex -> {name, category}; it is 9.8 MB of
+    generated data, so it keeps that shape on disk and gets flattened to the store's
+    "<fid>:0x…" keys here. Optional data — missing file = {}."""
     try:
-        return json.loads(path.read_text(encoding="utf-8"))
+        p = lres.data_path("speech_seed_names.json")
+        if not p.exists():
+            return {}
+        doc = json.loads(p.read_text(encoding="utf-8"))
     except Exception:
         return {}
+    out = {}
+    for fid in FILE_IDS:
+        for hk, v in (doc.get(fid) or {}).items():
+            if not isinstance(v, dict):
+                continue
+            try:
+                out[akey(fid, int(hk, 16))] = v
+            except ValueError:
+                continue
+    return out
 
-def load_names_map(path: Path) -> tuple:
-    if not path.exists():
-        return {}, None
+def _stale_seed_value(live: dict, seed: dict) -> dict | None:
+    """Fields to take from the shipped seed because the live value is OUR old value, not the
+    user's. Returns None to leave the entry completely alone.
+
+    "Only seed keys the user hasn't named" was too strict in one direction: it also meant a
+    *correction* to a shipped name or category could never reach anyone who had already
+    extracted. That is why chatter.bin and streamedchatter.bin sat under Color Commentary long
+    after they were re-filed as Crowd_Ambient, and why lines.bin never picked up the
+    Reporter_/Color_ voice split — 5,148 + 4,018 rows frozen at their first-release values.
+
+    The fix is not "seed wins" (that would throw away real renames). It is to only overwrite
+    values that are *recognisably machine-generated*:
+
+      1. the name is unchanged -> the category is ours, refresh it;
+      2. the names differ only by a voice prefix -> same line, we reclassified it;
+      3. the live name is a numbered placeholder -> nobody typed that;
+      4. the live category is "Unknown" -> the extractor's fallback, never a user's choice,
+         so a real category from the seed wins (the user's *name* still stands).
+
+    Anything else is a user edit and is preserved. That is what keeps, say, a hand-identified
+    `GoalHorn_Columbus_Cannon` from being reverted to `GoalHorn_Unidentified_03BA2000`.
+    """
+    ln, sn = live.get("name") or "", seed.get("name") or ""
+    lc, sc = live.get("category") or "", seed.get("category") or ""
+    if not sn:
+        return None
+    if ln == sn:
+        return {"category": sc} if sc and sc != lc else None
+    if _VOICE_PREFIX_RE.sub("", ln) == _VOICE_PREFIX_RE.sub("", sn) or _PLACEHOLDER_RE.match(ln):
+        out = {"name": sn}
+        if sc and sc != lc:
+            out["category"] = sc
+        return out
+    # 4. the user renamed the stream but never categorised it. "Unknown" is the extractor's
+    #    fallback bucket, not a choice anyone makes, so a real category from the seed is an
+    #    improvement either way -- and their name is still left untouched.
+    if lc == "Unknown" and sc and sc != lc:
+        return {"category": sc}
+    return None
+
+
+def merge_speech_seed(root: Path, nm_map: dict, log=None) -> dict:
+    """Fill gaps in the user's names map from the bundled speech seed and persist the
+    additions into Audio/Audio_Names.json so they're visible/editable afterwards.
+
+    User entries always win — only keys the user hasn't named are seeded. On a SEED_VERSION
+    bump this also re-applies shipped corrections over values that are still ours
+    (see _stale_seed_value); the refresh runs once per version, not on every load.
+    """
+    seed = load_speech_seed()
+    if not seed:
+        return nm_map
+    # `stem` is deliberately kept: it is the only record of channels/packets for streams the
+    # scanner's min_pkts floor hides (the 543 three-packet strays), and op_extract's second
+    # pass reads it back through STEM_RE to decode them.
+    new = {k: dict(v) for k, v in seed.items() if k not in nm_map}
+
+    raw = astore.load_names_raw(root)
+    fixes: dict[str, dict] = {}
+    if raw and raw.get("_seed_version", 1) < SEED_VERSION:
+        for k, sv in seed.items():
+            lv = raw.get(k)
+            if isinstance(lv, dict):
+                ch = _stale_seed_value(lv, sv)
+                if ch:
+                    fixes[k] = ch
+    if not new and not fixes:
+        return nm_map
+
+    nm_map = dict(nm_map)
+    nm_map.update(new)
+    for k, ch in fixes.items():
+        nm_map[k] = {**nm_map.get(k, {}), **ch}
     try:
-        raw = json.loads(path.read_text(encoding="utf-8"))
-        default_cat = raw.get("_default_category")
-        entries = {k: v for k, v in raw.items()
-                   if not k.startswith("_") and isinstance(v, dict)}
-        return entries, default_cat
-    except Exception:
-        return {}, None
-
-def save_catalog(path: Path, catalog: dict) -> None:
-    path.write_text(json.dumps(catalog, indent=2), encoding="utf-8")
+        for k, v in new.items():
+            raw.setdefault(k, v)
+        for k, ch in fixes.items():
+            raw[k] = {**raw.get(k, {}), **ch}
+        raw["_seed_version"] = SEED_VERSION
+        astore.save_names_raw(root, raw)
+        if new and log:
+            log(f"Seeded {len(new)} known speech name(s) from launcher data")
+        if fixes and log:
+            log(f"Refreshed {len(fixes)} name/category value(s) from updated launcher data "
+                f"(Reload Names applies them to the manifest and moves the WAVs)")
+    except Exception as e:
+        if log:
+            log(f"Speech-seed write failed: {e}")
+    return nm_map
 
 def wav_info(wav_path: Path) -> tuple:
     try:
@@ -396,78 +524,142 @@ def wav_info(wav_path: Path) -> tuple:
 def wav_duration(wav_path: Path) -> float:
     return wav_info(wav_path)[0]
 
-def _scan_wav_set(base: Path) -> set:
-    """All .wav paths under `base` as a set of os.path.normcase'd strings — one directory
-    walk instead of tens of thousands of per-file os.stat() calls. normcase makes the
-    lookups case-insensitive, matching Windows' Path.exists() semantics exactly."""
-    out = set()
+def _scan_wav_stats(base: Path) -> dict:
+    """normcase'd .wav path -> (size, mtime), from one directory walk.
+
+    scandir hands back both out of the directory entry the walk already read, so this costs the
+    same as the old existence-only walk (~0.2 s for 80k files) and buys the edit indicator for
+    free. Hashing is not an option here: the extract tree is ~24 GB, so a SHA-1 sweep on every
+    refresh would take minutes. See `_looks_edited` for what size+mtime can and can't prove."""
+    out = {}
     for dirpath, _dirs, files in os.walk(base):
-        for fn in files:
-            if fn.endswith(".wav"):
-                out.add(os.path.normcase(os.path.join(dirpath, fn)))
+        with os.scandir(dirpath) as it:
+            for de in it:
+                if de.name.endswith(".wav") and de.is_file():
+                    try:
+                        st = de.stat()
+                        out[os.path.normcase(de.path)] = (st.st_size, st.st_mtime)
+                    except OSError:
+                        pass
     return out
 
 
+# Filesystems disagree about mtime granularity (NTFS 100 ns, FAT 2 s) and a copy2 round-trip can
+# shave the low bits, so "same timestamp" gets a second of slack. Any real edit lands minutes or
+# days after the extract, never inside that window.
+_MTIME_EPS = 2.0
+
+
+def _looks_edited(entry: dict, cur_size: int, cur_mtime: float) -> bool:
+    """Cheap "has the user touched this WAV?" test for the list — no file reads.
+
+    Authority still rests with `audio_store.is_edited()`, which compares the real SHA-1 against
+    the pristine extract; Patch Game and Check All use that. This is the O(1) stand-in so the
+    ✓ column and the Revert item can be right without hashing 24 GB on every refresh:
+
+      * `dirty` — Rescan Edits hashed this one and found it differs. Settled.
+      * size differs from the pristine extract — settled the other way.
+      * mtime differs from the pristine extract — the user wrote over the file *in place*, which
+        is the case a size comparison alone is blind to (re-exporting a clip at the same settings
+        very often lands on the same byte count).
+      * no recorded `mtime` — an extract from before this was tracked. Nothing to compare, so
+        fall back to size only, exactly as before. Rescan Edits is how those get settled.
+    """
+    if entry.get("dirty"):
+        return True
+    base_size = entry.get("size")
+    if base_size is None or cur_size != base_size:
+        return True
+    base_mtime = entry.get("mtime")
+    if base_mtime is None:
+        return False
+    return abs(cur_mtime - base_mtime) > _MTIME_EPS
+
+
+def _maybe_edited(entry: dict, wav: Path) -> bool:
+    """Could this WAV have changed? A cheap pre-filter in front of the SHA-1 comparison.
+
+    Same tests as `_looks_edited`, but an entry with no recorded `mtime` answers "maybe" rather
+    than "no": there is nothing to compare against, so the only honest answer is to go and hash
+    it. That keeps Patch Game finding every edit it found before mtime existed."""
+    try:
+        st = wav.stat()
+    except OSError:
+        return False
+    if entry.get("mtime") is None:
+        return True
+    return _looks_edited(entry, st.st_size, st.st_mtime)
+
+
 def load_all_audio(root: Path) -> list:
-    aud_dir   = audio_dir(root)
-    mod_dir   = modified_audio_dir(root)
-    audio_set = _scan_wav_set(aud_dir)        # ~80k files in one walk (~0.2s) vs 80k stats
-    mod_set   = _scan_wav_set(mod_dir)
+    ex_dir    = astore.extracted_root(root)
+    stats     = _scan_wav_stats(ex_dir)       # ~80k files in one walk (~0.2s) vs 80k stats
     rows = []
-    for fid in FILE_IDS:
-        cat = load_catalog(catalog_path(root, fid))
-        for stem, entry in cat.items():
-            friendly    = entry.get("friendly_name") or stem
-            category    = entry.get("category") or "Unknown"
-            folder      = CATEGORY_FOLDER.get(category, "Unknown")
-            duration    = entry.get("duration", 0.0)
-            channels    = entry.get("channels", 1)
-            sample_rate = entry.get("sample_rate", SAMPLE_RATE)
-            wav_rel     = entry.get("wav", "")
-            off_hex     = entry.get("offset_hex", "")
-            max_pkts    = entry.get("packets", 0)
+    for key, entry in astore.load_manifest(root).items():
+        try:
+            fid, off = astore.parse_akey(key)
+        except Exception:
+            continue
+        stem        = astore.stem_of(entry)
+        friendly    = entry.get("name") or stem
+        category    = entry.get("category") or "Unknown"
+        folder      = CATEGORY_FOLDER.get(category, "Unknown")
+        duration    = entry.get("duration", 0.0)
+        channels    = entry.get("channels", 1)
+        sample_rate = entry.get("sample_rate", SAMPLE_RATE)
+        max_pkts    = entry.get("packets", 0)
 
-            wav_p      = (root / wav_rel) if wav_rel else (aud_dir / folder / f"{friendly}.wav")
-            wav_exists = os.path.normcase(str(wav_p)) in audio_set
-            if wav_exists and not sample_rate:
-                actual_dur, actual_sr = wav_info(wav_p)
-                if actual_sr:
-                    sample_rate = actual_sr
-                if actual_dur > 0:
-                    duration = actual_dur
-            elif wav_exists and sample_rate != SAMPLE_RATE and not duration:
-                actual_dur, _ = wav_info(wav_p)
-                if actual_dur > 0:
-                    duration = actual_dur
+        wav_p      = astore.wav_path(root, entry)
+        st         = stats.get(os.path.normcase(str(wav_p)))
+        wav_exists = st is not None
+        cur_size, cur_mtime = st if st else (None, None)
+        if wav_exists and not sample_rate:
+            actual_dur, actual_sr = wav_info(wav_p)
+            if actual_sr:
+                sample_rate = actual_sr
+            if actual_dur > 0:
+                duration = actual_dur
+        elif wav_exists and sample_rate != SAMPLE_RATE and not duration:
+            actual_dur, _ = wav_info(wav_p)
+            if actual_dur > 0:
+                duration = actual_dur
 
-            mod_p    = mod_dir / folder / f"{friendly}.wav"
-            has_mod  = os.path.normcase(str(mod_p)) in mod_set
-            if not has_mod:
-                mod_p2  = mod_dir / folder / f"{stem}.wav"
-                if os.path.normcase(str(mod_p2)) in mod_set:
-                    has_mod = True
-                    mod_p = mod_p2
+        edited    = wav_exists and _looks_edited(entry, cur_size, cur_mtime)
 
-            bank_disp, bank_hay = audnames.bank_info(fid, entry.get("offset"))
-            rows.append({
-                "stem":        stem,
-                "name":        friendly,
-                "category":    category,
-                "folder":      folder,
-                "duration":    duration,
-                "channels":    channels,
-                "sample_rate": sample_rate,
-                "source":      entry.get("source_file", fid),
-                "wav_path":    str(wav_p) if wav_exists else "",
-                "mod_path":    str(mod_p) if has_mod else "",
-                "has_mod":     has_mod,
-                "off_hex":     off_hex,
-                "offset":      entry.get("offset"),
-                "max_pkts":    max_pkts,
-                "file_id":     fid,
-                "banks":       bank_disp,
-                "banks_hay":   bank_hay,
-            })
+        bank_disp, bank_hay = audnames.bank_info(fid, off)
+        # which .bin wave bank physically holds this stream -- a different axis from the
+        # bank_info above, which says which arena_*.iff sound banks reference it
+        # ...and the authored SFX (0A/0B) are in no .bin at all -- they live inside their own
+        # container, so that container's name is the honest answer for this column.
+        bin_name = wbanks.bank_for(fid, off) or entry.get("source_bank", "")
+        rows.append({
+            "key":         key,
+            "stem":        stem,
+            "name":        friendly,
+            "category":    category,
+            "folder":      folder,
+            "duration":    duration,
+            "channels":    channels,
+            "sample_rate": sample_rate,
+            "source":      fid,
+            "wav_path":    str(wav_p) if wav_exists else "",
+            "edited":      edited,
+            "off_hex":     f"0x{off:08X}",
+            "offset":      off,
+            "max_pkts":    max_pkts,
+            "file_id":     fid,
+            "banks":       bank_disp,
+            "banks_hay":   bank_hay,
+            "bin":         bin_name,
+            # Which team this stream belongs to. A tag the user set by hand wins outright --
+            # including a deliberately blank one, which is why this tests for the key rather
+            # than for truthiness. Otherwise: a single-arena bank reference is proof, and
+            # failing that it comes from the name, which is where the team actually is for the
+            # ~93% of the catalogue no arena bank references. Blank when unknown -- see
+            # launcher/team_tag.py for why a wrong team is worse than none.
+            "team":        (entry["team"] if "team" in entry
+                            else team_tag.team_for(friendly, bank_disp)),
+        })
     return rows
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -634,118 +826,190 @@ def scan_streams(mm, file_size: int, min_pkts: int = 4) -> list:
 # Background audio operations  (unchanged from modtool)
 # ═══════════════════════════════════════════════════════════════════════════════
 
-def op_extract(root: Path, file_ids: list, xma2encode: str, log):
+def op_extract(root: Path, file_ids: list, xma2encode: str, log,
+               banks: set | None = None, workers: int = 6, sfx: bool = True,
+               sfx_banks: set | None = None):
+    """Decode every stream in `file_ids` to WAV and record it in that archive's catalog.
+
+    `banks`  restrict to these .bin wave banks (see wave_banks.py); None = every bank.
+    `workers` how many xma2encode.exe decodes run at once.
+    `sfx`    also decode the authored gameplay SFX out of the 0A/0B containers.
+    `sfx_banks` restrict the SFX pass to these authored banks (authored_sfx.ALL_BANKS);
+             None = all of them. Pass `file_ids=[]` to run the SFX pass on its own — the two
+             systems are independent, and the authored banks decode in seconds where a full
+             stream extract is hours.
+
+    Both parameters exist because of where the time actually goes. Scanning a 1.68 GB container for
+    stream starts costs ~2 s; decoding costs one xma2encode.exe spawn PER STREAM, and there are
+    ~81k streams, so a full extract is hours and it is ~all process-spawn latency. Splitting the
+    containers into per-bank files on disk would only have shortened the 2 s. Narrowing the work
+    (banks) and overlapping the spawns (workers) are what actually move the number.
+
+    Decoding is I/O- and subprocess-bound, so threads are the right tool despite the GIL: each task
+    writes its own temp dir and its own WAV, and only the counters and the manifest dict are shared.
+    """
+    nm_map, default_cat = astore.load_names(root)
+    nm_map = merge_speech_seed(root, nm_map, log)
+    man    = astore.load_manifest(root)
     for fid in file_ids:
         arc = archive_path(root, fid)
         if not arc.exists():
             log(f"[{fid}] SKIP: archive not found at {arc}"); continue
-        nm_map, default_cat = load_names_map(names_path(root, fid))
-        cat       = load_catalog(catalog_path(root, fid))
         file_size = arc.stat().st_size
         log(f"[{fid}] Scanning {file_size // 1024 // 1024} MB…")
         with open(arc, "rb") as fh:
             mm      = mmap.mmap(fh.fileno(), 0, access=mmap.ACCESS_READ)
             streams = scan_streams(mm, file_size)
-            total   = len(streams)
-            log(f"[{fid}] Found {total} streams")
+            found   = len(streams)
+            if banks:
+                streams = [s for s in streams
+                           if wbanks.bank_for(fid, s["offset"]) in banks]
+                log(f"[{fid}] Found {found} streams; "
+                    f"{len(streams)} in the selected wave bank(s)")
+            else:
+                log(f"[{fid}] Found {found} streams")
+
+            # Build the work list first (cheap, sequential) so the parallel part is nothing but
+            # decode. Anything already decoded with its WAV still on disk is counted and skipped,
+            # which is what makes a re-run of a finished extract fast.
             ok = fail = 0
-            for idx, s in enumerate(streams, 1):
+            jobs = []
+            for s in streams:
                 off  = s["offset"]; pkts = s["packets"]; ch = s["channels"]
-                stem = f"{off:08X}_{ch}ch_{pkts}p"; hex_key = f"0x{off:08X}"
-                ne   = nm_map.get(hex_key, {})
+                stem = f"{off:08X}_{ch}ch_{pkts}p"; key = akey(fid, off)
+                ne   = nm_map.get(key, {})
                 fname = ne.get("name") if ne else None
                 cat_  = ne.get("category") if ne else default_cat
                 folder = CATEGORY_FOLDER.get(cat_ or "", "Unknown")
-                label  = fname or stem
                 dest_d = audio_dir(root) / folder
                 dest_d.mkdir(parents=True, exist_ok=True)
-                wav = dest_d / f"{label}.wav"
-                if stem in cat and wav.exists():
+                wav = dest_d / f"{fname or stem}.wav"
+                if key in man and wav.exists():
                     ok += 1; continue
+                jobs.append((off, pkts, ch, stem, key, fname, cat_, wav))
+
+            # Only the decode runs in the pool; results are consumed here on the calling thread, so
+            # the counters and `man` need no lock.
+            done = 0
+
+            def _one(job):
+                off, pkts, ch, stem, key, fname, cat_, wav = job
                 raw = bytes(mm[off: off + pkts * PACKET_SIZE])
-                dur = decode_xma2(raw, ch, wav, xma2encode)
-                if dur > 0:
-                    _, sr = wav_info(wav)
-                    cat[stem] = {
-                        "offset": off, "offset_hex": hex_key,
-                        "packets": pkts, "channels": ch,
-                        "duration": round(dur, 3), "stem": stem,
-                        "friendly_name": fname, "category": cat_,
-                        "source_file": fid, "sample_rate": sr,
-                        "wav": str(wav.relative_to(root)),
-                    }
-                    ok += 1
-                else:
-                    fail += 1
-                if idx % 50 == 0 or idx == total:
-                    log(f"  [{fid}] {idx}/{total}  ok={ok} fail={fail}")
+                # The rate comes from the wave bank, never from the file we are about to write:
+                # XMA2 packets carry no rate, so reading it back off our own WAV only ever
+                # returned whatever we put in it. See wave_banks.BANK_RATES.
+                sr  = wbanks.rate_for(fid, off)
+                dur = decode_xma2(raw, ch, wav, xma2encode, sample_rate=sr)
+                if dur <= 0:
+                    return job, 0.0, 0, "", 0, 0.0
+                # Hash here, in the worker: it is the pristine-extract fingerprint that makes
+                # "the user edited this" a fact later, and hashing costs nothing next to a
+                # process spawn.
+                st = wav.stat()
+                return job, dur, sr, astore.sha1_file(wav), st.st_size, st.st_mtime
+
+            with ThreadPoolExecutor(max_workers=max(1, workers)) as pool:
+                for job, dur, sr, sha, size, mtime in pool.map(_one, jobs):
+                    off, pkts, ch, stem, key, fname, cat_, wav = job
+                    if dur > 0:
+                        man[key] = {
+                            "fid": fid, "offset": off,
+                            "packets": pkts, "channels": ch,
+                            "sample_rate": sr, "duration": round(dur, 3),
+                            "name": fname or stem, "category": cat_ or "Unknown",
+                            "wav": astore.rel_wav(root, wav),
+                            "sha1": sha, "size": size, "mtime": mtime,
+                        }
+                        ok += 1
+                    else:
+                        fail += 1
+                    done += 1
+                    if done % 50 == 0 or done == len(jobs):
+                        log(f"  [{fid}] {done}/{len(jobs)} decoded  ok={ok} fail={fail}")
+
             scanned = {s["offset"] for s in streams}
-            for hk, ne in nm_map.items():
-                try: off = int(hk, 16)
+            for key, ne in nm_map.items():
+                if not key.startswith(fid + ":"):
+                    continue
+                try: _f, off = parse_akey(key)
                 except ValueError: continue
                 if off in scanned: continue
+                # a bank-scoped extract must scope this pass too, or picking one bank still
+                # decodes every named stream the scanner missed
+                if banks and wbanks.bank_for(fid, off) not in banks: continue
                 m = STEM_RE.match(ne.get("stem", ""))
                 if not m: continue
                 ch = int(m.group(2)); pkts = int(m.group(3))
                 stem = f"{off:08X}_{ch}ch_{pkts}p"
-                if stem in cat: continue
+                if key in man: continue
                 folder = CATEGORY_FOLDER.get(ne.get("category") or "", "Unknown")
                 dest_d = audio_dir(root) / folder
                 dest_d.mkdir(parents=True, exist_ok=True)
                 wav = dest_d / f"{(ne.get('name') or stem)}.wav"
                 raw = bytes(mm[off: off + pkts * PACKET_SIZE])
-                dur = decode_xma2(raw, ch, wav, xma2encode)
+                sr  = wbanks.rate_for(fid, off)
+                dur = decode_xma2(raw, ch, wav, xma2encode, sample_rate=sr)
                 if dur > 0:
-                    _, sr = wav_info(wav)
-                    cat[stem] = {
-                        "offset": off, "offset_hex": hk,
+                    man[key] = {
+                        "fid": fid, "offset": off,
                         "packets": pkts, "channels": ch,
-                        "duration": round(dur, 3), "stem": stem,
-                        "friendly_name": ne.get("name"), "category": ne.get("category"),
-                        "source_file": fid, "sample_rate": sr,
-                        "wav": str(wav.relative_to(root)),
+                        "sample_rate": sr, "duration": round(dur, 3),
+                        "name": ne.get("name") or stem,
+                        "category": ne.get("category") or "Unknown",
+                        "wav": astore.rel_wav(root, wav),
+                        "sha1": astore.sha1_file(wav), "size": wav.stat().st_size,
+                        "mtime": wav.stat().st_mtime,
                     }
             mm.close()
-        save_catalog(catalog_path(root, fid), cat)
+        # One write per archive rather than one at the end: an 80k-stream extract is hours, and
+        # a crash three archives in should not throw away the three that finished.
+        astore.save_manifest(root, man)
         log(f"[{fid}] Done: {ok} extracted, {fail} failed")
+
+    # The authored SFX are a separate system -- sounds inside 0A/0B containers, not streams in a
+    # .bin wave bank -- so they are decoded after the stream pass, from their own descriptor
+    # tables, and merged into the same manifest. See launcher/authored_sfx.py.
+    if sfx:
+        try:
+            asfx.extract(root.parent, root, xma2encode, banks=sorted(sfx_banks) if sfx_banks
+                         else None, log=log, workers=max(1, workers))
+        except Exception as exc:
+            log(f"[sfx] gameplay SFX extract failed: {exc}")
 
 
 def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 force_truncate: bool, log) -> tuple:
-    mod  = modified_audio_dir(root)
-    wavs = sorted(mod.rglob("*.wav")) if mod.exists() else []
-    if not wavs:
-        log("No files in Modified/Audio/")
+    """Write every EDITED WAV under Audio/Extracted/ back into its archive.
+
+    "Edited" is settled by comparing each file against the pristine SHA-1 the extract recorded,
+    which is what lets the Original/ + Modified/ split go away: the file you edit is the file that
+    was extracted, and the manifest remembers what it looked like before you touched it.
+
+    The hash only runs on files that could plausibly have changed — size or mtime moved, or the
+    entry predates mtime tracking and so can't rule itself out. Everything else is skipped
+    without being read, which is what keeps this off a 24 GB sweep."""
+    man = astore.load_manifest(root)
+    if not man:
+        log("Nothing extracted yet — run Extract first.")
         return 0, 0, 0
-    all_cat: dict = {}; friendly_idx: dict = {}
-    for fid in FILE_IDS:
-        cat = load_catalog(catalog_path(root, fid))
-        for stem, entry in cat.items():
-            if not entry.get("source_file"):
-                entry["source_file"] = fid
-            all_cat[stem] = entry
-            fn = entry.get("friendly_name")
-            if fn:
-                friendly_idx[fn] = stem
     pending: dict = {fid: [] for fid in FILE_IDS}
-    not_found = []
-    for wp in wavs:
-        sk    = wp.stem
-        entry = all_cat.get(sk) or all_cat.get(friendly_idx.get(sk, ""))
-        if not entry:
-            not_found.append(wp); continue
-        sf = entry.get("source_file")
-        if not sf or sf not in FILE_IDS:
-            not_found.append(wp); continue
-        pending[sf].append((wp, entry))
+    for key, entry in man.items():
+        fid = entry.get("fid")
+        if fid not in FILE_IDS:
+            continue
+        wav = astore.wav_path(root, entry)
+        if _maybe_edited(entry, wav) and astore.is_edited(root, entry, wav):
+            pending[fid].append((wav, entry))
+    total_edits = sum(len(v) for v in pending.values())
+    if not total_edits:
+        log("No edited WAVs under Audio/Extracted/ — nothing to patch.")
+        return 0, 0, 0
     for fid in FILE_IDS:
         n = len(pending[fid])
         if n:
             arc    = archive_path(root, fid)
             status = "archive found" if arc.exists() else "ARCHIVE NOT FOUND"
-            log(f"  [{fid}] {n} file(s) queued — {status}")
-    if not_found:
-        log(f"WARNING: {len(not_found)} file(s) not in catalog (skipped)")
+            log(f"  [{fid}] {n} edited file(s) — {status}")
     patched = skipped_trunc = 0
     for fid, items in pending.items():
         if not items: continue
@@ -761,7 +1025,7 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
             for wp, entry in items:
                 off = entry["offset"]; max_pkts = entry["packets"]
                 ch  = entry["channels"]; sr = entry.get("sample_rate") or SAMPLE_RATE
-                display = entry.get("friendly_name") or entry.get("stem") or wp.stem
+                display = entry.get("name") or wp.stem
                 log(f"  {display}  @ 0x{off:08X}  slot={max_pkts}p {ch}ch")
                 try:
                     raw_new, q_used = encode_wav_to_fit(
@@ -785,55 +1049,142 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                     log(f"    Padded {-excess} spare packets")
                 f.seek(off); f.write(raw_new)
                 log(f"    Written {n_new} pkts"); patched += 1
-    return patched, skipped_trunc, len(not_found)
+    return patched, skipped_trunc, 0
 
 
 def op_reload_names(root: Path, log):
-    for fid in FILE_IDS:
-        nm_map, default_cat = load_names_map(names_path(root, fid))
-        if not nm_map and default_cat is None: continue
-        cat_p = catalog_path(root, fid); cat = load_catalog(cat_p)
-        if not cat: continue
-        updated = moved = 0
-        for stem, entry in cat.items():
-            off = entry.get("offset")
-            if off is None: continue
-            hk  = f"0x{off:08X}"; ne = nm_map.get(hk)
-            old_wav_rel = entry.get("wav", "")
-            old_wav     = root / old_wav_rel if old_wav_rel else None
-            changed = False
-            if ne:
-                new_name = ne.get("name"); new_cat = ne.get("category")
-                if new_name and entry.get("friendly_name") != new_name:
-                    entry["friendly_name"] = new_name; changed = True
-                if new_cat and entry.get("category") != new_cat:
-                    entry["category"] = new_cat; changed = True
-            elif default_cat and not entry.get("category"):
-                entry["category"] = default_cat; changed = True
-            if changed:
-                updated += 1
-                if old_wav and old_wav.exists():
-                    cur_cat    = entry.get("category") or "Unknown"
-                    cur_folder = CATEGORY_FOLDER.get(cur_cat, "Unknown")
-                    cur_name   = entry.get("friendly_name") or stem
-                    new_wav    = audio_dir(root) / cur_folder / f"{cur_name}.wav"
-                    if old_wav.resolve() != new_wav.resolve():
-                        new_wav.parent.mkdir(parents=True, exist_ok=True)
-                        try:
-                            shutil.move(str(old_wav), str(new_wav))
-                            entry["wav"] = str(new_wav.relative_to(root)); moved += 1
-                        except Exception as e:
-                            log(f"  [{fid}] Move failed ({old_wav.name}): {e}")
-        if updated:
-            save_catalog(cat_p, cat)
-        log(f"[{fid}] Reloaded names: {updated} updated, {moved} files moved")
+    """Apply the names file to the manifest, renaming/moving each WAV to match."""
+    nm_map, default_cat = astore.load_names(root)
+    nm_map = merge_speech_seed(root, nm_map, log)
+    man = astore.load_manifest(root)
+    if not man or (not nm_map and default_cat is None):
+        return
+    updated = moved = tagged = 0
+    for key, entry in man.items():
+        ne = nm_map.get(key)
+        old_wav = astore.wav_path(root, entry)
+        changed = False
+        if ne:
+            # `team` is pure metadata -- carry it across but don't let it trigger a file move
+            if "team" in ne and entry.get("team") != ne["team"]:
+                entry["team"] = ne["team"]; tagged += 1
+            new_name = ne.get("name"); new_cat = ne.get("category")
+            if new_name and entry.get("name") != new_name:
+                entry["name"] = new_name; changed = True
+            if new_cat and entry.get("category") != new_cat:
+                entry["category"] = new_cat; changed = True
+        elif default_cat and not entry.get("category"):
+            entry["category"] = default_cat; changed = True
+        if not changed:
+            continue
+        updated += 1
+        cur_folder = CATEGORY_FOLDER.get(entry.get("category") or "Unknown", "Unknown")
+        cur_name   = entry.get("name") or astore.stem_of(entry)
+        new_wav    = astore.extracted_root(root) / cur_folder / f"{cur_name}.wav"
+        entry["wav"] = astore.rel_wav(root, new_wav)
+        if old_wav.exists() and old_wav != new_wav:
+            new_wav.parent.mkdir(parents=True, exist_ok=True)
+            try:
+                shutil.move(str(old_wav), str(new_wav)); moved += 1
+            except Exception as e:
+                log(f"  Move failed ({old_wav.name}): {e}")
+    if updated or tagged:
+        astore.save_manifest(root, man)
+    log(f"Reloaded names: {updated} updated, {moved} files moved"
+        + (f", {tagged} team tag(s)" if tagged else ""))
+
+
+def op_revert_audio(root: Path, keys: list, xma2encode: str, log) -> int:
+    """Re-decode the listed streams from the archive, discarding in-place edits.
+
+    Editing in place means there is no pristine copy on disk any more, so Revert has to go back
+    to the archive — the same thing `archive_textures.revert_extract()` does for a .dds."""
+    man = astore.load_manifest(root)
+    ok = 0
+    for key in keys:
+        entry = man.get(key)
+        if not entry:
+            continue
+        fid = entry.get("fid")
+        arc = archive_path(root, fid)
+        if not arc.exists():
+            log(f"  [{fid}] archive not found — skipped {entry.get('name')}"); continue
+        size = entry["packets"] * PACKET_SIZE
+        with open(arc, "rb") as f:
+            f.seek(entry["offset"]); raw = f.read(size)
+        if len(raw) < size:
+            log(f"  archive too short for {entry.get('name')}"); continue
+        wav = astore.wav_path(root, entry)
+        wav.parent.mkdir(parents=True, exist_ok=True)
+        dur = decode_xma2(raw, entry.get("channels", 1), wav, xma2encode,
+                          sample_rate=entry.get("sample_rate") or SAMPLE_RATE)
+        if dur <= 0:
+            log(f"  decode failed: {entry.get('name')}"); continue
+        entry["duration"] = round(dur, 3)
+        entry["sha1"] = astore.sha1_file(wav)
+        entry["size"] = wav.stat().st_size
+        entry["mtime"] = wav.stat().st_mtime
+        entry.pop("dirty", None)          # this IS the pristine extract again
+        ok += 1
+        log(f"  reverted {entry.get('name')}")
+    if ok:
+        astore.save_manifest(root, man)
+    return ok
+
+
+def op_rescan_edits(root: Path, log) -> tuple:
+    """Settle "is this WAV edited?" by hash, and leave behind the cheap answer for next time.
+
+    The list normally decides with size+mtime (see `_looks_edited`) because the extract tree is
+    ~24 GB and hashing it on every refresh is not viable. That works from the moment mtime is
+    recorded — but an extract made before it was, then overwritten in place at the same byte
+    length, looks untouched to both tests. This is the pass that finds those: it hashes, marks
+    the genuinely-changed ones `dirty`, and stamps a pristine mtime on the rest so they answer
+    for free from here on.
+
+    Cost is a full read of the tree the first time and next to nothing after — once every entry
+    carries an mtime baseline, only the files whose timestamp actually moved get hashed."""
+    man = astore.load_manifest(root)
+    if not man:
+        log("Nothing extracted yet — run Extract first.")
+        return 0, 0, 0
+    changed = clean = missing = 0
+    total = len(man)
+    for i, entry in enumerate(man.values(), 1):
+        wav = astore.wav_path(root, entry)
+        try:
+            st = wav.stat()
+        except OSError:
+            missing += 1
+            continue
+        base_sha = entry.get("sha1")
+        # `dirty` is deliberately not trusted here — this pass is how a file that was edited and
+        # then put back the way it was gets its flag cleared, so those always get re-read.
+        if base_sha and not entry.get("dirty") and st.st_size == entry.get("size") \
+                and entry.get("mtime") is not None \
+                and abs(st.st_mtime - entry["mtime"]) <= _MTIME_EPS:
+            clean += 1                      # already settled — no need to read the file
+            continue
+        if not base_sha or astore.sha1_file(wav) != base_sha:
+            entry["dirty"] = True
+            changed += 1
+        else:
+            entry.pop("dirty", None)
+            entry["size"]  = st.st_size     # unchanged bytes, but the stamps may be stale
+            entry["mtime"] = st.st_mtime
+            clean += 1
+        if i % 2000 == 0 or i == total:
+            log(f"  {i}/{total} checked — {changed} modified, {clean} unchanged")
+    astore.save_manifest(root, man)
+    log(f"Rescan done: {changed} modified, {clean} unchanged, {missing} not extracted")
+    return changed, clean, missing
 
 
 def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
                     wav_path: Path, entry: dict, log) -> bool:
-    fid = entry.get("source_file")
+    fid = entry.get("fid")
     if not fid or fid not in FILE_IDS:
-        log(f"ERROR: invalid source_file {fid!r}"); return False
+        log(f"ERROR: invalid archive id {fid!r}"); return False
     arc = archive_path(root, fid)
     if not arc.exists():
         log(f"Archive not found: {arc}"); return False
@@ -842,7 +1193,7 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
         log(f"[{fid}] Creating backup…"); shutil.copy2(arc, bak)
     off = entry["offset"]; max_pkts = entry["packets"]
     ch  = entry["channels"]; sr = entry.get("sample_rate") or SAMPLE_RATE
-    display = entry.get("friendly_name") or entry.get("stem") or wav_path.stem
+    display = entry.get("name") or wav_path.stem
     log(f"{display}  @ 0x{off:08X}  slot={max_pkts}p {ch}ch")
     try:
         raw_new, q_used = encode_wav_to_fit(
@@ -864,32 +1215,6 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
     log(f"  Written {n_new} pkts → OK"); return True
 
 
-def op_set_sample_rate(root: Path, game_root: Path, fid: str,
-                       offset: int, packets: int, channels: int,
-                       wav_path: Path, new_rate: int,
-                       xma2encode: str, log) -> bool:
-    arc = game_root / fid
-    if not arc.exists():
-        log(f"Archive not found: {arc}"); return False
-    raw_size = packets * PACKET_SIZE
-    with open(arc, "rb") as f:
-        f.seek(offset); raw = f.read(raw_size)
-    if len(raw) < raw_size:
-        log("Read error: file too short"); return False
-    wav_path.parent.mkdir(parents=True, exist_ok=True)
-    log(f"Decoding at {new_rate} Hz …")
-    dur = decode_xma2(raw, channels, wav_path, xma2encode, sample_rate=new_rate)
-    if dur > 0:
-        log(f"OK — {dur:.2f}s at {new_rate} Hz → {wav_path.name}")
-        stem = f"{offset:08X}_{channels}ch_{packets}p"
-        cat_p = catalog_path(root, fid); cat = load_catalog(cat_p)
-        if stem in cat:
-            cat[stem]["sample_rate"] = new_rate
-            cat[stem]["duration"]    = round(dur, 3)
-            save_catalog(cat_p, cat)
-        return True
-    log("Decode failed"); return False
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # GUI
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -899,12 +1224,14 @@ class App(tk.Tk):
         super().__init__()
         self.cfg        = load_config()
         self.audio_rows: list = []
-        self.filtered:   list = []
+        self._audio_panes: dict = {}        # pane-key -> browser pane (Audio tab + Speech sub-tabs)
+        self._btns_apply_changes: list = [] # one "Apply Changes" button per ops bar
+        self._a_ctx = None                  # context menu kept referenced while posted
         self._log_q:     queue.Queue = queue.Queue()
         self._op_thread: threading.Thread | None = None
+        self._audio_loading = False      # guards the off-thread catalog load (see _reload_audio)
         self._playing   = False
         self._pending_name_changes: dict = {}
-        self._pending_rate_changes: dict = {}
         self._loading_dlg      = None
         self._ld_bar = self._ld_pct = self._ld_note = None   # loading-dialog progress widgets
         self._preview_img      = None
@@ -1127,6 +1454,7 @@ class App(tk.Tk):
         self._nb.pack(fill=BOTH, expand=True)
 
         self._tab_audio    = ttk.Frame(self._nb)
+        self._tab_speech   = ttk.Frame(self._nb)
         self._tab_iff      = ttk.Frame(self._nb)
         self._tab_banks    = ttk.Frame(self._nb)
         self._tab_arena    = ttk.Frame(self._nb)
@@ -1138,6 +1466,7 @@ class App(tk.Tk):
         self._tab_settings = ttk.Frame(self._nb)
 
         self._nb.add(self._tab_audio,    text="  Audio  ")
+        self._nb.add(self._tab_speech,   text="  Speech  ")
         self._nb.add(self._tab_iff,      text="  IFF Textures  ")
         # WIP — Audio Banks & Arena Music tabs are HIDDEN for the 1.0 release (not yet finished).
         # The frames are still created and built below so nothing else breaks; re-add these two
@@ -1152,6 +1481,7 @@ class App(tk.Tk):
         self._nb.add(self._tab_settings, text="  Settings  ")
 
         self._build_audio_tab()
+        self._build_speech_tab()
         self._build_iff_tab()
         self._build_banks_tab()
         self._build_arena_tab()
@@ -1184,103 +1514,153 @@ class App(tk.Tk):
             self._log_ctx.tk_popup(e.x_root, e.y_root),
             self._log_ctx.grab_release()))
 
-    # ── Audio tab ─────────────────────────────────────────────────────────────
+    # ── Audio + Speech tabs ───────────────────────────────────────────────────
+    # Both tabs are instances of the same track-browser pane over self.audio_rows:
+    # the Audio tab shows every NON-speech folder (music/crowd/SFX) with a category
+    # filter; the Speech tab splits announcer voice work into sub-tabs
+    # (Play-by-Play / Color / Reporter / PA / Unsorted-commentary), one fixed folder each.
+    #
+    # The three booth voices are Randy Hahn (play-by-play), Drew Remenda (colour) and
+    # John Schrader (the intermission/rinkside reporter) -- all three are mixed together
+    # inside lines.bin, so the split is by category, not by bank.
+
+    SPEECH_PANES = (
+        ("pxp",      "  Play-by-Play  ", frozenset({"Speech_PxP"})),
+        ("color",    "  Color  ",        frozenset({"Speech_Color"})),
+        ("reporter", "  Reporter  ",     frozenset({"Speech_Reporter"})),
+        ("pa",       "  PA Announcer  ", frozenset({"PA"})),
+        ("unsorted", "  Unsorted  ",     frozenset({"Commentary"})),
+    )
 
     def _build_audio_tab(self):
         t = self._tab_audio
+        self._build_audio_ops_bar(t)
+        self._make_audio_pane(t, "audio", folders=None, with_category=True)
+
+    def _build_speech_tab(self):
+        t = self._tab_speech
+        self._build_audio_ops_bar(t)
+        nb = ttk.Notebook(t)
+        nb.pack(fill=BOTH, expand=True, padx=4, pady=(0, 4))
+        self._speech_nb = nb
+        self._speech_pane_tabs = {}
+        for key, title, folders in self.SPEECH_PANES:
+            f = ttk.Frame(nb)
+            nb.add(f, text=title)
+            self._speech_pane_tabs[key] = f
+            self._make_audio_pane(f, key, folders=folders, with_category=False)
+
+    def _build_audio_ops_bar(self, t):
+        """Global audio operations row — identical on the Audio and Speech tabs."""
         bar = ttk.Frame(t, padding=(4, 4, 4, 2))
         bar.pack(fill=X)
-
-        ttk.Label(bar, text="Category:").pack(side=LEFT)
-        self._v_cat = StringVar(value="All")
-        self._cat_cb = ttk.Combobox(bar, textvariable=self._v_cat,
-                                     state="readonly", width=20)
-        self._cat_cb.pack(side=LEFT, padx=(4, 8))
-        self._cat_cb.bind("<<ComboboxSelected>>", lambda _: self._apply_audio_filter())
-
-        ttk.Label(bar, text="Team:").pack(side=LEFT)
-        self._v_audio_team = StringVar(value="Any")
-        self._audio_team_cb = ttk.Combobox(
-            bar, textvariable=self._v_audio_team,
-            values=["Any"] + TEAMS, state="readonly", width=18)
-        self._audio_team_cb.pack(side=LEFT, padx=(4, 8))
-        self._audio_team_cb.bind("<<ComboboxSelected>>",
-                                  lambda _: self._apply_audio_filter())
-
-        ttk.Label(bar, text="Search:").pack(side=LEFT)
-        self._v_search = StringVar()
-        self._v_search.trace_add("write", lambda *_: self._apply_audio_filter())
-        ttk.Entry(bar, textvariable=self._v_search, width=24).pack(side=LEFT, padx=(4, 8))
-
-        ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
         ttk.Button(bar, text="Extract…",     command=self._open_extract_dlg).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Check All",     command=self._run_check).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Reload Names",  command=self._run_reload_names).pack(side=LEFT, padx=2)
-        self._btn_apply_changes = ttk.Button(bar, text="Apply Changes",
-                                             command=self._apply_pending_changes,
-                                             state=DISABLED)
-        self._btn_apply_changes.pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Patch Game",
-                   style="Accent.TButton",
+        ttk.Button(bar, text="Check All",    command=self._run_check).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Rescan Edits", command=self._run_rescan_edits).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Reload Names", command=self._run_reload_names).pack(side=LEFT, padx=2)
+        btn = ttk.Button(bar, text="Apply Changes",
+                         command=self._apply_pending_changes, state=DISABLED)
+        btn.pack(side=LEFT, padx=2)
+        self._btns_apply_changes.append(btn)
+        ttk.Button(bar, text="Patch Game", style="Accent.TButton",
                    command=self._run_reimport).pack(side=LEFT, padx=2)
 
-        lf = ttk.Frame(t)
+    def _make_audio_pane(self, parent, key: str, folders, with_category: bool):
+        """Build one filter-bar + track-list + action-row browser.
+        folders=None -> every non-speech folder (the Audio tab); a set -> only those."""
+        pane = {"key": key, "folders": folders, "filtered": [], "sort": {},
+                "v_cat": StringVar(value="All"), "cat_cb": None,
+                "v_bin": StringVar(value="All"), "bin_cb": None,
+                "v_team": StringVar(value="Any"), "v_search": StringVar()}
+        self._audio_panes[key] = pane
+
+        bar = ttk.Frame(parent, padding=(4, 4, 4, 2))
+        bar.pack(fill=X)
+        if with_category:
+            ttk.Label(bar, text="Category:").pack(side=LEFT)
+            cb = ttk.Combobox(bar, textvariable=pane["v_cat"],
+                              state="readonly", width=20)
+            cb.pack(side=LEFT, padx=(4, 8))
+            cb.bind("<<ComboboxSelected>>", lambda _e, p=pane: self._apply_audio_filter(p))
+            pane["cat_cb"] = cb
+        # Wave bank (.bin) the stream is stored in -- the storage axis, populated from
+        # audio_wave_banks.json rather than from the rows so the list stays in layout order
+        ttk.Label(bar, text="Bin:").pack(side=LEFT)
+        bcb = ttk.Combobox(bar, textvariable=pane["v_bin"], state="readonly", width=18,
+                           values=["All"] + wbanks.all_banks() + list(asfx.ALL_BANKS))
+        bcb.pack(side=LEFT, padx=(4, 8))
+        bcb.bind("<<ComboboxSelected>>", lambda _e, p=pane: self._apply_audio_filter(p))
+        pane["bin_cb"] = bcb
+        ttk.Label(bar, text="Team:").pack(side=LEFT)
+        tcb = ttk.Combobox(bar, textvariable=pane["v_team"],
+                           values=["Any"] + TEAMS, state="readonly", width=18)
+        tcb.pack(side=LEFT, padx=(4, 8))
+        tcb.bind("<<ComboboxSelected>>", lambda _e, p=pane: self._apply_audio_filter(p))
+        ttk.Label(bar, text="Search:").pack(side=LEFT)
+        pane["v_search"].trace_add("write", lambda *_a, p=pane: self._apply_audio_filter(p))
+        ttk.Entry(bar, textvariable=pane["v_search"], width=24).pack(side=LEFT, padx=(4, 8))
+
+        lf = ttk.Frame(parent)
         lf.pack(fill=BOTH, expand=True, padx=4, pady=(0, 4))
 
-        cols = ("name", "category", "banks", "duration", "rate", "source", "ch", "modified")
-        self._a_tree = ttk.Treeview(lf, columns=cols, show="headings",
-                                     selectmode="extended")
-        self._a_tree.heading("name",     text="Name",        command=lambda: self._sort_audio("name"))
-        self._a_tree.heading("category", text="Category",    command=lambda: self._sort_audio("category"))
-        self._a_tree.heading("banks",    text="Bank / Team", command=lambda: self._sort_audio("banks"))
-        self._a_tree.heading("duration", text="Duration",    command=lambda: self._sort_audio("duration"))
-        self._a_tree.heading("rate",     text="Sample Rate", command=lambda: self._sort_audio("rate"))
-        self._a_tree.heading("source",   text="Source",      command=lambda: self._sort_audio("source"))
-        self._a_tree.heading("ch",       text="Ch",          command=lambda: self._sort_audio("ch"))
-        self._a_tree.heading("modified", text="Mod",         command=lambda: self._sort_audio("modified"))
-        self._a_tree.column("name",     width=320, minwidth=180)
-        self._a_tree.column("category", width=130, minwidth=80)
-        self._a_tree.column("banks",    width=110, minwidth=70)
-        self._a_tree.column("duration", width=75,  minwidth=55,  anchor=E)
-        self._a_tree.column("rate",     width=80,  minwidth=60,  anchor=CENTER)
-        self._a_tree.column("source",   width=55,  minwidth=45,  anchor=CENTER)
-        self._a_tree.column("ch",       width=55,  minwidth=40,  anchor=CENTER)
-        self._a_tree.column("modified", width=40,  minwidth=35,  anchor=CENTER)
+        cols = ("name", "category", "bin", "team", "duration", "rate", "source", "ch", "modified")
+        tree = ttk.Treeview(lf, columns=cols, show="headings", selectmode="extended")
+        pane["tree"] = tree
+        for col, txt in (("name", "Name"), ("category", "Category"), ("bin", "Wave Bank"),
+                         ("team", "Team"), ("duration", "Duration"),
+                         ("rate", "Sample Rate"), ("source", "Source"),
+                         ("ch", "Ch"), ("modified", "Mod")):
+            tree.heading(col, text=txt,
+                         command=lambda c=col, p=pane: self._sort_audio(p, c))
+        tree.column("name",     width=320, minwidth=180)
+        tree.column("category", width=130, minwidth=80)
+        tree.column("bin",      width=130, minwidth=80)
+        tree.column("team",     width=140, minwidth=80)
+        tree.column("duration", width=75,  minwidth=55,  anchor=E)
+        tree.column("rate",     width=80,  minwidth=60,  anchor=CENTER)
+        tree.column("source",   width=55,  minwidth=45,  anchor=CENTER)
+        tree.column("ch",       width=55,  minwidth=40,  anchor=CENTER)
+        tree.column("modified", width=40,  minwidth=35,  anchor=CENTER)
 
-        vsb = ttk.Scrollbar(lf, orient=VERTICAL,   command=self._a_tree.yview)
-        hsb = ttk.Scrollbar(lf, orient=HORIZONTAL, command=self._a_tree.xview)
-        self._a_tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
-        self._a_tree.grid(row=0, column=0, sticky="nsew")
+        vsb = ttk.Scrollbar(lf, orient=VERTICAL,   command=tree.yview)
+        hsb = ttk.Scrollbar(lf, orient=HORIZONTAL, command=tree.xview)
+        tree.configure(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
+        tree.grid(row=0, column=0, sticky="nsew")
         vsb.grid(row=0, column=1, sticky="ns")
         hsb.grid(row=1, column=0, sticky="ew")
         lf.rowconfigure(0, weight=1); lf.columnconfigure(0, weight=1)
 
-        self._a_tree.tag_configure("modified", foreground="#4fc3f7")
-        self._a_tree.tag_configure("missing",  foreground="#888888")
-        self._a_tree.tag_configure("pending",  foreground="#FFB74D")
+        tree.tag_configure("modified", foreground="#4fc3f7")
+        tree.tag_configure("missing",  foreground="#888888")
+        tree.tag_configure("pending",  foreground="#FFB74D")
 
-        self._a_tree.bind("<<TreeviewSelect>>", self._on_audio_select)
-        self._a_tree.bind("<Double-1>",          self._on_audio_double)
-        self._a_tree.bind("<Button-3>",          self._show_audio_ctx)
-        self._a_ctx = None        # context menu is rebuilt per right-click (selection-aware)
+        tree.bind("<<TreeviewSelect>>", lambda _e, p=pane: self._on_audio_select(p))
+        tree.bind("<Double-1>",         lambda e, p=pane: self._on_audio_double(p, e))
+        tree.bind("<Button-3>",         lambda e, p=pane: self._show_audio_ctx(p, e))
 
-        ctrl = ttk.Frame(t, padding=(4, 2, 4, 4))
+        ctrl = ttk.Frame(parent, padding=(4, 2, 4, 4))
         ctrl.pack(fill=X)
-        self._btn_play     = ttk.Button(ctrl, text="▶  Play",          command=self._play,          state=DISABLED)
-        self._btn_stop     = ttk.Button(ctrl, text="■  Stop",          command=self._stop,          state=DISABLED)
-        self._btn_replace  = ttk.Button(ctrl, text="Replace…",         command=self._replace,       state=DISABLED)
-        self._btn_showfile = ttk.Button(ctrl, text="Show in Explorer",  command=self._show_in_explorer, state=DISABLED)
-        self._btn_openmod  = ttk.Button(ctrl, text="Open Modified Folder",
-                                         command=self._open_modified_folder)
-        self._btn_play.pack(side=LEFT, padx=2)
-        self._btn_stop.pack(side=LEFT, padx=2)
+        pane["btn_play"]     = ttk.Button(ctrl, text="▶  Play",
+                                          command=lambda p=pane: self._play(p), state=DISABLED)
+        pane["btn_stop"]     = ttk.Button(ctrl, text="■  Stop",
+                                          command=self._stop, state=DISABLED)
+        pane["btn_replace"]  = ttk.Button(ctrl, text="Replace…",
+                                          command=lambda p=pane: self._replace(p), state=DISABLED)
+        pane["btn_showfile"] = ttk.Button(ctrl, text="Show in Explorer",
+                                          command=lambda p=pane: self._show_in_explorer(p),
+                                          state=DISABLED)
+        btn_openmod = ttk.Button(ctrl, text="Open Modified Folder",
+                                 command=self._open_modified_folder)
+        pane["btn_play"].pack(side=LEFT, padx=2)
+        pane["btn_stop"].pack(side=LEFT, padx=2)
         ttk.Separator(ctrl, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=8)
-        self._btn_replace.pack(side=LEFT, padx=2)
-        self._btn_showfile.pack(side=LEFT, padx=2)
-        self._btn_openmod.pack(side=RIGHT, padx=2)
-        self._lbl_sel = ttk.Label(ctrl, text="No file selected",
-                                   foreground="#888888", font=("Segoe UI", 8))
-        self._lbl_sel.pack(side=LEFT, padx=10)
+        pane["btn_replace"].pack(side=LEFT, padx=2)
+        pane["btn_showfile"].pack(side=LEFT, padx=2)
+        btn_openmod.pack(side=RIGHT, padx=2)
+        pane["lbl_sel"] = ttk.Label(ctrl, text="No file selected",
+                                    foreground="#888888", font=("Segoe UI", 8))
+        pane["lbl_sel"].pack(side=LEFT, padx=10)
+        return pane
     def _build_arena_tab(self):
         t = self._tab_arena
         outer = ttk.Frame(t, padding=(12, 8))
@@ -1452,7 +1832,7 @@ class App(tk.Tk):
             dur   = f"{r['_dur']:.1f}s" if r.get("_dur") else ""
             ch    = ("Mono" if r["_ch"] == 1 else "Stereo") if r.get("_ch") else ""
             row   = r.get("_row")
-            modded = bool(row and row.get("has_mod"))
+            modded = bool(row and row.get("edited"))
             tag   = "modified" if modded else ("linked" if row else "unlinked")
             sound = (r.get("_sound") or "(unlinked)") + ("   ✓ replaced" if modded else "")
             self._bk_tree.insert("", END, tags=(tag,), values=(
@@ -1471,7 +1851,7 @@ class App(tk.Tk):
             messagebox.showinfo("No Linked Sound",
                 "This record's wave isn't in the audio catalog (crowd/bootup banks point "
                 "into their own wave region)."); return
-        row = r["_row"]; wav = row.get("mod_path") or row.get("wav_path")
+        row = r["_row"]; wav = row.get("wav_path")
         if not wav:
             messagebox.showinfo("Not Extracted",
                 f"Extract {row['file_id']} audio first to hear it."); return
@@ -1491,10 +1871,24 @@ class App(tk.Tk):
     def _bank_show_in_audio(self):
         r = self._bank_selected()
         if not r or not r.get("_row"): return
-        self._v_cat.set("All"); self._v_audio_team.set("Any")
-        self._v_search.set(r["_row"]["name"])
-        self._apply_audio_filter()
-        self._nb.select(self._tab_audio)
+        row    = r["_row"]
+        folder = row.get("folder", "")
+        # Route to whichever browser owns this track's folder: a Speech sub-tab
+        # for announcer folders, else the main Audio tab.
+        pane = self._audio_panes.get("audio")
+        if folder in SPEECH_FOLDERS:
+            for key, _title, folders in self.SPEECH_PANES:
+                if folder in folders:
+                    pane = self._audio_panes.get(key, pane)
+                    self._nb.select(self._tab_speech)
+                    self._speech_nb.select(self._speech_pane_tabs[key])
+                    break
+        else:
+            self._nb.select(self._tab_audio)
+        if pane is None: return
+        pane["v_cat"].set("All"); pane["v_team"].set("Any")
+        pane["v_search"].set(row["name"])
+        self._apply_audio_filter(pane)
 
     def _bank_export(self):
         if not self._bank_meta:
@@ -5602,191 +5996,289 @@ class App(tk.Tk):
     # ── Audio data ────────────────────────────────────────────────────────────
 
     def _reload_audio(self):
+        """Load the audio catalog OFF the UI thread.
+
+        This is the single most expensive thing on the startup path (~80k rows). Doing it inline
+        blocked the Tk mainloop before the first paint, so Windows drew the window as a blank
+        white rectangle and flagged it "not responding" — it looked like a hang but was only a
+        slow load. The file/JSON work now runs on a worker; only the widget updates come back to
+        the main thread via after(), because Tkinter is not thread-safe.
+        """
         root = self._get_root()
         if not root: return
-        self.audio_rows = load_all_audio(root)
-        for (fid, oh), ch in self._pending_name_changes.items():
-            for r in self.audio_rows:
-                r_oh = r["off_hex"] or (f"0x{r['offset']:08X}" if r.get("offset") else "")
-                if r["file_id"] == fid and r_oh == oh:
-                    if "name" in ch:     r["name"] = ch["name"]
-                    if "category" in ch: r["category"] = ch["category"]
-                    break
-        for (fid, oh), rc in self._pending_rate_changes.items():
-            for r in self.audio_rows:
-                r_oh = r["off_hex"] or (f"0x{r['offset']:08X}" if r.get("offset") else "")
-                if r["file_id"] == fid and r_oh == oh:
-                    r["sample_rate"] = rc["new_rate"]
-                    break
-        folders = sorted({r["folder"] for r in self.audio_rows if r["folder"]})
+        if self._audio_loading:          # Reload All double-click, or a reload during startup
+            return
+        self._audio_loading = True
+        self._v_status.set("Loading audio catalog…")
+
+        def work():
+            try:
+                # One-time fold of the old four-catalog + Modified/Audio layout into
+                # Audio/Extracted/. Runs here rather than at startup because this is the first
+                # thing to touch the store after the root is known, and nothing is deleted — the
+                # old JSONs are parked. Logging goes through _log_q: _log touches widgets.
+                if astore.needs_migration(root):
+                    try:
+                        astore.migrate(root, self._log_q.put)
+                    except Exception as e:
+                        self._log_q.put(f"Audio layout migration FAILED: {e}")
+                # Extracts made before the rate came from the wave banks recorded a hardcoded
+                # 48000 for every stream, so the 44.1 kHz banks are sitting on disk 8.8% sharp.
+                # Restamp them once.
+                if astore.manifest_schema(root) < astore.SCHEMA:
+                    try:
+                        astore.repair_sample_rates(root, self._log_q.put)
+                    except Exception as e:
+                        self._log_q.put(f"Sample-rate repair FAILED: {e}")
+                rows = load_all_audio(root)
+            except Exception as e:
+                self._log_q.put(f"Audio load FAILED: {e}")
+                rows = None
+            self.after(0, self._reload_audio_done, rows)
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _reload_audio_done(self, rows):
+        """Main-thread half of _reload_audio: everything from here down touches widgets."""
+        self._audio_loading = False
+        if rows is None:
+            self._v_status.set("Audio catalog failed to load")
+            return
+        self.audio_rows = rows
+        by_key = {r["key"]: r for r in self.audio_rows}
+        for k, ch in self._pending_name_changes.items():
+            r = by_key.get(k)
+            if not r: continue
+            if "name" in ch:     r["name"] = ch["name"]
+            if "category" in ch: r["category"] = ch["category"]
+        folders = sorted({r["folder"] for r in self.audio_rows
+                          if r["folder"] and r["folder"] not in SPEECH_FOLDERS})
         labels  = ["All"] + [CATEGORY_LABELS.get(f, f) for f in folders]
-        self._cat_cb["values"] = labels
-        if self._v_cat.get() not in labels:
-            self._v_cat.set("All")
+        for pane in self._audio_panes.values():
+            if pane["cat_cb"] is not None:
+                pane["cat_cb"]["values"] = labels
+                if pane["v_cat"].get() not in labels:
+                    pane["v_cat"].set("All")
         self._apply_audio_filter()
         self._log(f"Loaded {len(self.audio_rows)} audio tracks")
         self._v_status.set(f"{len(self.audio_rows)} tracks loaded")
 
-    def _apply_audio_filter(self):
-        cat_label = self._v_cat.get()
-        team      = self._v_audio_team.get()
-        search    = self._v_search.get().lower().strip()
+    def _pane_base_rows(self, pane) -> list:
+        """The rows a pane is allowed to show, before its own filter bar is applied."""
+        if pane["folders"] is None:
+            return [r for r in self.audio_rows if r["folder"] not in SPEECH_FOLDERS]
+        return [r for r in self.audio_rows if r["folder"] in pane["folders"]]
+
+    def _apply_audio_filter(self, pane=None):
+        if pane is None:
+            for p in self._audio_panes.values():
+                self._apply_audio_filter(p)
+            return
+        cat_label = pane["v_cat"].get()
+        bin_sel   = pane["v_bin"].get()
+        team      = pane["v_team"].get()
+        search    = pane["v_search"].get().lower().strip()
         cat_key   = None
         if cat_label != "All":
             for k, v in CATEGORY_LABELS.items():
                 if v == cat_label: cat_key = k; break
-        self.filtered = [
-            r for r in self.audio_rows
+        pane["filtered"] = [
+            r for r in self._pane_base_rows(pane)
             if (not cat_key or r["folder"] == cat_key)
-            and (team == "Any" or team.lower() in r["name"].lower()
-                 or team.lower() in r.get("banks_hay", ""))
+            and (bin_sel == "All" or r.get("bin", "") == bin_sel)
+            # exact match on the resolved team, not a substring sweep of the name --
+            # the old form matched "Boston" inside any line that merely said Boston
+            and (team == "Any" or r.get("team", "") == team)
             and (not search or search in r["name"].lower()
                  or search in r.get("banks_hay", "")
-                 or search in r.get("banks", "").lower())
+                 or search in r.get("team", "").lower()
+                 or search in r.get("bin", "").lower())
         ]
-        self._populate_audio_tree()
+        self._populate_audio_tree(pane)
 
-    def _populate_audio_tree(self):
-        self._a_tree.delete(*self._a_tree.get_children())
-        for row in self.filtered:
+    def _populate_audio_tree(self, pane):
+        """Fill the pane's tree in chunks so the UI keeps painting.
+
+        Inserting ~80k Treeview rows in one loop pins the mainloop for seconds. The rows go in a
+        few hundred at a time, yielding to Tk between batches, so the window stays live and the
+        first screenful shows up immediately.
+        """
+        tree = pane["tree"]
+        # Cancel an in-flight fill for this pane, or its remaining batches would append onto the
+        # rows we are about to lay down (stale duplicates after a fast filter change).
+        job = pane.get("fill_job")
+        if job:
+            try: self.after_cancel(job)
+            except Exception: pass
+        pane["fill_job"] = None
+        tree.delete(*tree.get_children())
+        self._fill_audio_chunk(pane, 0)
+
+    def _fill_audio_chunk(self, pane, start: int):
+        tree = pane["tree"]
+        rows = pane["filtered"]
+        end  = min(start + AUDIO_FILL_CHUNK, len(rows))
+        for row in rows[start:end]:
             dur   = f"{row['duration']:.1f}s" if row["duration"] else "—"
             ch    = "Mono" if row["channels"] == 1 else "Stereo"
-            mod   = "✓" if row["has_mod"] else ""
+            mod   = "✓" if row["edited"] else ""
             label = CATEGORY_LABELS.get(row["folder"], row["folder"])
             sr    = row.get("sample_rate", 0)
-            oh    = row["off_hex"] or (f"0x{row['offset']:08X}" if row.get("offset") else "")
-            rate_pending = (row["file_id"], oh) in self._pending_rate_changes
-            rate  = (f"{sr // 1000} kHz" + ("*" if rate_pending else "")) if sr else "—"
-            is_pending = (row["file_id"], oh) in self._pending_name_changes or rate_pending
+            rate  = f"{sr // 1000} kHz" if sr else "—"
+            is_pending = row["key"] in self._pending_name_changes
             if is_pending:
                 tags = ("pending",)
-            elif row["has_mod"]:
+            elif row["edited"]:
                 tags = ("modified",)
             elif not row["wav_path"]:
                 tags = ("missing",)
             else:
                 tags = ()
-            self._a_tree.insert("", END,
-                values=(row["name"], label, row.get("banks", ""), dur, rate,
-                        row["source"], ch, mod),
+            tree.insert("", END,
+                values=(row["name"], label, row.get("bin", ""), row.get("team", ""),
+                        dur, rate, row["source"], ch, mod),
                 tags=tags)
-        n_mod = sum(1 for r in self.filtered if r["has_mod"])
+        if end < len(rows):
+            pane["fill_job"] = self.after(1, self._fill_audio_chunk, pane, end)
+            self._v_status.set(f"Listing tracks… {end:,} of {len(rows):,}")
+            return
+        pane["fill_job"] = None
+        n_mod = sum(1 for r in rows if r["edited"])
         self._v_status.set(
-            f"Showing {len(self.filtered)} of {len(self.audio_rows)} tracks"
+            f"Showing {len(rows)} of {len(self.audio_rows)} tracks"
             + (f"  |  {n_mod} modified" if n_mod else ""))
 
-    _a_sort_state: dict = {}
-
-    def _sort_audio(self, col: str):
-        rev = self._a_sort_state.get(col, False)
+    def _sort_audio(self, pane, col: str):
+        rev = pane["sort"].get(col, False)
         keys = {
             "name":     lambda r: r["name"].lower(),
             "category": lambda r: r["folder"].lower(),
-            "banks":    lambda r: (r.get("banks", "") == "", r.get("banks", "").lower()),
+            "bin":      lambda r: (r.get("bin", "") == "", r.get("bin", "").lower()),
+            # untagged rows sort last in both directions -- a blank Team means "unknown",
+            # not "before Anaheim", so it should never crowd the top of the list
+            "team":     lambda r: (r.get("team", "") == "", r.get("team", "").lower()),
             "duration": lambda r: r["duration"],
             "rate":     lambda r: r.get("sample_rate", 0),
             "source":   lambda r: r["source"],
             "ch":       lambda r: r["channels"],
-            "modified": lambda r: int(r["has_mod"]),
+            "modified": lambda r: int(r["edited"]),
         }
-        self.filtered.sort(key=keys[col], reverse=rev)
-        self._a_sort_state[col] = not rev
-        self._populate_audio_tree()
+        pane["filtered"].sort(key=keys[col], reverse=rev)
+        pane["sort"][col] = not rev
+        self._populate_audio_tree(pane)
 
-    def _selected_audio_row(self) -> dict | None:
-        sel = self._a_tree.selection()
+    def _selected_audio_row(self, pane) -> dict | None:
+        tree = pane["tree"]
+        sel  = tree.selection()
         if not sel: return None
-        idx = self._a_tree.index(sel[0])
-        return self.filtered[idx] if idx < len(self.filtered) else None
+        idx = tree.index(sel[0])
+        return pane["filtered"][idx] if idx < len(pane["filtered"]) else None
 
-    def _selected_audio_rows(self) -> list:
+    def _selected_audio_rows(self, pane) -> list:
         rows = []
-        for iid in self._a_tree.selection():
-            idx = self._a_tree.index(iid)
-            if idx < len(self.filtered):
-                rows.append(self.filtered[idx])
+        tree = pane["tree"]
+        for iid in tree.selection():
+            idx = tree.index(iid)
+            if idx < len(pane["filtered"]):
+                rows.append(pane["filtered"][idx])
         return rows
 
-    def _on_audio_select(self, _=None):
-        row = self._selected_audio_row()
+    def _on_audio_select(self, pane):
+        row = self._selected_audio_row(pane)
         if not row:
-            self._btn_play.config(state=DISABLED)
-            self._btn_replace.config(state=DISABLED)
-            self._btn_showfile.config(state=DISABLED)
-            self._lbl_sel.config(text="No file selected", foreground="#888888")
+            pane["btn_play"].config(state=DISABLED)
+            pane["btn_replace"].config(state=DISABLED)
+            pane["btn_showfile"].config(state=DISABLED)
+            pane["lbl_sel"].config(text="No file selected", foreground="#888888")
             return
         has_wav  = bool(row["wav_path"])
-        has_file = has_wav or row["has_mod"]
-        self._btn_play.config(state=NORMAL if has_wav else DISABLED)
-        self._btn_replace.config(state=NORMAL)
-        self._btn_showfile.config(state=NORMAL if has_file else DISABLED)
+        has_file = has_wav or row["edited"]
+        pane["btn_play"].config(state=NORMAL if has_wav else DISABLED)
+        pane["btn_replace"].config(state=NORMAL)
+        pane["btn_showfile"].config(state=NORMAL if has_file else DISABLED)
         sr  = row.get("sample_rate", 0)
         sr_ = f"  |  {sr // 1000} kHz" if sr else ""
-        col = "#4fc3f7" if row["has_mod"] else "#cccccc"
-        self._lbl_sel.config(
+        col = "#4fc3f7" if row["edited"] else "#cccccc"
+        pane["lbl_sel"].config(
             text=f"{row['name']}  |  {row['source']}  |  "
                  f"{'Mono' if row['channels']==1 else 'Stereo'}{sr_}"
-                 f"{'  [modified]' if row['has_mod'] else ''}",
+                 f"{'  [modified]' if row['edited'] else ''}",
             foreground=col)
 
-    def _on_audio_double(self, event=None):
+    def _on_audio_double(self, pane, event=None):
         if event:
-            col = self._a_tree.identify_column(event.x)
-            if col == "#1": self._inline_edit_name(event); return
-            if col == "#2": self._inline_edit_category(event); return
-        self._play()
+            col = pane["tree"].identify_column(event.x)
+            if col == "#1": self._inline_edit_name(pane, event); return
+            if col == "#2": self._inline_edit_category(pane, event); return
+        self._play(pane)
 
     # ── Audio context menu ────────────────────────────────────────────────────
 
-    def _show_audio_ctx(self, event):
+    def _show_audio_ctx(self, pane, event):
         # Right-clicking a row that's NOT in the current selection selects just it;
         # right-clicking inside a multi-selection keeps the whole selection.
-        iid = self._a_tree.identify_row(event.y)
-        if iid and iid not in self._a_tree.selection():
-            self._a_tree.selection_set(iid)
-        self._on_audio_select()
-        rows = self._selected_audio_rows()
+        tree = pane["tree"]
+        iid  = tree.identify_row(event.y)
+        if iid and iid not in tree.selection():
+            tree.selection_set(iid)
+        self._on_audio_select(pane)
+        rows = self._selected_audio_rows(pane)
         n    = len(rows)
-        m = Menu(self._a_tree, tearoff=0)
+        m = Menu(tree, tearoff=0)
         if n <= 1:
             row = rows[0] if rows else None
-            m.add_command(label="▶  Play", command=self._play,
+            m.add_command(label="▶  Play", command=lambda: self._play(pane),
                           state=NORMAL if (row and row["wav_path"]) else DISABLED)
-            m.add_command(label="Replace…", command=self._replace,
+            m.add_command(label="Replace…", command=lambda: self._replace(pane),
                           state=NORMAL if row else DISABLED)
-            m.add_command(label="Patch This File", command=self._patch_single,
-                          state=NORMAL if (row and row["has_mod"]) else DISABLED)
+            # Not gated on "edited": writing a track's own extracted audio back into the
+            # archive is a legitimate thing to want (it is how you re-apply after a .bak
+            # restore, and how you patch a file you overwrote outside the launcher). All it
+            # needs is a WAV on disk.
+            m.add_command(label="Patch This File", command=lambda: self._patch_single(pane),
+                          state=NORMAL if (row and row["wav_path"]) else DISABLED)
             m.add_separator()
-            m.add_command(label="Show in Explorer",          command=self._show_in_explorer)
-            m.add_command(label="Show Original in Explorer", command=self._show_original)
+            m.add_command(label="Show in Explorer",
+                          command=lambda: self._show_in_explorer(pane))
+            m.add_command(label="Revert to Original",
+                          command=lambda: self._revert_audio(pane),
+                          state=NORMAL if (row and row["edited"]) else DISABLED)
             m.add_separator()
-            m.add_command(label="Edit Name…",     command=self._inline_edit_name_menu)
-            m.add_command(label="Set Category…",   command=self._bulk_set_category)
-            m.add_command(label="Set Sample Rate…", command=self._bulk_set_rate,
-                          state=NORMAL if (row and row.get("offset") is not None) else DISABLED)
+            m.add_command(label="Edit Name…",
+                          command=lambda: self._inline_edit_name_menu(pane))
+            m.add_command(label="Set Category…",
+                          command=lambda: self._bulk_set_category(pane))
+            m.add_command(label="Set Team…",
+                          command=lambda: self._bulk_set_team(pane),
+                          state=NORMAL if row else DISABLED)
         else:
             m.add_command(label=f"{n} tracks selected", state=DISABLED)
             m.add_separator()
-            m.add_command(label=f"Set Category for {n}…", command=self._bulk_set_category)
-            any_rate = any(r.get("offset") is not None and r["wav_path"] for r in rows)
-            m.add_command(label=f"Set Sample Rate for {n}…", command=self._bulk_set_rate,
-                          state=NORMAL if any_rate else DISABLED)
+            m.add_command(label=f"Set Category for {n}…",
+                          command=lambda: self._bulk_set_category(pane))
+            m.add_command(label=f"Set Team for {n}…",
+                          command=lambda: self._bulk_set_team(pane))
+            n_ed = sum(1 for r in rows if r["edited"])
+            m.add_command(label=f"Revert {n_ed} to Original",
+                          command=lambda: self._revert_audio(pane),
+                          state=NORMAL if n_ed else DISABLED)
         self._a_ctx = m          # keep a reference alive while the menu is posted
         try: m.tk_popup(event.x_root, event.y_root)
         finally: m.grab_release()
 
     # ── Audio inline edit ─────────────────────────────────────────────────────
 
-    def _inline_edit_name(self, event=None):
-        sel = self._a_tree.selection()
+    def _inline_edit_name(self, pane, event=None):
+        tree = pane["tree"]
+        sel  = tree.selection()
         if not sel: return
-        iid = sel[0]; row = self._selected_audio_row()
+        iid = sel[0]; row = self._selected_audio_row(pane)
         if not row: return
-        bbox = self._a_tree.bbox(iid, column="#1")
+        bbox = tree.bbox(iid, column="#1")
         if not bbox: return
         x, y, w, h = bbox
         var = StringVar(value=row["name"])
-        ent = ttk.Entry(self._a_tree, textvariable=var)
+        ent = ttk.Entry(tree, textvariable=var)
         ent.place(x=x, y=y, width=w, height=h)
         ent.select_range(0, END); ent.focus_set()
         def confirm(e=None):
@@ -5797,26 +6289,28 @@ class App(tk.Tk):
         ent.bind("<Return>", confirm); ent.bind("<Escape>", cancel)
         ent.bind("<FocusOut>", cancel)
 
-    def _inline_edit_name_menu(self):
-        sel = self._a_tree.selection()
+    def _inline_edit_name_menu(self, pane):
+        tree = pane["tree"]
+        sel  = tree.selection()
         if sel:
-            bbox = self._a_tree.bbox(sel[0], column="#1")
+            bbox = tree.bbox(sel[0], column="#1")
             if bbox:
                 class _E: pass
                 e = _E(); e.x = bbox[0] + 2
-                self._inline_edit_name(e)
+                self._inline_edit_name(pane, e)
 
-    def _inline_edit_category(self, event=None):
-        sel = self._a_tree.selection()
+    def _inline_edit_category(self, pane, event=None):
+        tree = pane["tree"]
+        sel  = tree.selection()
         if not sel: return
-        iid = sel[0]; row = self._selected_audio_row()
+        iid = sel[0]; row = self._selected_audio_row(pane)
         if not row: return
-        bbox = self._a_tree.bbox(iid, column="#2")
+        bbox = tree.bbox(iid, column="#2")
         if not bbox: return
         x, y, w, h = bbox
         cats = sorted(CATEGORY_LABELS.values())
         cur  = CATEGORY_LABELS.get(row["folder"], row["folder"])
-        cb   = ttk.Combobox(self._a_tree, values=cats, state="readonly")
+        cb   = ttk.Combobox(tree, values=cats, state="readonly")
         cb.set(cur); cb.place(x=x, y=y, width=w, height=h); cb.focus_set()
         cb.after(30, lambda: cb.event_generate("<Down>") if cb.winfo_exists() else None)
         def confirm(e=None):
@@ -5829,25 +6323,14 @@ class App(tk.Tk):
             if cb.winfo_exists(): cb.destroy()
         cb.bind("<<ComboboxSelected>>", confirm); cb.bind("<Escape>", cancel)
 
-    def _inline_edit_category_menu(self):
-        sel = self._a_tree.selection()
-        if sel:
-            bbox = self._a_tree.bbox(sel[0], column="#2")
-            if bbox:
-                class _E: pass
-                e = _E(); e.x = bbox[0] + 2
-                self._inline_edit_category(e)
-
     def _apply_name_change(self, row: dict, new_name=None, new_category=None, refresh=True):
         root    = self._get_root()
         if not root: return
-        fid     = row["file_id"]
-        off_hex = row["off_hex"] or (f"0x{row['offset']:08X}" if row.get("offset") else None)
-        if not off_hex:
+        key     = row.get("key")
+        if not key:
             if refresh:
                 messagebox.showwarning("Cannot Edit", "No offset info for this entry.")
             return
-        key     = (fid, off_hex)
         pending = self._pending_name_changes.get(key, {"stem": row["stem"]})
         if new_name is not None:
             pending["name"] = new_name; pending.setdefault("category", row["category"])
@@ -5866,172 +6349,66 @@ class App(tk.Tk):
         if not self._pending_name_changes: return
         root = self._get_root()
         if not root: return
-        by_fid: dict = {}
-        for (fid, oh), ch in self._pending_name_changes.items():
-            by_fid.setdefault(fid, {})[oh] = ch
-        for fid, changes in by_fid.items():
-            nm_path = names_path(root, fid)
-            raw = json.loads(nm_path.read_text(encoding="utf-8")) if nm_path.exists() else {}
-            for oh, ch in changes.items():
-                entry = raw.get(oh, {}); entry.update(ch); raw[oh] = entry
-            nm_path.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-            self._log(f"[{fid}] Saved {len(changes)} name change(s)")
+        astore.update_names(root, self._pending_name_changes)
+        self._log(f"Saved {len(self._pending_name_changes)} name change(s) to "
+                  f"{astore.names_file(root).name}")
         self._pending_name_changes.clear()
         self._update_apply_btn()
 
-    def _queue_rate_change(self, row: dict, new_rate: int, refresh=True):
-        """Stage a sample-rate change instead of running it immediately.
-        Applied (decoded) in one batch by Apply Changes."""
-        fid     = row["file_id"]
-        off_hex = row["off_hex"] or (f"0x{row['offset']:08X}" if row.get("offset") else None)
-        if not off_hex or row.get("offset") is None:
-            if refresh:
-                messagebox.showwarning("Cannot Edit", "No offset info for this entry.")
-            return
-        key = (fid, off_hex)
-        cur = row.get("sample_rate", SAMPLE_RATE) or SAMPLE_RATE
-        if new_rate == cur:
-            self._pending_rate_changes.pop(key, None)        # back to original = nothing to do
-        else:
-            self._pending_rate_changes[key] = {
-                "offset":   row["offset"], "packets": row["max_pkts"],
-                "channels": row["channels"], "wav_path": row["wav_path"],
-                "new_rate": new_rate, "stem": row["stem"], "name": row["name"],
-            }
-        row["sample_rate"] = new_rate                        # reflect in the list right away
-        if refresh:
-            self._update_apply_btn()
-            self._apply_audio_filter()
-
     def _apply_pending_changes(self):
-        """One button for everything staged: name/category edits + sample-rate changes."""
+        """Commit the staged name/category edits.
+
+        There used to be a staged sample-rate change here too. There isn't any more: the rate
+        is a property of the wave bank and is read out of the game's own cue tables
+        (wave_banks.BANK_RATES), so there is nothing left for the user to choose -- and the
+        old dialog's default of 48000 was itself the thing that made the 44.1 kHz banks sharp.
+        """
         if self._op_busy(): return
-        had_names    = bool(self._pending_name_changes)
-        rate_changes = dict(self._pending_rate_changes)
-        if not had_names and not rate_changes:
+        if not self._pending_name_changes:
             return
         root = self._get_root()
         if not root: return
-        xma = game_root = None
-        if rate_changes:
-            xma = self._get_xma2encode()
-            if not xma: return                               # keep pending; tool missing
-            game_root = self._get_game_root()
-            if not game_root:
-                messagebox.showwarning("No Root",
-                    "Configure the game files folder first."); return
-        # Commit: names to JSON now (fast), then batch the slow decodes in one thread.
         self._flush_pending_names()
-        self._pending_rate_changes.clear()
         self._update_apply_btn()
-        n = (1 if had_names else 0) + len(rate_changes)
-        self._log(f"─── Apply Changes ({n} item group(s)) ───")
+        self._log("─── Apply Changes ───")
         self._run_in_thread(
-            self._apply_changes_worker,
-            root, game_root, had_names, rate_changes, xma, self._log_q.put,
+            op_reload_names, root, self._log_q.put,
             op_label="Applying changes…", on_done=self._reload_audio)
 
-    def _apply_changes_worker(self, root, game_root, had_names, rate_changes, xma, log):
-        if had_names:
-            op_reload_names(root, log)
-        if not rate_changes:
-            return
-        items = list(rate_changes.items())
-
-        # A rename moves the WAV, so if names were just applied, re-resolve each rate
-        # change's target file from the current catalog (by stem) before decoding.
-        if had_names:
-            cat_cache: dict = {}
-            for (fid, _oh), rc in items:
-                cat = cat_cache.get(fid)
-                if cat is None:
-                    cat = cat_cache[fid] = load_catalog(catalog_path(root, fid))
-                e = cat.get(f"{rc['offset']:08X}_{rc['channels']}ch_{rc['packets']}p")
-                if e and e.get("wav"):
-                    rc["wav_path"] = str(root / e["wav"])
-
-        def _decode(kv):
-            (fid, _oh), rc = kv
-            try:
-                with open(game_root / fid, "rb") as f:
-                    f.seek(rc["offset"]); raw = f.read(rc["packets"] * PACKET_SIZE)
-            except Exception as e:
-                return fid, rc, 0.0, f"read error: {e}"
-            if len(raw) < rc["packets"] * PACKET_SIZE:
-                return fid, rc, 0.0, "archive too short"
-            wp = Path(rc["wav_path"]); wp.parent.mkdir(parents=True, exist_ok=True)
-            try:
-                dur = decode_xma2(raw, rc["channels"], wp, xma, sample_rate=rc["new_rate"])
-            except Exception as e:
-                return fid, rc, 0.0, str(e)
-            return fid, rc, dur, None
-
-        # Decode in parallel — each xma2encode is its own subprocess (releases the GIL)
-        # and writes to a unique temp dir + WAV, so N tracks finish in ~1/N the wall time.
-        workers = max(2, min(len(items), os.cpu_count() or 4))
-        updates: dict = {}                       # fid -> [(stem, new_rate, dur)]
-        ok = 0
-        with ThreadPoolExecutor(max_workers=workers) as ex:
-            for fid, rc, dur, err in ex.map(_decode, items):
-                if err or dur <= 0:
-                    log(f"  FAILED {rc['name']}: {err or 'decode failed'}"); continue
-                stem = f"{rc['offset']:08X}_{rc['channels']}ch_{rc['packets']}p"
-                updates.setdefault(fid, []).append((stem, rc["new_rate"], dur))
-                log(f"  {rc['name']} → {rc['new_rate']} Hz ({dur:.2f}s)"); ok += 1
-        # Catalog writes serialized here (one load+save per archive) — avoids the
-        # read-modify-write race that parallel op_set_sample_rate calls would have.
-        for fid, ups in updates.items():
-            cat_p = catalog_path(root, fid); cat = load_catalog(cat_p)
-            for stem, nr, dur in ups:
-                if stem in cat:
-                    cat[stem]["sample_rate"] = nr
-                    cat[stem]["duration"]    = round(dur, 3)
-            save_catalog(cat_p, cat)
-        # Persist the chosen rates into the names JSON too, so they travel as shareable
-        # metadata (mod-pack / names export) alongside name + category edits.
-        names_writes: dict = {}
-        for (fid, oh), rc in rate_changes.items():
-            names_writes.setdefault(fid, {})[oh] = rc["new_rate"]
-        for fid, m in names_writes.items():
-            np_ = names_path(root, fid)
-            raw = json.loads(np_.read_text(encoding="utf-8")) if np_.exists() else {}
-            for oh, rate in m.items():
-                cur = raw.get(oh) if isinstance(raw.get(oh), dict) else {}
-                cur = dict(cur or {}); cur["sample_rate"] = rate; raw[oh] = cur
-            np_.write_text(json.dumps(raw, indent=2), encoding="utf-8")
-        log(f"─── Sample-rate: {ok}/{len(items)} applied ───")
-
     def _update_apply_btn(self):
-        n = len(self._pending_name_changes) + len(self._pending_rate_changes)
-        self._btn_apply_changes.config(
-            text=f"Apply Changes ({n})" if n else "Apply Changes",
-            state=NORMAL if n else DISABLED)
+        n = len(self._pending_name_changes)
+        for btn in self._btns_apply_changes:
+            btn.config(text=f"Apply Changes ({n})" if n else "Apply Changes",
+                       state=NORMAL if n else DISABLED)
 
     # ── Audio playback ────────────────────────────────────────────────────────
 
-    def _play(self):
-        row = self._selected_audio_row()
+    def _play(self, pane):
+        row = self._selected_audio_row(pane)
         if not row: return
-        wav = row["mod_path"] if row["has_mod"] else row["wav_path"]
+        wav = row["wav_path"]
         if not wav:
             messagebox.showinfo("Not Extracted",
                 "Run Extract first to generate WAV files."); return
         try:
             winsound.PlaySound(wav, winsound.SND_FILENAME | winsound.SND_ASYNC)
-            self._btn_stop.config(state=NORMAL); self._playing = True
+            pane["btn_stop"].config(state=NORMAL); self._playing = True
         except Exception as e:
             messagebox.showerror("Playback Error", str(e))
 
     def _stop(self):
         winsound.PlaySound(None, winsound.SND_PURGE)
-        self._btn_stop.config(state=DISABLED); self._playing = False
+        for pane in self._audio_panes.values():
+            pane["btn_stop"].config(state=DISABLED)
+        self._playing = False
 
-    def _replace(self):
-        self._replace_row(self._selected_audio_row())
+    def _replace(self, pane):
+        self._replace_row(self._selected_audio_row(pane))
 
     def _replace_row(self, row):
         """Shared Replace pipeline — used by the Audio tab and the Audio Banks tab.
-        Validates the new WAV fits the original slot, then stages it in Modified/Audio/."""
+        Validates the new WAV fits the original slot, then overwrites the extracted WAV in
+        place; the manifest's pristine sha1 is what marks it as edited from then on."""
         if not row: return
         tools = self._get_tools(); root = self._get_root()
         if not tools or not root: return
@@ -6063,12 +6440,21 @@ class App(tk.Tk):
             status = "fits perfectly" if excess == 0 else f"fits ({-excess} pkts spare)"
             msg = (f"Size check: {status}.{q_note}"
                    f"  Slot: {max_pkts}p ({dur_orig:.2f}s)\n  Yours: {n_new}p ({dur_new:.2f}s)\n\n"
-                   "Copy to Modified folder?")
+                   "Replace the extracted WAV?")
             if not messagebox.askyesno("Confirm Replace", msg): return
-        dest_dir = modified_audio_dir(root) / row["folder"]
-        dest_dir.mkdir(parents=True, exist_ok=True)
-        shutil.copy2(new_wav, dest_dir / f"{row['name']}.wav")
-        self._log(f"Saved to Modified/Audio/{row['folder']}/{row['name']}.wav")
+        man   = astore.load_manifest(root)
+        key   = row.get("key") or ""
+        entry = man.get(key)
+        dest  = (astore.wav_path(root, entry) if entry
+                 else astore.extracted_root(root) / row["folder"] / f"{row['name']}.wav")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(new_wav, dest)
+        if entry is not None:
+            # copy2 carries the *source* file's timestamp over, so the mtime test can't be
+            # trusted here — but we don't need it to guess: we just did the replacing.
+            entry["dirty"] = True
+            astore.save_manifest(root, man)
+        self._log(f"Replaced {astore.rel_wav(root, dest)}")
         self._reload_audio()
         if getattr(self, "_bank_records", None):     # keep the Banks tab links fresh
             self._bank_populate()
@@ -6076,13 +6462,13 @@ class App(tk.Tk):
     def _open_modified_folder(self):
         root = self._get_root()
         if not root: return
-        mod = modified_audio_dir(root); mod.mkdir(parents=True, exist_ok=True)
-        os.startfile(str(mod))
+        ex = audio_dir(root); ex.mkdir(parents=True, exist_ok=True)
+        os.startfile(str(ex))
 
-    def _show_in_explorer(self):
-        row = self._selected_audio_row()
+    def _show_in_explorer(self, pane):
+        row = self._selected_audio_row(pane)
         if not row: return
-        target = row["mod_path"] or row["wav_path"]
+        target = row["wav_path"]
         if target and Path(target).exists():
             subprocess.Popen(f'explorer /select,"{target}"')
         else:
@@ -6091,56 +6477,84 @@ class App(tk.Tk):
                 folder = audio_dir(root) / row["folder"]
                 if folder.exists(): os.startfile(str(folder))
 
-    def _show_original(self):
-        row = self._selected_audio_row()
-        if not row or not row["wav_path"]: return
-        if Path(row["wav_path"]).exists():
-            subprocess.Popen(f'explorer /select,"{row["wav_path"]}"')
+    def _revert_audio(self, pane):
+        """Re-decode the selected tracks from the archive.
 
-    def _bulk_set_rate(self):
-        """Stage a sample-rate change for every selected, extracted track (works for 1)."""
-        rows = [r for r in self._selected_audio_rows()
-                if r.get("offset") is not None and r["wav_path"]]
+        Editing happens in place now, so there is no pristine copy on disk to copy back —
+        the archive is the original, and re-extracting is the undo.
+        """
+        rows = [r for r in self._selected_audio_rows(pane) if r["edited"]]
         if not rows:
-            messagebox.showinfo("Not Extracted",
-                "Select one or more extracted tracks to set the sample rate."); return
+            messagebox.showinfo("Nothing to Revert",
+                "Select one or more edited tracks."); return
+        if self._op_busy(): return
+        root = self._get_root()
+        if not root: return
+        xma = self._get_xma2encode()
+        if not xma: return
         n = len(rows)
-        rates    = {r.get("sample_rate", SAMPLE_RATE) or SAMPLE_RATE for r in rows}
-        cur_rate = next(iter(rates)) if len(rates) == 1 else SAMPLE_RATE
-        title    = rows[0]["name"] if n == 1 else f"{n} tracks selected"
-        dlg = Toplevel(self); dlg.title("Set Sample Rate")
+        if not messagebox.askyesno(
+                "Revert to Original",
+                f"Discard your changes to {n} track(s) and re-extract them from the game "
+                "files?\n\nThis cannot be undone."):
+            return
+        keys = [r["key"] for r in rows]
+        self._log(f"─── Revert {n} track(s) ───")
+        self._run_in_thread(op_revert_audio, root, keys, xma, self._log_q.put,
+                            op_label="Reverting…", on_done=self._reload_audio)
+
+    def _bulk_set_team(self, pane):
+        """Set (or clear) the Team tag on every selected track (works for 1).
+
+        Unlike name/category this changes nothing on disk beyond a metadata field -- no WAV
+        moves, nothing is re-decoded -- so it is written straight through rather than staged.
+        The value goes in Audio_Names.json next to name/category, which is what makes it
+        survive a re-extract and travel in a shared names export. `team_tag` only fills in the
+        ~6% it can prove; this is how the rest get filled in.
+        """
+        rows = self._selected_audio_rows(pane)
+        if not rows: return
+        root = self._get_root()
+        if not root: return
+        n     = len(rows)
+        title = rows[0]["name"] if n == 1 else f"{n} tracks selected"
+        dlg = Toplevel(self); dlg.title("Set Team")
         dlg.resizable(False, False); dlg.grab_set()
         f = ttk.Frame(dlg, padding=18); f.pack(fill=BOTH, expand=True)
         ttk.Label(f, text=title, font=("Segoe UI", 9, "bold")).pack(anchor=W)
-        ttk.Label(f, text="Lower rate = lower pitch/slower.  Higher = higher/faster.",
-                  foreground="#888888").pack(anchor=W, pady=(4, 8))
+        ttk.Label(f, text="Blank = no team. This only tags the track for the Team filter; "
+                          "it does not change the audio.",
+                  foreground="#888888", wraplength=340).pack(anchor=W, pady=(4, 8))
         sf = ttk.Frame(f); sf.pack(fill=X)
-        ttk.Label(sf, text="Sample rate (Hz):").pack(side=LEFT)
-        v  = StringVar(value=str(cur_rate))
-        ttk.Entry(sf, textvariable=v, width=10).pack(side=LEFT, padx=6)
-        cb = ttk.Combobox(sf, values=["22050","32000","44100","48000"],
-                           width=7, state="readonly"); cb.pack(side=LEFT)
-        cb.bind("<<ComboboxSelected>>", lambda _: v.set(cb.get()))
-        def apply():
-            try:
-                new_rate = int(v.get())
-                if not 8000 <= new_rate <= 192000: raise ValueError
-            except ValueError:
-                messagebox.showerror("Invalid", "Enter a rate between 8000–192000.", parent=dlg)
-                return
-            dlg.destroy()
-            for r in rows:
-                self._queue_rate_change(r, new_rate, refresh=False)
-            self._update_apply_btn()
-            self._apply_audio_filter()
-        ttk.Button(f, text="Queue Change" + ("" if n == 1 else f"  (×{n})"),
-                   style="Accent.TButton", command=apply).pack(pady=(10, 2))
-        ttk.Label(f, text="Staged until you press Apply Changes (batched with name edits).",
-                  foreground="#888888", font=("Segoe UI", 8)).pack()
+        ttk.Label(sf, text="Team:").pack(side=LEFT)
+        cb = ttk.Combobox(sf, values=["(none)"] + list(TEAMS), width=24, state="readonly")
+        cb.set(rows[0].get("team") or "(none)")
+        cb.pack(side=LEFT, padx=6)
 
-    def _bulk_set_category(self):
+        def apply():
+            team = cb.get()
+            if team == "(none)":
+                team = ""
+            dlg.destroy()
+            keys = [r["key"] for r in rows]
+            # "" is a real, meaningful value here -- it is how the user says "team_tag guessed
+            # wrong, this one has no team" -- so it is stored, not dropped.
+            astore.update_names(root, {k: {"team": team} for k in keys})
+            man = astore.load_manifest(root)
+            for k in keys:
+                if k in man:
+                    man[k]["team"] = team
+            astore.save_manifest(root, man)
+            for r in rows:
+                r["team"] = team
+            self._apply_audio_filter()
+            self._log(f"Team set to '{team or '(none)'}' on {n} track(s)")
+        ttk.Button(f, text="Set Team" + ("" if n == 1 else f"  (×{n})"),
+                   style="Accent.TButton", command=apply).pack(pady=(10, 2))
+
+    def _bulk_set_category(self, pane):
         """Stage a category change for every selected track (works for 1)."""
-        rows = self._selected_audio_rows()
+        rows = self._selected_audio_rows(pane)
         if not rows: return
         n = len(rows)
         cats  = sorted(CATEGORY_LABELS.values())
@@ -6168,33 +6582,39 @@ class App(tk.Tk):
         ttk.Label(f, text="Staged until you press Apply Changes.",
                   foreground="#888888", font=("Segoe UI", 8)).pack()
 
-    def _patch_single(self):
-        row = self._selected_audio_row()
-        if not row or not row["has_mod"]:
-            messagebox.showinfo("No Modification",
-                "Select a track that has a modified file."); return
+    def _patch_single(self, pane):
+        row = self._selected_audio_row(pane)
+        if not row or not row["wav_path"]:
+            messagebox.showinfo("Nothing to Patch",
+                "Select a track that has an extracted WAV."); return
         tools = self._get_tools(); root = self._get_root()
         if not tools or not root or self._op_busy(): return
         xma2encode, ffmpeg = tools
         arc = archive_path(root, row["source"])
         if not arc.exists():
             messagebox.showerror("Archive Not Found", f"Not found:\n{arc}"); return
+        note = ("" if row["edited"] else
+                "\nThis file isn't flagged as modified, so unless you edited it outside the\n"
+                "launcher this re-encodes the original audio back over itself.\n")
         if not messagebox.askyesno("Patch Single Track",
-                f"Write '{row['name']}' into {row['source']}?\n\n"
+                f"Write '{row['name']}' into {row['source']}?\n{note}\n"
                 "A .bak backup is created if one doesn't exist."): return
         self._log(f"─── Patch Single: {row['name']} ───")
-        entry = {"source_file": row["source"], "offset": row["offset"],
+        entry = {"fid": row["source"], "offset": row["offset"],
                  "packets": row["max_pkts"], "channels": row["channels"],
                  "sample_rate": row.get("sample_rate"),
-                 "friendly_name": row["name"], "stem": row["stem"]}
-        def work(): op_patch_single(root, ffmpeg, xma2encode, Path(row["mod_path"]), entry, self._log_q.put)
+                 "name": row["name"]}
+        def work(): op_patch_single(root, ffmpeg, xma2encode, Path(row["wav_path"]), entry, self._log_q.put)
         self._run_in_thread(work, on_done=self._reload_audio)
+
     def _open_extract_dlg(self):
         if self._op_busy(): return
         root = self._get_root(); xma = self._get_xma2encode()
         if not root or not xma: return
         win = Toplevel(self); win.title("Extract Audio")
-        win.geometry("380x260"); win.resizable(False, False); win.grab_set()
+        # Vertically resizable and sized above the packed requirement: the bank list grew when the
+        # authored SFX banks joined it, and a fixed 560 clipped the Extract button off the bottom.
+        win.geometry("420x620"); win.resizable(False, True); win.minsize(420, 600); win.grab_set()
         f = ttk.Frame(win, padding=18); f.pack(fill=BOTH, expand=True)
         ttk.Label(f, text="Extract Audio",
                   font=("Segoe UI", 11, "bold")).pack(pady=(0, 10))
@@ -6210,16 +6630,75 @@ class App(tk.Tk):
                             state=NORMAL if exists else DISABLED).pack(
                 anchor=W, padx=16, pady=2)
             checks[fid] = (var, exists)
-        ttk.Label(f, text="May take several minutes per archive.",
-                  foreground="#888888").pack(pady=(6, 0))
+
+        # Wave-bank scoping. A full extract is ~81k xma2encode.exe spawns (hours); one bank is
+        # seconds to minutes. Selecting nothing here keeps the old behaviour (everything), so the
+        # list is a narrowing tool rather than something you must fill in.
+        ttk.Label(f, text="Banks — none selected = all:").pack(anchor=W, pady=(10, 0))
+        # Both audio systems are listed here, because from the user's side they are just "banks".
+        # The wave banks (.bin) are streams inside 1A/1B; the authored SFX banks (.bnk/.iff/disc_*)
+        # are sounds inside 0A/0B and are decoded by a completely separate pass. Selecting only
+        # authored banks therefore SKIPS the stream pass entirely — that is the whole point of
+        # listing them: the SFX take seconds, a full stream extract takes hours.
+        bank_names = wbanks.all_banks()
+        rows = [("wave", bn) for bn in bank_names] + [("sfx", bn) for bn in asfx.ALL_BANKS]
+        blf = ttk.Frame(f); blf.pack(fill=BOTH, expand=True, pady=4)
+        blist = tk.Listbox(blf, selectmode="extended", height=10,
+                           exportselection=False, activestyle="none")
+        bsb = ttk.Scrollbar(blf, orient=VERTICAL, command=blist.yview)
+        blist.configure(yscrollcommand=bsb.set)
+        for kind, bn in rows:
+            blist.insert(END, bn if kind == "wave" else f"{bn}   [gameplay SFX]")
+        blist.pack(side=LEFT, fill=BOTH, expand=True)
+        bsb.pack(side=LEFT, fill=Y)
+
+        wf = ttk.Frame(f); wf.pack(fill=X, pady=(8, 0))
+        ttk.Label(wf, text="Parallel decoders:").pack(side=LEFT)
+        v_workers = StringVar(value="6")
+        ttk.Combobox(wf, textvariable=v_workers, state="readonly", width=5,
+                     values=["1", "2", "4", "6", "8", "12"]).pack(side=LEFT, padx=(6, 0))
+        ttk.Label(f, text="Decoding is one xma2encode spawn per stream — the bank list and the "
+                          "decoder count are what shorten it, not the archive size.",
+                  foreground="#888888", wraplength=370, justify=LEFT).pack(pady=(6, 0), anchor=W)
+
+        # The gameplay SFX are a second, separate audio system: authored sounds inside 0A/0B
+        # containers rather than streams in a .bin wave bank, so the scanner above never sees
+        # them and the bank list does not apply. ~1,170 sounds, seconds to decode.
+        v_sfx = BooleanVar(value=True)
+        ttk.Checkbutton(f, text="Also extract gameplay SFX (all [gameplay SFX] banks above)",
+                        variable=v_sfx).pack(anchor=W, pady=(8, 0))
+        ttk.Label(f, text="Select only [gameplay SFX] banks to extract just those — seconds, "
+                          "and the multi-hour stream pass is skipped.",
+                  foreground="#888888", wraplength=370, justify=LEFT).pack(anchor=W)
+
         def start():
             sel = [fid for fid, (v, ex) in checks.items() if v.get() and ex]
-            if not sel:
+            picked_wave = {rows[i][1] for i in blist.curselection() if rows[i][0] == "wave"}
+            picked_sfx  = {rows[i][1] for i in blist.curselection() if rows[i][0] == "sfx"}
+            # Picking an authored bank IS the request to extract it, so it overrides the checkbox
+            # rather than being silently dropped by it.
+            do_sfx = v_sfx.get() or bool(picked_sfx)
+            # Nothing picked = everything (the list narrows, it is not a required field). Once
+            # something IS picked, the stream pass only runs if a wave bank was among it.
+            do_streams = bool(picked_wave) or not (picked_wave or picked_sfx)
+            if do_streams and not sel:
                 messagebox.showwarning("Nothing selected",
                     "Select at least one archive.", parent=win); return
+            if not do_streams and not do_sfx:
+                messagebox.showwarning("Nothing selected",
+                    "Select at least one bank, or tick the gameplay SFX box.",
+                    parent=win); return
+            try:
+                nw = int(v_workers.get())
+            except ValueError:
+                nw = 6
             win.destroy()
-            self._log(f"─── Extract {sel} ───")
-            self._run_in_thread(op_extract, root, sel, xma, self._log_q.put,
+            scope = ", ".join(sorted(picked_wave | picked_sfx)) or "all banks"
+            self._log(f"─── Extract {sel if do_streams else 'gameplay SFX only'} — "
+                      f"{scope} — {nw} decoder(s) ───")
+            self._run_in_thread(op_extract, root, sel if do_streams else [], xma,
+                                self._log_q.put, picked_wave or None, nw, do_sfx,
+                                picked_sfx or None,
                                 op_label="Extracting audio…",
                                 on_done=self._reload_audio)
         ttk.Button(f, text="Extract", style="Accent.TButton", command=start).pack(pady=(12, 0))
@@ -6230,28 +6709,21 @@ class App(tk.Tk):
         if not tools or not root: return
         xma2encode, ffmpeg = tools
         self._log("─── Check All ───")
-        mod = modified_audio_dir(root)
-        wavs = sorted(mod.rglob("*.wav")) if mod.exists() else []
-        if not wavs:
-            self._log("No files in Modified/Audio/ — nothing to check."); return
-        self._log(f"Found {len(wavs)} file(s) to check.")
+        # "Edited" is now a hash comparison against the pristine extract, so the check runs over
+        # exactly what Patch Game would write instead of over a staging folder.
+        man   = astore.load_manifest(root)
+        items = [(e, astore.wav_path(root, e)) for e in man.values()]
+        items = [(e, w) for e, w in items
+                 if _maybe_edited(e, w) and astore.is_edited(root, e, w)]
+        if not items:
+            self._log("No edited WAVs in Audio/Extracted/ — nothing to check."); return
+        self._log(f"Found {len(items)} edited file(s) to check.")
         def work():
-            all_cat: dict = {}; fi: dict = {}
-            for fid in FILE_IDS:
-                cat = load_catalog(catalog_path(root, fid))
-                for stem, entry in cat.items():
-                    all_cat[stem] = entry
-                    fn = entry.get("friendly_name")
-                    if fn: fi[fn] = stem
             ok = trunc = padded = fail = 0
-            for wp in wavs:
-                sk    = wp.stem
-                entry = all_cat.get(sk) or all_cat.get(fi.get(sk, ""))
-                if not entry:
-                    self._log_q.put(f"  NOT FOUND: {wp.stem}"); fail += 1; continue
+            for entry, wp in items:
                 max_pkts = entry["packets"]; ch = entry["channels"]
                 sr = entry.get("sample_rate") or SAMPLE_RATE
-                display = entry.get("friendly_name") or sk
+                display = entry.get("name") or wp.stem
                 try:
                     raw, q = encode_wav_to_xma2(wp, ch, ffmpeg, xma2encode, sample_rate=sr)
                     n_new  = len(raw) // PACKET_SIZE
@@ -6283,8 +6755,23 @@ class App(tk.Tk):
             patched, skipped, nf = op_reimport(
                 root, ffmpeg, xma2encode, False, self._log_q.put)
             self._log_q.put(
-                f"─── Done: {patched} patched  {skipped} skipped  {nf} not in catalog ───")
+                f"─── Done: {patched} patched  {skipped} skipped ───")
         self._run_in_thread(work, op_label="Patching game files…",
+                            on_done=self._reload_audio)
+
+    def _run_rescan_edits(self):
+        if self._op_busy(): return
+        root = self._get_root()
+        if not root: return
+        if not messagebox.askyesno("Rescan Edits",
+                "Hash every extracted WAV to find files you changed outside the launcher.\n\n"
+                "The first run reads the whole Audio/Extracted tree (~24 GB) and can take a few "
+                "minutes. After that it only checks files whose timestamp moved.\n\n"
+                "Nothing is written to the game — this only updates the ✓ Modified column."):
+            return
+        self._log("─── Rescan Edits ───")
+        self._run_in_thread(op_rescan_edits, root, self._log_q.put,
+                            op_label="Hashing extracted audio…",
                             on_done=self._reload_audio)
 
     def _run_reload_names(self):
@@ -7708,17 +8195,11 @@ class App(tk.Tk):
 
     def _on_close(self):
         n_names = len(self._pending_name_changes)
-        n_rates = len(self._pending_rate_changes)
-        if n_names or n_rates:
-            bits = []
-            if n_names: bits.append(f"{n_names} name/category change(s)")
-            if n_rates: bits.append(f"{n_rates} sample-rate change(s)")
+        if n_names:
             ans = messagebox.askyesnocancel(
                 "Unsaved Changes",
-                f"You have staged {', '.join(bits)}.\n\n"
-                "Save name/category edits before closing?\n"
-                "(Staged sample-rate changes are only applied by Apply Changes — "
-                "they'll be discarded.)", icon="warning")
+                f"You have staged {n_names} name/category change(s).\n\n"
+                "Save them before closing?", icon="warning")
             if ans is None: return
             if ans: self._flush_pending_names()
         self.destroy()
