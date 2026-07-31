@@ -2,7 +2,7 @@
 
 One-line summary: the in-game scorebug, all HUD overlays, and the front-end menus are one hash-keyed scene-graph system; `overlay_static.iff` holds the entire overlay scene graph (513 nodes) plus its texture atlas, per-element scorebug layout is editable via a serialized Maya-style scene, and menu/logo/jersey/crowd assets each have a known (and sometimes surprising) storage story.
 
-Status: **mostly verified.** Whole-bug placement, per-element scorebug X/Y (mesh + text), text color, whole-atlas recolor, texture replacement, logo bundles, and the jersey map are all confirmed in-game. **Active/incomplete:** adding Shots-On-Goal to the bug (data source unpinned, text-draw function unfound). A few per-element behaviors (period "1st" and the tens digit are runtime-re-anchored; font-size lever unconfirmed) are flagged below.
+Status: **mostly verified.** Whole-bug placement, per-element scorebug X/Y (mesh + text), text color, whole-atlas recolor, texture replacement, logo bundles, the jersey map, and **Shots-On-Goal on the bug (working in-game 2026-07-28, §5)** are all confirmed in-game. **Active/incomplete:** SOG FPS choppiness A/B, font-redirect (`+0xDC`) and glyph-scale (anim consts) in-game verification. A few per-element behaviors (period "1st" and the tens digit are runtime-re-anchored) are flagged below.
 
 ---
 
@@ -100,16 +100,74 @@ The "Overlay: Scorebug" scene *template* lives in `global.iff` blob0 (~21 MB DRA
 
 ---
 
-## 5. Shots-On-Goal on the scorebug — ACTIVE, incomplete
+## 5. Shots-On-Goal on the scorebug — ACTIVE; overlay text-binding architecture CRACKED (2026-07-27, static)
 
-**Goal:** 3 new elements — Away Shots (dynamic), Home Shots (dynamic), static "SHOTS" label — delivered as a **persistent, shippable XEX hook** that draws the strings directly (piggybacking the game's own font/text-draw). This deliberately avoids the *serialized scene-node insert* path, which is blocked (relocated name-pointer node format; element cap = 10 in `Scene_BuildTemplateInstance`).
+**Goal:** 3 new elements — Away Shots (dynamic), Home Shots (dynamic), static "SHOTS" label.
 
-**Four pieces needed:**
+### 5.1 The in-game overlay TEXT-BINDING system (verified static, XEX .data — needs in-game confirmation of behavior)
 
-1. **Live shots data source — UNPINNED.** RE ruled out the easy paths: `Stats_BuildStatTable @0x83F88AA0` is a *static* stats-SCREEN template (row 5 = "Shots" `@0x83b2ad88`, but it only loads a layout constant, never the live count); `Stats_AccumulateZones @0x83b6f5a0` = shot-chart heatmap bins; `StatsEntry_Begin/End @0x83b72cf0/0x83b73138` = per-event log. The live SOG total is a plain per-team counter, still unpinned — pin it live by value-scan, then correlate to a BSS base in Ghidra.
-2. **Game text/font draw-string function — NOT FOUND.** `Frontend_DrawElementList @0x83beedb0` only draws type-1 sprite / type-2 glow (white + alpha) — no text branch. Clock/score digits use a separate, still-unnamed font path (digit formatters `Runtime_FormatFloatDigits @0x841D6A08` / `DecimalString_RoundAndCopyDigits @0x841D8AE0` are generic sprintf internals, no scorebug lead). Next: trace how a scorebug clock/score text element gets its string set each frame.
-3. **Per-frame hook point — FOUND:** `Scorebug_FrameDispatch @0x840c1518` (state 2 → `Scorebug_UpdateActive` → `Scorebug_BindElementsBySize`). Note update ≠ draw — the text render happens later in the frame's scene walk, so the draw hook likely wants the render pass.
-4. **Codecave** — pending.
+The engine binds overlay text elements to per-frame **provider callbacks** via plain data tables in the XEX (flat-XEX file offsets via `xex_patch.va_to_offset`):
+
+- **Binding tables @ VA `0x8499F000–0x849A0D40`.** Row = 16 bytes: `[scene crc32-raw][element crc32 (mostly of UPPERCASED node name)][provider callback][slot global]`. The slot is a BSS global that receives the resolved element handle.
+- **Per-overlay registry @ ~`0x849A0DF0`+, stride 0x24**, keyed by root node hash: entry `+0x1C` = root hash, `+0x20` = bind-table ptr, `+0x04` = aux table. Scorebug entry `@0x849A0E5C` → root `41267075` (= crc32-raw `"scorebug"`), bind table `0x8499FE50`.
+- **Scorebug table `0x8499FE50–0x8499FFE0`**, slots `0x8203B3A8–0x8203B3D0`. Identified elements (crc32 of UPPER name): `C22AE09C`=TEAM1, `502105EE`=TEAM1_SCORE, `5B23B126`=TEAM2, `61C91F73`=TEAM2_SCORE, `23C41F1D`=QUARTER, `6E9019D0`=GAMECLOCK_SEMI. **Unidentified:** F2BA1BE9, 6BB34A53, FEC8BC6C, 67C1EDD6, AAEC8F88, A6D4D322, F1E25DC9, 219DD0D3, 715D7D23, 77762F67, B87FB6D2, E6370495, 365A707C (this one's cb `0x840C15D0` is a transform updater). These are NOT GAMECLOCK1–4 in either case convention (checked) — the clock-digit *content* is scene-data-driven; those hashes appear nowhere in the XEX.
+- **`intermission_report` table @`0x8499F370`** — 26 text elements (`25BFE697`=away_score, `3963CEC1`=home_score); **the intermission report displays SOG, so its providers reach the live shots data.** `end_of_period` @`0x8499F000` (`B83232BD`=PERIODNUMBER); `fight_control` rows resolve to roster names (title/RT_button…), confirming the element-hash convention.
+- **Text-set chain:** common provider cb `0x83BE6018` (7 instrs): `r4=**(ctx+4)`, `r3=*(ctx+0x14)` (element), tail-call **`Element_SetText_WithTokenResolver @0x83D79110`** → **`Element_SetTextByStringId @0x8415A968`** = `element->vtbl[+8](stringObj, argpack)`, where the argpack carries a **token resolver**.
+- **`{TOKEN}` system:** localized strings contain `{NAME:arg}` placeholders. `TextToken_ParseName @0x841595F0` splits at `:`/`}` and hashes with `Function_84113810` (same hash as `"Overlay: Scorebug"`). `TextToken_ResolveAndDispatch @0x841597A8` walks a **runtime-registered handler list @`0x849E29B0`** (node `+0x4`=token hash, `+0xC`=next, `vtbl+4`=resolve). Handlers register at runtime (the static-init stub at `0x8424FD80` only installs the list object's vtable `0x8203CA78`) — **so enumerating them requires a live session.**
+- **Frontend menus have a parallel system** @`0x8492D374–0x8492DAxx` (scene `68B8F624` = a 4-team scores screen: team1–4, team3/4_score, time, stats1–3; providers `FeText_Provider_* @0x83BE4318/0x83BE4750/0x83BE3F20`, the latter dispatching a 21-case jumptable @`0x83BE48AC` of Ghidra-unrecovered blocks — every case funnels into `Element_SetTextByStringId`).
+
+**Confirmed dead ends:** no `{TOKEN}` text exists in the XEX, `overlay_static`, `gamedata`, or `global` DRAM (brace matches are font charset tables) — the strings are runtime string *objects* (`StringObj_AssignCopy @0x83D87178` is a refcounted copy, not a table lookup). `loc.iff` = 6 compressed blobs with **no text** (fonts). The `"Update Clocks"` scheduled task (`0x83EB4E00`) is a generic timer-queue ticker. `"BoxScore%02d"` is a save-slot writer. `Stats_BuildStatTable`'s apparent base-getter `FUN_841d3f34` is a `__savegprlr_27` stub — the row-struct base arrives in r3 from an unfound fn-pointer caller.
+
+### 5.2 Remaining pieces
+
+1. **Live shots data source — SOLVED & VERIFIED (2026-07-27, live CE, 4 checkpoints exact: away 8→10→12→12, home 0→1→1→3):**
+
+   **Team SOG = the opposing team's goalies' shots-against, summed.** No team-level SOG counter exists anywhere (session object, statics band, and the game-level stat region at `sess+0x1F48` were all searched/diffed — that region holds faceoffs/clock).
+
+   ```
+   blk(team, idx) = sess + 0x994 + 0x74 + (team*20 + idx)*0x88      // per-player live-stat block (0x88 B)
+   sess           = *(u32*)0x84FEE8E4                                // per-game heap object — always deref
+   team: 0 = HOME, 1 = AWAY
+
+   goalie shots-against = *(s16*)(blk + 0x24)                        // == opponent SOG
+   // other block fields: +0x04 u32 TOI-seconds, +0x08 shift count,
+   // +0x3A/+0x3C per-player shot ATTEMPTS (not SOG — summed 21/3 when SOG read 10/1)
+
+   // goalie identification — the game's own entity walk (handles goalie swaps):
+   for team in 0,1:
+     mgr = *(u32*)(0x84FD0C34 + team*4)                              // per-team manager global
+     for slot in 0..27:
+       ent = *(u32*)(mgr + 0x28 + slot*4);  if !ent: continue
+       sub = *(u32*)(ent + 0x1BB4);         if !sub: continue
+       idx = *(u32*)(sub + 8);              if idx >= 20: continue   // stat-block index
+       rec = *(u32*)( *(u32*)(sub + 0x10) )                          // roster record (0x1A4)
+       if ((*(u32*)(rec + 0x40)) >> 3) & 7 == 0:                     // position == G
+           SA += *(s16*)(blk(team, idx) + 0x24)
+     SOG[other team] = SA
+   ```
+
+   Verified live end-to-end: home goalies blk0 (SA=12) + blk10 (0) → away SOG 12; away goalies blk15 (SA=3) + blk19 (0) → home SOG 3. **Caveat (untested):** shots taken at an empty net (goalie pulled) may not credit any goalie's SA — the display could undercount during 6-on-5.
+
+   The token-handler registry was also walked live: 12 static nodes `@0x8492F268` (stride 0x18), all sharing resolver `Function_840DD1E0` — a nested `{CTX:SUB}` switch serving roster/season data (team leaders via `Function_840DD038`, W/L via `Function_83D602B0`), *not* the live match counters.
+2. **Text draw — effectively solved for hook purposes:** call `Element_SetText_WithTokenResolver(element, stringObj)` with an element handle from the slot globals, or reuse a bind-table row. The raw-text vtable entry is likely adjacent to `+8` in the element vtable (confirm live).
+3. **Per-frame hook point — FOUND** (unchanged): `Scorebug_FrameDispatch @0x840c1518`.
+4. **New lever — the binding tables are plain XEX data:** rows can be retargeted or appended (null-terminated blocks with slack), e.g. rebind an unused scene text element (`gameclock4`, `team1_score`/Period) to a shots provider once one is known — potentially **no codecave needed**.
+
+### 5.3 Add-element build status (2026-07-27, two in-game iterations)
+
+**Verified working in-game:**
+- **XEX bind-table relocation** (`launcher/scorebug_xex_rows.py` v2): table copied to the `.reloc` tail padding @VA `0x851A7000` (in place, no resize — **do NOT convert zero-blocks to data; Xenia unmaps the region**, that was v1's failure), registry ptr `@0x849A0E7C` repointed, 3 rows added binding SHOTS_AWAY/LABEL/HOME to existing bank ids `34EF4867`/`125F4849`/`D09D14AD`. All stock text renders through the relocated table.
+- **overlay_static record-table relocation** (`launcher/scorebug_add_shots.py`): 11 records + 2 clones moved to blob0 end; count `@0x209698` 11→13; both self-rel base ptrs (`0x209650`/`0x20969C` → firstkey+0x18) rewritten; per-record the only self-rel field is `+0x08` (name). Engine consumes the relocated table (records runtime-filled in the instance).
+
+**Anim-descriptor table MAPPED + patch applied (2026-07-28, static; in-game test pending):** the earlier "never instanced / opacity channel holds 0" theory was refined. The table `@0x2096A0` is **stride 0x1C, count 54 `@0x209618`** (self-rel table ptr `@0x20961C`); desc = `[k1][k2][flags][-1.0f][p10][p14][p18→channel data]`, flags = AnimEval channel mask (bits 20+) / const-vs-spline bits (8+) / property-class low byte. Each text element has **two descs**: `[crc-UPPER(bindname)][0x0CED9417]` flags `0x00100012` = **one spline = OPACITY** (all 10 stock splines byte-identical — 7-key intro fade settling at alpha 1.0), and `[E9015CE9][crc-raw(name)]` flags `0x03F03F21` = 6 const floats (transform/scale). **Key finding: the opacity desc is keyed by the element's BIND hash (record `+0xD8`), not positionally paired** — `gameclock4`'s stock bind `365A707C` is the only record bind with no opacity desc, so its alpha defaults 0 (positional pairing disproven: gameclock3, which *binds* DIGIT4, draws; gameclock4, adjacent to DIGIT4's desc, doesn't). The shots elements were invisible for the same reason. Also mapped: **scene node array `@0x209FD0` stride 0xB0 (17 nodes**, name crc `+0x04`; node[0] `scorebug_text` `+0x60` = 13 = joint count; node[1] `+0x48` = duplicate desc count) and the **joint table `@0x2146B4` stride 0x30** (name crc `+0x00`; `away_abbrev` has no joint and draws → joints optional). **Applied (`launcher/scorebug_anim_descs.py`, dry-run validated):** desc table relocated to blob0 end, 5 descs appended (opacity for SHOTS_AWAY/HOME/LABEL cloned from TEAM2's spline + transforms for shots_away/home), count 54→59 at both sites, old keys zeroed. **★ VERIFIED IN-GAME (2026-07-28): all three SOG elements render live on the scorebug** — the bind-hash-keyed opacity desc was the missing instancing/visibility piece. The label draws at the record position (joint j12 does not override).
+
+**Font + glyph-scale levers (2026-07-28, follow-up RE):**
+- **Record `+0xDC` = the per-element FONT hash** (`+0x00` is only the table key — the older "font @+0x00" claim was wrong; `scorebug_layout` corrected). Ground truth: `Function_83C9EDA0` (record property parser) — records are baked from 0x20-stride key/value property lists; keys: `0xBF045BDB`=font (inline string OR precomputed crc), `0x7714781F`=bind name (string, crc-upper-hashed at parse — the origin of bind hashes), `0x11FA397C`=size, plus X/Y/Z/W/color/flags keys. Non-scorebug scenes store text elements as raw property lists with **inline font-name strings** (`avenir_heavy_24`).
+- **Stock scorebug fonts (`+0xDC`):** `3DD873F2`=`'AVENIR_HEAVY_24'`, `F57C40A5`=`'AVENIR_ROMAN_22'`, `4A63F778`=`crc('avenir_heavy_24')` (SOG elements). **Font redirect = write `+0xDC`** — wired into the Scoreclock tab font picker with a curated 11-font set (in-game verify pending).
+- **★ FONT SYSTEM FULLY MAPPED (2026-07-28): `english.iff` blob0 holds the font-instance registry** @`0x129000–0x12CC90`: **103 alias entries**, stride 0x90, each `[utf16 name][hash @name+0x40][base-font hash +0x44][1.0f][scaleX +0x4C][scaleY +0x50]`, resolving to **8 base typefaces** (`avenir_heavy_24`, `avenir_heavy_40`, `avenir_roman_18`, `avenir_roman_22`, `avenir_light_40`, `avenir_black_95`, `arial_black_20`, `prison_aoe`; one unresolved base `69F88471`). Every "font" the game names (ARIAL_15, AGBOLDCN 26, Stratum2 40, LREGULAR 28 …) is just a base typeface × scale pair — e.g. `'ARIAL BOLD 13'` = avenir_heavy_40 × 0.35. Any of the 103 hashes is a valid `+0xDC` target. Per-alias scale floats are editable in place (a "custom font size" = retune an unused alias's target+scale). Typeface data: blob0 headers (`'Avenir 85 Heavy'` @0x1C628 etc.) carry charset-range→glyph-index tables + metrics; glyph atlases = blob1 (3.7 MB). **Custom font texture** = replace a base typeface's atlas (affects every alias of that base; the isolated-per-element version = clone a typeface + new alias — future project, format partially mapped).
+- **Glyph scale**: the transform anim-desc consts `[tx,ty,tz,sx,sy,sz]` (stock 1.1/1.2) are the per-element scale; `scorebug_anim_descs.set_text_scale` + tab "Set scale" write them (in-game verify pending; the record matrix diagonal is also still written).
+- The three SOG elements are full Scoreclock-tab citizens (position/width/color/font/scale/hide); label clip width set 20→48 to stop the "Shots" ellipsis truncation.
+- **OPEN: user reports choppy FPS with SOG live.** Suspect: 3 extra per-frame `{PT_SUBJECT:…:STAT:SHOTS:VALUE}` resolutions (nested token handler + stat walk under Xenia JIT). A/B: restore the XEX `.sogbak` (kills binds, overlay untouched) and compare; if confirmed, the fix is a throttling hook (update every N frames).
 
 ### ★ CRITICAL Cheat-Engine-over-Xenia lesson
 
@@ -186,7 +244,7 @@ The crowd is a **2D sprite / billboard system**, which is the flat "PS1" look.
 
 ## 9. Open questions / caveats
 
-- **SOG on the bug is unfinished** — the live per-team shots counter is unpinned and the game's text/font draw-string function is unidentified. (Hook point and display approach are decided.)
+- **SOG on the bug: WORKING IN-GAME (verified 2026-07-28)** — see §5.3. Open items: FPS choppiness A/B (suspect per-frame token resolution), and in-game verification of the new font-redirect (`+0xDC`) and glyph-scale (anim consts) levers.
 - **Runtime-re-anchored scorebug elements** don't respond to position edits: the **period "1st"**, the clock **tens digit** (`gameclock4`), and the **away team abbreviation** are placed by the game at draw time relative to the clock/each other. The away abbrev is a text draw record with a **blank font/name hash (`0x00000000`)**, one 0xE0 stride before `team2`'s record — colorable/sizable but position writes the draw record directly (experimental).
 - **Font-size lever (`+0x7C`)** is not confirmed in-game.
 - **Grey "2K" backdrop behind a custom SN logo:** definitively a **2K-shaped MESH drawn grey** (Xenia paints the empty/unbound texture slot grey; `logo_2k_mesh` geometry), NOT a texture — so no texture edit removes it. Hiding it by zeroing `logo_2k_mesh`'s index buffer was confirmed in one reboot but is coupled to the SN quad (both render from the same mesh geometry / share material `0x218698`); a clean SN-preserving hide is still open. It is a scene-node `type` (1 = skipped, 0 = drawn) away from a clean skip, but the source node records use relocated name pointers (serialized format not yet cracked → the real add/remove-element lever).

@@ -40,3 +40,7 @@ config
 
 # ── Per-user launcher state (lives in %APPDATA%, never in the repo) ───────
 NHL2K10 Mod Launcher/
+
+# ── Local SYNC script to sync local changes into git repo ─────────────────
+sync.bat
+sync.py
