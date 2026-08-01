@@ -4,13 +4,24 @@ Supersedes the live-memory approach in portrait_assign.py / goalie_equipment.py.
 the *loaded* player array in Xenia and must be re-applied every launch; this writes the save file,
 so the assignment persists, ships in a .n2kpack, and works on real console hardware.
 
-The on-disk player record is the SAME struct as the in-memory one. RosFile frames the player chunk
-at `foff`, but record 0 actually begins DELTA=0x73 bytes further in, so this module addresses
+The on-disk player record is the SAME struct as the in-memory one, and since 2026-08-01 RosFile
+frames the player chunk correctly, so this module addresses
 
-    record_base(row) = chunk.foff + DELTA + row*STRIDE
+    record_base(row) = chunk.foff + row*STRIDE
 
 and every field offset below is then IDENTICAL to the in-memory offset that goalie_equipment.py /
-portrait_assign.py use against Xenia. (Pointer fields — the name pointers at +0x00/+0x04 — are not
+portrait_assign.py use against Xenia.
+
+⚠ ROWS SHIFTED +7 on 2026-08-01. This used to be `chunk.foff + 0x73 + row*STRIDE`, a hand
+correction for ros_file.py's wrong DATA_BASE. It got the *phase* right (0x73 happened to land on a
+record boundary) but started 7 records late, so rows 0..6 — six of which are on a team's roster,
+checked via the team records' player pointers — were invisible and every row index was 7 low. The
+old row N is now row N+7. Nothing keys off a bare row index except the mod-pack goalie section,
+which re-resolves by portrait key and goalie ordinal (see modpack._resolve_goalie_row), so old
+packs still land on the right goalies. Record 0 is now the chunk start, confirmed by the team
+records' player pointers, which target `player_record + 0x00`.
+
+(Pointer fields — the name pointers at +0x00/+0x04 — are not
 stored as offsets on disk; the loader resolves those, so per-player NAMES are still unsolved here.
 Identify a row by portrait key or by goalie order instead: find_rows_by_portrait_key / goalie_rows.)
 
@@ -55,10 +66,10 @@ except ImportError:
 
 PLAYER_HASH = 0x1E159C31
 STRIDE = 420
-DELTA = 0x73
 
-# Offsets are relative to record_base(row) = foff + DELTA + row*STRIDE, i.e. identical to the
+# Offsets are relative to record_base(row) = foff + row*STRIDE, i.e. identical to the
 # in-memory offsets used by goalie_equipment.py / portrait_assign.py.
+OFF_TEAM     = 0x14                          # self-relative ptr back to this player's team record
 OFF_PORTRAIT = 0x1C                          # u16
 OFF_POSITION = 0x40                          # u32, goalie iff (v>>3)&7 == 0
 OFF_SHELL    = 0xB4                          # u32, shell   = (v>>23)&0xF
@@ -87,8 +98,8 @@ class PlayerTable:
         if self.chunk is None:
             raise ValueError("no player chunk 0x1E159C31 in this save")
         self.foff = self.chunk.foff
-        self.base = self.chunk.foff + DELTA          # record 0 starts DELTA into the chunk
-        self.nrec = (self.chunk.size - DELTA) // STRIDE
+        self.base = self.chunk.foff                  # record 0 IS the chunk start
+        self.nrec = self.chunk.size // STRIDE
         if self.nrec < 100:
             raise ValueError(f"implausible player count {self.nrec}")
 

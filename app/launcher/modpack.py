@@ -68,10 +68,12 @@ try:
     from . import team_colors as TC
     from . import roster_editor as RE
     from . import player_assign as PA
+    from . import team_order as TO
 except ImportError:
     import team_colors as TC
     import roster_editor as RE
     import player_assign as PA
+    import team_order as TO
 
 FORMAT = "nhl2k10-modpack"
 VERSION = 1
@@ -79,8 +81,9 @@ FILE_IDS = ["0A", "0B", "1A", "1B"]
 PACK_EXT = ".n2kpack"
 NAMES_EXT = ".n2knames.json"
 
-ROSTER_GROUP_ORDER = ["team_colors", "arena_names", "team_names", "goalie_masks"]
+ROSTER_GROUP_ORDER = ["team_order", "team_colors", "arena_names", "team_names", "goalie_masks"]
 ROSTER_GROUPS = {
+    "team_order":   "Team Order — the order teams are listed in every menu",
     "team_colors":  "Team Colours — primary + secondary (all teams)",
     "arena_names":  "Arena Names (all teams)",
     "team_names":   "Team Names — city / state / team / name (all teams)",
@@ -345,6 +348,13 @@ def load_roster(ros_path):
     if not ros_path.is_file():
         return out
     try:
+        # a list of the 30 display codes, in menu order — see team_order.py
+        codes = TO.order_codes(ros_path)
+        if len(codes) == TO.NHL and all(codes):
+            out["team_order"] = codes
+    except Exception:
+        pass
+    try:
         cols = TC.load(ros_path)
         tc = {code: {"primary": _rgbhex(v["primary"]), "secondary": _rgbhex(v["secondary"])} for code, v in cols.items()}
         if tc:
@@ -379,6 +389,8 @@ def _roster_group_label(group, data=None):
     label = ROSTER_GROUPS.get(group, group.replace("_", " ").title())
     if group == GOALIE_MASKS_KEY and data:
         label += f"   [{len(data)} goalies — mask textures ride along]"
+    if group == "team_order" and data:
+        label += f"   [{', '.join(list(data)[:6])}…]"
     return label
 
 def _roster_item(group, data):
@@ -412,6 +424,17 @@ def _add_name_edit(edits, skipped, slot, new):
 def apply_roster(ros_path, groups, log=print):
     ros_path = Path(ros_path)
     applied = {}
+    # team_order FIRST: it physically permutes the team records, and every other group
+    # addresses teams by code, so ordering it first keeps the rest addressing the same
+    # teams either way.
+    if "team_order" in groups:
+        try:
+            TO.apply_order(ros_path, groups["team_order"], log=log)
+            applied["team_order"] = TO.NHL
+        except Exception as e:
+            log(f"  team_order failed: {e}")
+            applied["team_order"] = 0
+
     if "team_colors" in groups:
         n = 0
         for code, v in groups["team_colors"].items():

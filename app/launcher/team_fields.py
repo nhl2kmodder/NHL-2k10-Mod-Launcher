@@ -127,7 +127,7 @@ def load_rows(ros_path, led=False) -> list[dict]:
     base, S = _base_stride(ros)
     defs = load_defs()
     rows = []
-    for code, rec in sorted(TC.team_map().items(), key=lambda kv: kv[1]):
+    for code, rec in sorted(TC.team_map(ros_path).items(), key=lambda kv: kv[1]):
         r = rec + (TC.LED_OFFSET if led else 0)
         b = base + r * S
         vals = {f["name"]: decode(bytes(d[b + f["off"]: b + f["off"] + f["size"]]), f["type"])
@@ -145,7 +145,7 @@ def save_rows(ros_path, edits, led=False, backup=True, log=print) -> int:
     """
     ros_path = Path(ros_path)
     defs = {f["name"]: f for f in load_defs()}
-    tmap = TC.team_map()
+    tmap = TC.team_map(ros_path)
     plan = []
     for code, name, text in edits:
         f = defs.get(name)
@@ -180,7 +180,7 @@ def record_hex(ros_path, code, led=False) -> str:
     """The raw 412 bytes of one team's record, as an annotated hex dump."""
     ros = RF.RosFile(str(ros_path)); d = ros.data
     base, S = _base_stride(ros)
-    rec = TC.team_map()[code.upper()] + (TC.LED_OFFSET if led else 0)
+    rec = TC.team_map(ros_path)[code.upper()] + (TC.LED_OFFSET if led else 0)
     b = base + rec * S
     raw = bytes(d[b:b + S])
     out = [f"{code.upper()}  record {rec}  file offset 0x{b:X}  ({S} bytes)"]

@@ -40,6 +40,7 @@ from launcher import authored_sfx as asfx
 from launcher import modpack as mp
 from launcher import resources as lres
 from launcher import scorebug_anchors as sbanchor
+from launcher import default_matchup as dmatch
 
 try:
     from PIL import Image, ImageTk
@@ -5031,9 +5032,38 @@ class App(tk.Tk):
                   font=("Segoe UI", 8)).grid(
             row=10, column=0, columnspan=3, sticky=W, pady=(14, 0))
 
+        # ── Default matchup (two `li r3,imm` in the boot path) ────────────────
         ttk.Separator(outer).grid(row=11, column=0, columnspan=3, sticky=EW, pady=18)
-        ttk.Label(outer, text="Share & Merge (collaboration)",
+        ttk.Label(outer, text="Default Matchup (teams selected on boot)",
                   font=("Segoe UI", 11, "bold")).grid(row=12, column=0, columnspan=3, sticky=W)
+        ttk.Label(
+            outer, foreground="#888888", font=("Segoe UI", 8),
+            text=("The two teams Play Now / Exhibition start on. Stock is Detroit v Pittsburgh "
+                  "(the 2009 Cup Final). Patches your game .xex, so it travels to a console.\n"
+                  "Teams are matched by roster ID, so this keeps working if you rename teams. "
+                  "Only applies to the v1.0 executable — Title Update #1 relocates the code.")
+        ).grid(row=13, column=0, columnspan=3, sticky=W, pady=(2, 8))
+
+        dm = ttk.Frame(outer); dm.grid(row=14, column=0, columnspan=3, sticky=W)
+        self._dm_home = StringVar(); self._dm_away = StringVar()
+        self._dm_status = StringVar(value="")
+        ttk.Label(dm, text="Home:").pack(side=LEFT)
+        self._dm_home_cb = ttk.Combobox(dm, textvariable=self._dm_home, width=28, state="readonly")
+        self._dm_home_cb.pack(side=LEFT, padx=(4, 14))
+        ttk.Label(dm, text="Away:").pack(side=LEFT)
+        self._dm_away_cb = ttk.Combobox(dm, textvariable=self._dm_away, width=28, state="readonly")
+        self._dm_away_cb.pack(side=LEFT, padx=(4, 14))
+        ttk.Button(dm, text="Apply", style="Accent.TButton",
+                   command=self._dm_apply).pack(side=LEFT, padx=4)
+        ttk.Button(dm, text="Revert to stock", command=self._dm_revert).pack(side=LEFT, padx=4)
+        ttk.Button(dm, text="Refresh", command=self._dm_refresh).pack(side=LEFT, padx=4)
+        ttk.Label(outer, textvariable=self._dm_status, foreground="#888888",
+                  font=("Segoe UI", 8)).grid(row=15, column=0, columnspan=3, sticky=W, pady=(6, 0))
+        self._dm_refresh()
+
+        ttk.Separator(outer).grid(row=16, column=0, columnspan=3, sticky=EW, pady=18)
+        ttk.Label(outer, text="Share & Merge (collaboration)",
+                  font=("Segoe UI", 11, "bold")).grid(row=17, column=0, columnspan=3, sticky=W)
         ttk.Label(
             outer, foreground="#888888", font=("Segoe UI", 8),
             text=("Export your work to share, or import someone else's and merge it into yours. "
@@ -5046,8 +5076,8 @@ class App(tk.Tk):
                   "into Modified (review, then Patch); roster edits apply straight onto your "
                   "Roster.ROS so you can share them without shipping your players/ratings; the "
                   "scoreclock replays onto the recipient's game files and lands as a preset too.")
-        ).grid(row=13, column=0, columnspan=3, sticky=W, pady=(2, 8))
-        share = ttk.Frame(outer); share.grid(row=14, column=0, columnspan=3, sticky=W)
+        ).grid(row=18, column=0, columnspan=3, sticky=W, pady=(2, 8))
+        share = ttk.Frame(outer); share.grid(row=19, column=0, columnspan=3, sticky=W)
         ttk.Button(share, text="Export Audio Names…", command=self._export_names).pack(side=LEFT, padx=(0, 4))
         ttk.Button(share, text="Import Audio Names…", command=self._import_names).pack(side=LEFT, padx=4)
         ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
@@ -5058,6 +5088,60 @@ class App(tk.Tk):
         ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
         ttk.Button(share, text="Revert Mod Pack…",
                    command=self._revert_modpack).pack(side=LEFT, padx=4)
+
+    # ── Default matchup (boot teams) ──────────────────────────────────────────
+
+    def _dm_refresh(self):
+        """Repopulate both team pickers from the current save and show what the XEX holds now."""
+        self._dm_choices = dmatch.choices(self._current_roster_path())
+        labels = [lbl for _tid, lbl in self._dm_choices]
+        self._dm_home_cb["values"] = labels
+        self._dm_away_cb["values"] = labels
+        xex = self._sb_xex()
+        if not xex:
+            self._dm_status.set("No game .xex found — set the Game path above.")
+            return
+        try:
+            home_id, away_id = dmatch.read(xex)
+        except Exception as e:
+            self._dm_status.set(str(e))
+            return
+        by_id = dict(self._dm_choices)
+        self._dm_home.set(by_id.get(home_id, f"id {home_id}"))
+        self._dm_away.set(by_id.get(away_id, f"id {away_id}"))
+        self._dm_status.set(f"{xex.name}: home id {home_id}, away id {away_id}"
+                            + ("  (stock)" if (home_id, away_id) ==
+                               (dmatch.STOCK_HOME, dmatch.STOCK_AWAY) else ""))
+
+    def _dm_ids(self):
+        """(home_id, away_id) for the current picker selections, or None if either is unset."""
+        by_label = {lbl: tid for tid, lbl in getattr(self, "_dm_choices", [])}
+        h, a = by_label.get(self._dm_home.get()), by_label.get(self._dm_away.get())
+        return None if h is None or a is None else (h, a)
+
+    def _dm_write(self, ids, what):
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Default Matchup",
+                                 "No game .xex found — set the Game path in Settings."); return
+        try:
+            dmatch.write(xex, ids[0], ids[1], log=self._log)
+        except Exception as e:
+            messagebox.showerror("Default Matchup", str(e)); return
+        self._log(f"Default matchup → {what}")
+        self._dm_refresh()
+        messagebox.showinfo("Default Matchup",
+                            f"Boot matchup set to {what}.\n\nRestart the game to see it.")
+
+    def _dm_apply(self):
+        ids = self._dm_ids()
+        if ids is None:
+            messagebox.showerror("Default Matchup", "Pick both a home and an away team."); return
+        self._dm_write(ids, f"{self._dm_home.get()} (home) v {self._dm_away.get()} (away)")
+
+    def _dm_revert(self):
+        self._dm_write((dmatch.STOCK_HOME, dmatch.STOCK_AWAY),
+                       "stock (Detroit v Pittsburgh)")
 
     # ── Share & Merge (mod packs / audio-name files) ──────────────────────────
 
@@ -8052,6 +8136,8 @@ class App(tk.Tk):
         ttk.Button(bar, text="Export CSV…", command=self._teams_export).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Import CSV…", command=self._teams_import).pack(side=LEFT, padx=2)
         ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
+        ttk.Button(bar, text="Team Order…",
+                   command=self._teams_order_editor).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Team Record Fields…",
                    command=self._teams_fields_editor).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Advanced Editor (all tables & fields)…",
@@ -8097,6 +8183,18 @@ class App(tk.Tk):
             ros_live_editor.open_team_editor(self)
         except Exception as e:
             messagebox.showerror("Team Rosters", f"Could not open the editor:\n{e}")
+
+    def _teams_order_editor(self):
+        """Open the team-order editor — the order the 30 teams are listed in, in every menu.
+        Physically permutes the team records in Roster.ROS; see launcher/team_order.py."""
+        path = self._v_roster.get().strip()
+        if not path or not Path(path).is_file():
+            messagebox.showerror("Team Order", "Set a valid Roster.ROS path first (Browse…)."); return
+        try:
+            from launcher import team_order_gui
+            team_order_gui.open_editor(self, path)
+        except Exception as e:
+            messagebox.showerror("Team Order", f"Could not open the editor:\n{e}")
 
     def _teams_fields_editor(self):
         """Open the team-record field grid — every editable field of the 412-byte team record,

@@ -1,17 +1,32 @@
 """
 ros_file.py — parser / in-place editor for an NHL 2K10 Roster.ROS save (big-endian, Xbox 360).
 
-Container format (reverse-engineered):
+Container format (reverse-engineered; CORRECTED 2026-08-01 — see "the directory" below):
   0x00  u32  total size (filesize - 4)
   0x04  u32  version (1)
-  0x08  u32  chunk_count (N)
-  0x0C  N x [ u32 type_hash | u32 count | u32 data_offset ]        # the chunk directory
-  0xB28 ...  data section; each chunk = data_base + data_offset, tiling with no gaps.
+  0x08  u32  0xED — NOT the chunk count; treated here as an upper bound only
+  0x0C  N x [ u32 type_hash | u32 count | u32 data_ptr ]           # the chunk directory
+  ...        data section, tiling with no gaps, first chunk immediately after the directory.
 
-A record table is a chunk of `count` fixed-stride records. Directory `size//count` rounds the
-stride DOWN (the region is a hair short of count*stride), so the true stride is detected by
-byte-autocorrelation and the usable record count is size//stride. Chunks with count<=1 or whose
-records don't autocorrelate are treated as raw BLOBS (e.g. the string pool 0xEB69DFB9).
+## The directory (this was wrong until 2026-08-01)
+
+`data_ptr` is a **self-relative pointer**, the same convention every other pointer in this
+file uses:  ``target = <offset of the data_ptr field itself> + value - 1``.  It is NOT an
+offset from a fixed data base.  The old reading (a constant DATA_BASE = 0xB28, i.e. the end
+of a 237-entry directory) put every chunk 0xB28 too far in and, worse, at the wrong *phase*
+— the framing error that ros_editor_gui.py's "REBASED" note and player_assign.py's
+DELTA = 0x73 were both compensating for by hand.
+
+There are **19 chunks**, not the 237 the header's 0x08 field suggests; entry 19 onward is
+already chunk-0 data being misread as directory. The directory therefore self-terminates:
+an entry whose pointer is null, lands inside the directory, runs past EOF, or goes backwards
+is the first byte of the data section.
+
+With the pointers read correctly every record table tiles **exactly** — `size == count *
+stride` to the byte for all 19 chunks (2715x420 players, 96x412 teams, 40x40 arenas, ...).
+So the stride is just `size // count`; the byte-autocorrelation guess is kept only as a
+fallback for a save whose chunks do not divide evenly. Chunks with count<=1 that don't
+divide are raw BLOBS (e.g. the string pool 0xEB69DFB9, whose `count` is not a record count).
 
 Editing is strictly IN PLACE (file size never changes) so every fixed offset the game holds stays
 valid — the same invariant roster_editor.py relies on. A .bak is written before the first save.
@@ -28,7 +43,8 @@ from __future__ import annotations
 import struct
 from pathlib import Path
 
-DATA_BASE = 0xB28
+DIR_OFF = 0x0C              # first directory entry
+DIR_ENT = 12                # u32 type_hash | u32 count | u32 data_ptr
 
 
 def _be(d, o): return struct.unpack_from(">I", d, o)[0]
@@ -77,23 +93,48 @@ class RosFile:
         self.chunks: list[Chunk] = []
         self._parse()
 
+    def _read_dir(self):
+        """[(index, hash, count, data_offset)] — reads until the directory self-terminates.
+
+        The count at 0x08 is an upper bound, not the entry count (see the module header): the
+        bytes after the last real entry are chunk-0 data. An entry is real only while its
+        self-relative pointer resolves to a sane, non-decreasing position in the data section.
+        """
+        d, out, prev = self.data, [], 0
+        for i in range(min(_be(d, 8), (len(d) - DIR_OFF) // DIR_ENT)):
+            fo = DIR_OFF + i * DIR_ENT
+            h, cnt, ptr = _be(d, fo), _be(d, fo + 4), _be(d, fo + 8)
+            if ptr == 0:
+                break
+            off = fo + 8 + ptr - 1                                  # self-relative
+            if off < fo + DIR_ENT or off > self.orig_size or off < prev:
+                break                                               # landed in the directory / EOF / backwards
+            out.append((i, h, cnt, off))
+            prev = off
+        if not out:
+            raise ValueError("no readable chunk directory — is this a Roster.ROS?")
+        return out
+
     def _parse(self):
-        d = self.data
-        n = _be(d, 8)
-        ents = [(_be(d, 0x0C + i * 12), _be(d, 0x0C + i * 12 + 4), _be(d, 0x0C + i * 12 + 8))
-                for i in range(n)]
-        order = sorted(range(n), key=lambda i: ents[i][2])          # by data offset -> boundaries
-        for k, i in enumerate(order):
-            h, cnt, off = ents[i]
-            nxt = ents[order[k + 1]][2] if k + 1 < len(order) else (self.orig_size - 4 - (DATA_BASE - 4))
-            size = nxt - off
-            self.chunks.append(Chunk(i, h, cnt, DATA_BASE + off, size))
-        # sort back to directory order for a stable display
-        self.chunks.sort(key=lambda c: c.index)
+        ents = self._read_dir()
+        order = sorted(range(len(ents)), key=lambda k: (ents[k][3], k))   # by data offset, ties by index
+        for k, j in enumerate(order):
+            i, h, cnt, off = ents[j]
+            nxt = ents[order[k + 1]][3] if k + 1 < len(order) else self.orig_size
+            self.chunks.append(Chunk(i, h, cnt, off, nxt - off))
+        self.chunks.sort(key=lambda c: c.index)                     # directory order, for a stable display
         for c in self.chunks:
             self._classify(c)
 
     def _classify(self, c: Chunk):
+        # With the directory read correctly every record table divides exactly, so trust that
+        # first and only fall back to the autocorrelation guess if it doesn't.
+        if c.count > c.size:
+            c.kind = "blob"          # `count` can't be a record count — it's a blob (the string pool)
+            return
+        if c.count >= 2 and c.size >= 8 and c.size % c.count == 0:
+            c.kind, c.stride, c.nrec, c.score = "records", c.size // c.count, c.count, 1.0
+            return
         if c.count >= 2 and c.size >= 8:
             base = c.size // c.count                                  # rounds down; true stride >= base
             lo = max(2, base); hi = base + 8

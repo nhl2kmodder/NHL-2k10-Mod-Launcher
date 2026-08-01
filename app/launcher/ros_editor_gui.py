@@ -24,24 +24,30 @@ TYPES = ["u8", "i8", "u16", "i16", "u32", "i32", "f32", "hex"]
 
 # Pre-mapped fields per chunk (seeded when a table has no saved field defs yet). Discovered by
 # Ghidra + direct record analysis. The player record 0x1E159C31 (420B) carries an RGBA gear/team
-# colour palette at +0x130..+0x1A0 (each u32 = 0xRRGGBBAA); +0x158/+0x15C/+0x160 are the 3 team
-# recolour colours the goalie system uses. More fields (names, ratings) need serializer RE / in-game
-# diffs — the file uses its own serialization, distinct from the live-memory record layout.
+# colour palette at +0xBD..+0x12D (each u32 = 0xRRGGBBAA). The three team-RECOLOUR colours the
+# goalie system uses are a different, independently pinned set at +0x158/+0x15C/+0x160 (+0x168 cage)
+# — this file used to label the palette block as those, which the 2026-08-01 reframe disproved: the
+# two claims were 0x73 apart and only player_assign.py's was in-game verified. More fields (names,
+# ratings) need serializer RE / in-game diffs — the file uses its own serialization, distinct from
+# the live-memory record layout.
 #
 # +0x9F/+0xA1 are the announcer "audio name" ids: the id the commentary and PA systems resolve to
 # a recorded name. 0xFFFF = no recording = announcer stays silent for that half of the name.
 #
-# REBASED 2026-07-31 — these were listed here at +0xB1/+0xB3, which read flat zero in this GUI
-# (6 and 4 distinct values across the whole table; +0xB3 is the position dword). The offsets
-# themselves were never wrong, they were relative to record base 0x5A1B, while RosFile frames the
-# player chunk at foff 0x5A2D — exactly 0x12 further in. Same absolute bytes:
-#   0x5A1B + 0xB3 == 0x5A2D + 0xA1,   0x5A1B + 0xB1 == 0x5A2D + 0x9F
-# so under this GUI's framing they are +0x9F / +0xA1. Confirmed by the in-game name-edit series in
+# REBASED AGAIN 2026-08-01 — and this time the frame itself is right, so it should be the last
+# time. ros_file.py was reading the chunk directory with a fixed DATA_BASE; the offsets are really
+# self-relative pointers, and the old reading framed the player chunk at 0x5A2D when record 0 is at
+# 0x4F24. That is 6 records + 305 bytes, i.e. the GUI's "records" were a ROTATION straddling two
+# real players — fields below +0x73 belonged to the next player along. Every offset here is
+# therefore remapped  new = (old + 305) mod 420  (equivalently old - 0x73), with the row it belongs
+# to shifting by 7. The two audio ids, empirically pinned at +0x9F/+0xA1 in the old frame, are
+# +0x2C/+0x2E in this one. Confirmed by the in-game name-edit series in
 # Roster_Investigate/test1..6.ROS — renaming a player moves +0x9F/+0xA1 and nothing else:
-#   row 2311 first name Adam -> Alec -> Ashjay:  +0xA1 = 5003 -> 5975 -> 0xFFFF (invented name)
-#   row 2312 last name -> Lecavalier:            +0x9F = 0 -> 724, then constant while the first
+#   row 2318 first name Adam -> Alec -> Ashjay:  +0x2E = 5003 -> 5975 -> 0xFFFF (invented name)
+#   row 2319 last name -> Lecavalier:            +0x2C = 0 -> 724, then constant while the first
 #                                                name changed 5243 -> 5930 -> 5784
-# Across the live save +0x9F has 1012 distinct values / 769 sentinels, +0xA1 has 506 / 217.
+# (those rows were 2311/2312 before the +7 row shift; the byte addresses are unchanged.)
+# Across the live save +0x2C has 1012 distinct values / 769 sentinels, +0x2E has 506 / 217.
 #
 # READ-ONLY IN PRACTICE: an earlier single-variable in-game test proved the game IGNORES a
 # file-edited id for an existing player (stock Lucic id -> Getzlaf's id, PxP still said "Lucic"),
@@ -51,11 +57,19 @@ TYPES = ["u8", "i8", "u16", "i16", "u32", "i32", "f32", "hex"]
 # NAME to one that has a recording. See memory project_player_audio_name_ids.
 DEFAULT_FIELDS = {
     "0x1E159C31": (
-        [{"name": "const20", "off": 0x11C, "type": "u32"},
-         {"name": "audio_last", "off": 0x9F, "type": "u16"},
-         {"name": "audio_first", "off": 0xA1, "type": "u16"}]
-        + [{"name": ("recolor_%d" % ((o - 0x158) // 4 + 1)) if 0x158 <= o <= 0x160 else "color_%02d" % ((o - 0x130) // 4),
-            "off": o, "type": "hex", "len": 4} for o in range(0x130, 0x1A4, 4)]
+        [{"name": "portrait", "off": 0x1C, "type": "u16"},          # these four are pinned in game
+         {"name": "audio_last", "off": 0x2C, "type": "u16"},
+         {"name": "audio_first", "off": 0x2E, "type": "u16"},
+         {"name": "position", "off": 0x40, "type": "u32"},          # goalie iff (v>>3)&7 == 0
+         {"name": "team_ptr", "off": 0x14, "type": "hex", "len": 4},
+         {"name": "const20", "off": 0xA9, "type": "u32"},
+         {"name": "mask_shell", "off": 0xB4, "type": "u32"},
+         {"name": "mask_pattern", "off": 0xB8, "type": "u32"}]
+        + [{"name": "palette_%02d" % ((o - 0xBD) // 4), "off": o, "type": "hex", "len": 4}
+           for o in range(0xBD, 0x131, 4)]
+        + [{"name": "recolor_%d" % ((o - 0x158) // 4 + 1), "off": o, "type": "hex", "len": 4}
+           for o in range(0x158, 0x164, 4)]
+        + [{"name": "cage", "off": 0x168, "type": "hex", "len": 4}]
     ),
 }
 MAX_ROWS = 20000

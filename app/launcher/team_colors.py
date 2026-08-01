@@ -6,19 +6,21 @@ team-select screen) live in chunk **0x8489FAF3** (stride 412) as two blocks of 3
   - LED  records 30..59 = the same teams' arena-LED colors (+30)
 Within a record: PRIMARY  @ +0x14C (3 bytes RGB), SECONDARY @ +0x14F (3 bytes RGB).
 
-The table is SELF-DESCRIBING: every record carries its own index at +0x12B and its
-team id at +0x12C. For the 30 team records those are equal (0..29); for the LED
-block +0x12B runs 30..59 while +0x12C wraps back to 0..29. We anchor on that
-signature rather than on the chunk directory, because the directory's data_offset
-for this chunk lands 7 records (2884 B) *into* the table — record 0 (ANA) sits
-BEFORE ``chunk.foff``. Anchoring on foff silently loses the 7 teams that sort
+Every record carries its own index at +0x12B and its team id at +0x12C. On a stock
+save those are equal (0..29) for the team records, while the LED block runs +0x12B
+30..59 against +0x12C 0..29. The table is NOT found via the chunk directory: that
+chunk's data_offset lands 7 records (2884 B) *into* the table — record 0 (ANA) sits
+BEFORE ``chunk.foff``, so anchoring on foff silently loses the 7 teams that sort
 before Colorado (ANA, ATL, BOS, BUF, CGY, CAR, CHI), which is why they could never
 be mapped. See _team_base().
 
-Team id (+0x12C) == roster_editor.NHL_CODES order, i.e. plain NHL-alphabetical:
-0=ANA … 7=COL … 23=PIT … 29=WSH. So the code->record map is just that list; no
-hand-built map file is needed (team_color_map.json is dead, and its CAR=23 was
-wrong — record 23 in the old foff-relative numbering is ANA's arena LED).
+⚠ Record index is NOT a fixed alphabetical position. team_order.py physically
+permutes these records to change the in-game team list order, and it deliberately
+does not renumber +0x12B/+0x12C — the ids travel with their team. So
+``team_map(ros_path)`` reads each record's display code out of the file, and
+_team_base() anchors on the PRO/FARM roster pointers (team_order.find_table),
+which is the one signature a reorder leaves intact. The NHL_CODES fallback only
+applies when no path is supplied, and is right for a stock-ordered save only.
 
 Uniform colors (helmet / jersey / fonts) are a *different* chunk (0x1AEB24EC,
 stride 284, RGBA) and are not edited here — those are per-uniform, not per-team.
@@ -42,6 +44,7 @@ REC_IDX_OFF   = 0x12B       # this record's own index (0..59+)
 TEAM_ID_OFF   = 0x12C       # this record's team id (0..29; wraps for the LED block)
 LED_OFFSET    = 30          # record N+30 holds the same team's arena-LED colors
 NTEAMS        = 30
+FRAME_SHIFT   = 0x63        # this module's record 0 starts 0x63 bytes before team_order's
 
 
 def _color_chunk(ros: "RF.RosFile"):
@@ -50,13 +53,27 @@ def _color_chunk(ros: "RF.RosFile"):
 
 
 def _team_base(ros: "RF.RosFile", c) -> int:
-    """File offset of team record 0, found by the table's own id signature.
+    """File offset of team record 0.
 
-    ``c.foff`` is not the table start (it lands 7 records in), so probe a window of
-    record-sized shifts around it for the run of 30 records with +0x12B == +0x12C == k.
-    Raises RuntimeError rather than guess — a wrong base would write colors into
-    neighbouring records.
+    Primary anchor is team_order.find_table(), which keys off the PRO/FARM roster pointers
+    every record carries. That signature survives a **team reorder**; the old one below did
+    not, because it required record k to hold the id k and a reorder moves records without
+    renumbering them. team_order frames a record 0x63 later than this module does (its +0xC8
+    id byte is this module's +0x12B), hence FRAME_SHIFT.
+
+    The legacy id-signature probe is kept as a fallback: ``c.foff`` is not the table start
+    (it lands 7 records in), so it walks record-sized shifts around it looking for 30
+    consecutive records with +0x12B == +0x12C == k. Raises rather than guess — a wrong base
+    would write colours into neighbouring records.
     """
+    try:
+        import team_order as TO
+    except ImportError:
+        from . import team_order as TO
+    try:
+        return TO.find_table(ros.data)[0] - FRAME_SHIFT
+    except Exception:
+        pass
     d, S = ros.data, c.stride
     for shift in range(-16, 17):
         b = c.foff + shift * S
@@ -70,14 +87,29 @@ def _team_base(ros: "RF.RosFile", c) -> int:
 
 
 def team_map(ros_path=None) -> dict:
-    """{TEAMCODE: team record index} — the table's +0x12C team id.
+    """{TEAMCODE: team record index}.
 
-    Keyed off RE.NHL_CODES (a fixed 30-entry list), NOT RosterEditor(...).teams: that
-    property is built as [teams[c] for c in NHL_CODES if c in teams], so a code its string
-    parser failed to find would silently shorten the list and shift every later team's
-    colour onto the wrong record. NHL_CODES order == team id order (verified against the
-    +0x12C field and the stock colours for all 30).
+    **Pass ros_path whenever you have it.** The codes are then read out of the records
+    themselves, which is the only correct answer once the teams have been reordered (see
+    team_order.py) or renamed — record index is no longer alphabetical position.
+
+    Without a path this falls back to RE.NHL_CODES, a fixed 30-entry list that matches a
+    stock roster's order. Not RosterEditor(...).teams: that property is built as
+    [teams[c] for c in NHL_CODES if c in teams], so a code its string parser failed to find
+    would silently shorten the list and shift every later team's colour onto the wrong
+    record.
     """
+    if ros_path:
+        try:
+            try:
+                import team_order as TO
+            except ImportError:
+                from . import team_order as TO
+            m = {t["code"].upper(): t["slot"] for t in TO.read_order(ros_path) if t["code"]}
+            if len(m) == NTEAMS:
+                return m
+        except Exception:
+            pass
     if len(RE.NHL_CODES) != NTEAMS:
         raise RuntimeError(f"expected {NTEAMS} team codes, got {len(RE.NHL_CODES)}")
     return {code.upper(): i for i, code in enumerate(RE.NHL_CODES)}
@@ -92,7 +124,7 @@ def load(ros_path) -> dict:
     ros = RF.RosFile(str(ros_path)); d = ros.data; c = _color_chunk(ros)
     base = _team_base(ros, c)
     out = {}
-    for code, rec in team_map().items():
+    for code, rec in team_map(ros_path).items():
         if not (0 <= rec < NTEAMS):
             continue
         b = base + rec * c.stride
@@ -108,7 +140,7 @@ def set_color(ros_path, code, primary=None, secondary=None,
     `led=True` targets that team's arena-LED record (+30) instead. Returns the record index.
     Raises KeyError if the code isn't in the roster, RuntimeError if the file size would change."""
     ros_path = Path(ros_path)
-    rec = team_map()[code.upper()]
+    rec = team_map(ros_path)[code.upper()]
     if led:
         rec += LED_OFFSET
     if backup:
