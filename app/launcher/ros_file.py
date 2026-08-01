@@ -15,8 +15,14 @@ records don't autocorrelate are treated as raw BLOBS (e.g. the string pool 0xEB6
 
 Editing is strictly IN PLACE (file size never changes) so every fixed offset the game holds stays
 valid — the same invariant roster_editor.py relies on. A .bak is written before the first save.
-CAVEAT: a few fields are scrambled/encoded per-save (e.g. the goalie-mask slot) and won't round-trip
-predictably; most numeric fields do. Verify changes in-game.
+
+CORRECTED 2026-07-31: there is NO per-save scramble or record checksum. One in-game roster edit
+produces a 7-byte whole-file diff. The field that misled this note is the 20-bit region at player
+record +0xC3..+0xC5, which does change on ~every record between saves (its low 4 bits are preserved)
+but does NOT change when other fields change — so it is not a checksum over the record, and nothing
+needs recomputing after a write. The goalie mask in particular is a plain bitfield and round-trips
+fine; see player_assign.py, which maps the disk record onto the in-memory struct (disk = mem + 0x73)
+and writes portrait keys and goalie masks statically.
 """
 from __future__ import annotations
 import struct

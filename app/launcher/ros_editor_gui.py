@@ -8,8 +8,9 @@ changes); a one-time .bak backup is made on first save. Field definitions are re
 in ros_fields.json so your field map grows over time.
 
 Run:  python ros_editor_gui.py  ["<path to Roster.ROS>"]
-CAVEAT: field meanings are yours to discover; a few fields are scrambled per-save (e.g. goalie mask)
-and won't round-trip. Always test in-game; keep the .bak.
+CAVEAT: field meanings are yours to discover. There is no per-save scramble (see ros_file.py) — the
+goalie mask round-trips fine; what does NOT round-trip is anything the game re-derives on save, e.g.
+the audio-name ids below. Always test in-game; keep the .bak.
 """
 import sys, json, struct
 from pathlib import Path
@@ -27,18 +28,32 @@ TYPES = ["u8", "i8", "u16", "i16", "u32", "i32", "f32", "hex"]
 # recolour colours the goalie system uses. More fields (names, ratings) need serializer RE / in-game
 # diffs — the file uses its own serialization, distinct from the live-memory record layout.
 #
-# +0xB1/+0xB3 are the announcer "audio name" ids (findings 16): the id the commentary and PA
-# systems resolve to a recorded name. 0xFFFF = no recording = announcer stays silent for that
-# half of the name. They are shown here because they are the only readable link between a
-# player and the name-call audio, but note the in-game caveat recorded in findings 16: for
-# players who already shipped with the game, editing these bytes in the FILE does not change
-# what the announcer says (the game re-resolves from the roster string pool and reassigns the
-# ids on save). Treat them as diagnostic, not as a working switch.
+# +0x9F/+0xA1 are the announcer "audio name" ids: the id the commentary and PA systems resolve to
+# a recorded name. 0xFFFF = no recording = announcer stays silent for that half of the name.
+#
+# REBASED 2026-07-31 — these were listed here at +0xB1/+0xB3, which read flat zero in this GUI
+# (6 and 4 distinct values across the whole table; +0xB3 is the position dword). The offsets
+# themselves were never wrong, they were relative to record base 0x5A1B, while RosFile frames the
+# player chunk at foff 0x5A2D — exactly 0x12 further in. Same absolute bytes:
+#   0x5A1B + 0xB3 == 0x5A2D + 0xA1,   0x5A1B + 0xB1 == 0x5A2D + 0x9F
+# so under this GUI's framing they are +0x9F / +0xA1. Confirmed by the in-game name-edit series in
+# Roster_Investigate/test1..6.ROS — renaming a player moves +0x9F/+0xA1 and nothing else:
+#   row 2311 first name Adam -> Alec -> Ashjay:  +0xA1 = 5003 -> 5975 -> 0xFFFF (invented name)
+#   row 2312 last name -> Lecavalier:            +0x9F = 0 -> 724, then constant while the first
+#                                                name changed 5243 -> 5930 -> 5784
+# Across the live save +0x9F has 1012 distinct values / 769 sentinels, +0xA1 has 506 / 217.
+#
+# READ-ONLY IN PRACTICE: an earlier single-variable in-game test proved the game IGNORES a
+# file-edited id for an existing player (stock Lucic id -> Getzlaf's id, PxP still said "Lucic"),
+# while the game's own name picker writing that same byte does take effect. The id is a handle into
+# the name string pool; the announcer looks up the pool TEXT, and the serializer reassigns handles
+# on save. Treat these two fields as diagnostic — to change what the announcer says, change the
+# NAME to one that has a recording. See memory project_player_audio_name_ids.
 DEFAULT_FIELDS = {
     "0x1E159C31": (
         [{"name": "const20", "off": 0x11C, "type": "u32"},
-         {"name": "audio_last", "off": 0xB1, "type": "u16"},
-         {"name": "audio_first", "off": 0xB3, "type": "u16"}]
+         {"name": "audio_last", "off": 0x9F, "type": "u16"},
+         {"name": "audio_first", "off": 0xA1, "type": "u16"}]
         + [{"name": ("recolor_%d" % ((o - 0x158) // 4 + 1)) if 0x158 <= o <= 0x160 else "color_%02d" % ((o - 0x130) // 4),
             "off": o, "type": "hex", "len": 4} for o in range(0x130, 0x1A4, 4)]
     ),

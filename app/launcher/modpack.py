@@ -20,10 +20,20 @@ decode/encode) plus the two idempotent, sentinel-checked XEX patches (SOG bind r
 The scoreclock's overlay_static TEXTURES ride in the normal textures section — staged into
 Extracted and applied by the usual Apply All pass, which preserves this layout.
 
-Three whole-league groups, each one selectable checkbox:
+A fifth section — PORTRAITS — ships RAW GAME BYTES: the whole disc_b9610aac.iff player-portrait
+pixel pack (~65MB, all 1478 faces), installed over the recipient's outright. All-or-nothing, and
+it carries no player->portrait assignments (those live in Roster.ROS, and portrait keys only mean
+anything against the roster they were authored for) — see the section header for why.
+
+Four whole-league groups, each one selectable checkbox:
   * team_colors  — {CODE: {primary, secondary}}      (chunk 0x8489FAF3, via team_colors.py)
   * arena_names  — {CODE: arena}                      (string pool, via roster_editor.py)
   * team_names   — {CODE: {city, state, team, name}}  (string pool, via roster_editor.py)
+  * goalie_masks — {row: {shell, pattern, colors, cage, ...}} (player records, via player_assign.py)
+
+goalie_masks is the one roster group that is PER-PLAYER rather than per-team, so it carries its
+own identity plumbing (see that section's header). Selecting it also force-includes the mask
+TEXTURE files it names, so the pack is self-contained the way the scoreclock section is.
 
 Applying names is best-effort: a name longer than its fixed slot in the target save is skipped
 (the same in-place constraint the Teams tab enforces), never grown.
@@ -31,7 +41,7 @@ Applying names is best-effort: a name longer than its fixed slot in the target s
 Identity keys:
   audio stream  ->  "<fid>:0x<OFFSET8>"   (resolved through the extract manifest, robust to renames)
   texture       ->  its relative path under Textures/Extracted/  (deterministic filename)
-  roster group  ->  the group name ("team_colors" | "arena_names" | "team_names")
+  roster group  ->  the group name ("team_colors" | "arena_names" | "team_names" | "goalie_masks")
   scoreclock    ->  the single key "scoreclock" (whole-mod, all-or-nothing)
 
 Merge model per item:
@@ -57,9 +67,11 @@ except ImportError:
 try:
     from . import team_colors as TC
     from . import roster_editor as RE
+    from . import player_assign as PA
 except ImportError:
     import team_colors as TC
     import roster_editor as RE
+    import player_assign as PA
 
 FORMAT = "nhl2k10-modpack"
 VERSION = 1
@@ -67,11 +79,12 @@ FILE_IDS = ["0A", "0B", "1A", "1B"]
 PACK_EXT = ".n2kpack"
 NAMES_EXT = ".n2knames.json"
 
-ROSTER_GROUP_ORDER = ["team_colors", "arena_names", "team_names"]
+ROSTER_GROUP_ORDER = ["team_colors", "arena_names", "team_names", "goalie_masks"]
 ROSTER_GROUPS = {
-    "team_colors": "Team Colours — primary + secondary (all teams)",
-    "arena_names": "Arena Names (all teams)",
-    "team_names":  "Team Names — city / state / team / name (all teams)",
+    "team_colors":  "Team Colours — primary + secondary (all teams)",
+    "arena_names":  "Arena Names (all teams)",
+    "team_names":   "Team Names — city / state / team / name (all teams)",
+    "goalie_masks": "Goalie Masks — mask + pattern colours + cage (every custom-mask goalie)",
 }
 
 
@@ -168,6 +181,164 @@ def load_textures(root):
 def _rgbhex(rgb):
     return "#%02X%02X%02X" % (rgb[0] & 0xFF, rgb[1] & 0xFF, rgb[2] & 0xFF)
 
+
+# ── goalie masks (a PER-PLAYER roster group) ──────────────────────────────────
+#
+# The unit shipped per goalie is the whole look: which mask (shell + pattern), the three
+# pattern/recolour colour slots and the cage colour — the four things the Creation-Zone mask
+# editor exposes, all of them plain fields in the player record (+0xB4/+0xB8/+0x158../+0x168).
+#
+# WHICH goalies: the three recolour slots set to the RGB identity (FF0000/00FF00/0000FF) is the
+# file-visible signature of a repainted custom mask — it neutralises the team-colour substitution
+# so an authored true-colour texture renders as painted. Nobody sets that by accident, and it needs
+# no launcher config to detect, so it is the export filter.
+#
+# IDENTITY across rosters is the hard part: names are NOT stored inline in the player record (the
+# loader resolves them through a pointer), so a goalie can only be pinned by numbers. Each entry
+# therefore carries three, checked in descending order of confidence at apply time:
+#   row      — the record index; exact on the same roster lineage, which is the normal case since
+#              a portrait/mask pack already tells recipients to take the author's Roster.ROS.
+#   portrait — the row's portrait key (+0x1C). Verifies `row` still points at the same player, and
+#              is the search key when it doesn't. Not unique (backup/duplicate rows share keys).
+#   ordinal  — nth goalie in file order. Last resort, only trusted when the goalie COUNT matches.
+# Anything that resolves to a non-goalie row, or doesn't resolve at all, is skipped and reported —
+# a mask written onto a skater would be silent corruption.
+
+GOALIE_MASKS_KEY = "goalie_masks"
+
+def _hex6(v):
+    return "#%06X" % (int(v) & 0xFFFFFF)
+
+def _unhex6(s):
+    if isinstance(s, int):
+        return s & 0xFFFFFF
+    return int(str(s).lstrip("#"), 16) & 0xFFFFFF
+
+def _goalie_name_map():
+    """portrait key -> "First Last", best-effort, for readable labels and logs ONLY.
+
+    Read out of the launcher's own config (the Portraits tab's name->key assignments); a pack that
+    lands on someone else's machine simply carries whatever names the author's config resolved.
+    Never used for matching — see the section header for why identity is numeric.
+    """
+    import os
+    try:
+        p = Path(os.environ["APPDATA"]) / "NHL2K10 Mod Launcher" / "nhl2k10_launcher_config.json"
+        cfg = json.loads(p.read_text(encoding="utf-8"))
+        out = {}
+        for nm, key in (cfg.get("player_portraits") or {}).items():
+            out.setdefault(int(key), str(nm).replace("|", " "))
+        return out
+    except Exception:
+        return {}
+
+def mask_asset_name(shell, pattern):
+    """The mask texture asset for a (shell, pattern) pair.
+
+    The texture filename's shell number is one HIGHER than the value in the player record — the
+    record's 0 is helmet_g01 — which is the same off-by-one the Goalie tab applies in reverse.
+    """
+    return "helmet_g%02d_pattern_%02d.iff" % (int(shell) + 1, int(pattern))
+
+def load_goalie_masks(ros_path):
+    """{"<row>": {ordinal, portrait, name, shell, pattern, colors[3], cage}} for custom-mask goalies."""
+    ros_path = Path(ros_path)
+    if not ros_path.is_file():
+        return {}
+    ident = tuple(c & 0xFFFFFF for c in PA.IDENTITY_COLORS)
+    names = _goalie_name_map()
+    out = {}
+    try:
+        t = PA.PlayerTable(ros_path)
+        goalies = t.goalie_rows()
+        for ordinal, row in enumerate(goalies):
+            look = t.goalie_look(row)
+            if tuple(look["colors"]) != ident:
+                continue
+            pk = t.portrait(row)
+            out[str(row)] = {
+                "ordinal": ordinal,
+                "portrait": pk,
+                "name": names.get(pk, ""),
+                "shell": look["shell"],
+                "pattern": look["pattern"],
+                "colors": [_hex6(c) for c in look["colors"]],
+                "cage": _hex6(look["cage"]),
+            }
+    except Exception:
+        return {}
+    return out
+
+def goalie_mask_assets(data):
+    """The mask texture assets a goalie_masks group refers to — the art that must ride along."""
+    out = set()
+    for e in (data or {}).values():
+        try:
+            out.add(mask_asset_name(e["shell"], e["pattern"]))
+        except Exception:
+            continue
+    return out
+
+def goalie_mask_tex_folders(data):
+    """Those assets' folders under Textures/Extracted/, lowercased, as posix prefixes.
+
+    Via AT.asset_iff rather than the asset name: the extract tree is a GROUPED layout, so a folder
+    can be nested (Uniform/ANA/AWAY) or shared (Logos). Masks currently sit in a flat
+    helmet_gNN_pattern_NN.iff/ folder, but going through the same mapping the IFF tab extracts with
+    means this keeps working if that ever changes.
+    """
+    return {AT.asset_iff(a).lower().replace("\\", "/").strip("/") for a in goalie_mask_assets(data)}
+
+def _resolve_goalie_row(t, goalies, want_row, portrait, ordinal):
+    """(row, note) — the recipient row this entry belongs to, or (None, why-not). See header."""
+    gset = set(goalies)
+    if want_row in gset and (portrait is None or t.portrait(want_row) == portrait):
+        return want_row, ""
+    if portrait is not None:
+        hits = [r for r in goalies if t.portrait(r) == portrait]
+        if len(hits) == 1:
+            return hits[0], f"row {want_row} moved -> {hits[0]} (matched by portrait {portrait})"
+        if len(hits) > 1:
+            if want_row in hits:
+                return want_row, ""
+            return hits[0], (f"row {want_row} moved -> {hits[0]} (portrait {portrait} is on "
+                             f"{len(hits)} goalies — took the first)")
+    if want_row in gset:
+        return want_row, f"row {want_row}: portrait differs from the pack — applied by row anyway"
+    if ordinal is not None and 0 <= ordinal < len(goalies):
+        return goalies[ordinal], (f"row {want_row} is not a goalie here — fell back to goalie "
+                                  f"#{ordinal} (row {goalies[ordinal]})")
+    return None, f"row {want_row} (portrait {portrait}) has no goalie to match in this roster"
+
+def apply_goalie_masks(ros_path, data, log=print):
+    """Write each shipped goalie look onto the matching row. Returns the number applied."""
+    ros_path = Path(ros_path)
+    t = PA.PlayerTable(ros_path)
+    goalies = t.goalie_rows()
+    n, skipped = 0, 0
+    for rk, e in sorted(data.items(), key=lambda kv: int(kv[0])):
+        who = e.get("name") or f"portrait {e.get('portrait')}"
+        row, note = _resolve_goalie_row(t, goalies, int(rk), e.get("portrait"), e.get("ordinal"))
+        if row is None:
+            log(f"  goalie_masks: {who} skipped — {note}")
+            skipped += 1
+            continue
+        if note:
+            log(f"  goalie_masks: {who} — {note}")
+        t.set_goalie_look(row, {
+            "shell":   e["shell"],
+            "pattern": e["pattern"],
+            "colors":  [_unhex6(c) for c in e["colors"]],
+            "cage":    _unhex6(e["cage"]),
+        })
+        n += 1
+    if n:
+        t.save()
+    if skipped:
+        log(f"  goalie_masks: {skipped} goalie(s) could not be matched in this roster")
+    return n
+
+
 def load_roster(ros_path):
     out = {}
     ros_path = Path(ros_path)
@@ -199,11 +370,20 @@ def load_roster(ros_path):
             out["team_names"]  = names
     except Exception:
         pass
+    gm = load_goalie_masks(ros_path)
+    if gm:
+        out["goalie_masks"] = gm
     return out
 
-def _roster_item(group, data):
+def _roster_group_label(group, data=None):
     label = ROSTER_GROUPS.get(group, group.replace("_", " ").title())
-    return {"section": "roster", "key": group, "label": label, "team": "", "category": "Roster", "count": len(data)}
+    if group == GOALIE_MASKS_KEY and data:
+        label += f"   [{len(data)} goalies — mask textures ride along]"
+    return label
+
+def _roster_item(group, data):
+    return {"section": "roster", "key": group, "label": _roster_group_label(group, data),
+            "team": "", "category": "Roster", "count": len(data)}
 
 def local_roster_items(ros_path):
     data = load_roster(ros_path)
@@ -217,8 +397,8 @@ def diff_roster(in_roster, ros_path):
             continue
         inc, loc = in_roster[g], local.get(g)
         status = "new" if loc is None else ("same" if loc == inc else "conflict")
-        label = ROSTER_GROUPS.get(g, g.replace("_", " ").title())
-        items.append({"section": "roster", "key": g, "status": status, "incoming": inc, "local": loc, "label": label, "team": "", "category": "Roster"})
+        items.append({"section": "roster", "key": g, "status": status, "incoming": inc, "local": loc,
+                      "label": _roster_group_label(g, inc), "team": "", "category": "Roster"})
     return items
 
 def _add_name_edit(edits, skipped, slot, new):
@@ -243,6 +423,13 @@ def apply_roster(ros_path, groups, log=print):
             except Exception as e:
                 log(f"  team_colors: '{code}' failed: {e}")
         applied["team_colors"] = n
+
+    if "goalie_masks" in groups:
+        try:
+            applied["goalie_masks"] = apply_goalie_masks(ros_path, groups["goalie_masks"], log)
+        except Exception as e:
+            log(f"  goalie_masks failed: {e}")
+            applied["goalie_masks"] = 0
 
     name_groups = [g for g in ("arena_names", "team_names") if g in groups]
     if name_groups:
@@ -422,15 +609,123 @@ def apply_scoreclock(game_dir, sc, log=print):
     return "; ".join(parts)
 
 
+# ── portraits (the whole player-portrait pixel pack, shipped verbatim) ────────
+#
+# Unlike every other section this one ships RAW GAME BYTES: the complete disc_b9610aac.iff pixel
+# pack (~65MB, all 1478 portraits). It can't ride in the textures section — portraits aren't files
+# under Textures/Extracted, they are 0E4837 blobs inside the archive — and it deliberately doesn't
+# ship 1478 PNGs to be re-encoded on the recipient's machine: re-encoding would rebuild every mip
+# chain locally, so the result would only be approximately the author's. Shipping the finished
+# asset makes an imported pack byte-identical to the author's, and the install is one relocate.
+#
+# All-or-nothing on purpose. There is no per-portrait row and no player→portrait ASSIGNMENT in the
+# pack: assignments live in Roster.ROS (player record +0x1C), and portrait KEYS are only meaningful
+# against the roster they were authored for. Recipients are expected to take the author's
+# Roster.ROS alongside the portrait pack; a pack applied over an unrelated roster gives correct
+# images at the wrong players, which is a roster problem, not a pack problem.
+
+PORTRAITS_KEY = "portraits"
+PORTRAITS_LABEL = "Player Portraits — the whole portrait pack (all 1478 faces)"
+PORTRAITS_ARC = "portraits/" + AT.PORTRAIT_PACK_NAME
+
+
+def _sha_stream(fh, chunk=1 << 20):
+    h = hashlib.sha1()
+    for c in iter(lambda: fh.read(chunk), b""):
+        h.update(c)
+    return h.hexdigest()
+
+
+def portraits_export_item(game_dir=None):
+    """Picker row offered at export time, or None when there is no portrait pack to export.
+    Cheap: a TOC lookup, no 65MB read (that happens in the export worker if selected)."""
+    if not game_dir:
+        return None
+    try:
+        if not AT.resolve(AT.PORTRAIT_PACK_NAME, Path(game_dir)):
+            return None
+    except Exception:
+        return None
+    return {"section": "portraits", "key": PORTRAITS_KEY, "label": PORTRAITS_LABEL,
+            "team": "", "category": "Portraits"}
+
+
+def load_portraits(game_dir, log=print):
+    """The current portrait pack's bytes, or b"" when it can't be read. ~65MB — worker thread."""
+    try:
+        data = AT.export_portrait_pack(Path(game_dir))
+    except Exception as e:
+        log(f"  portraits: not captured ({e})")
+        return b""
+    n = len(AT._portrait_pairs(data))
+    if n != AT.PORTRAIT_COUNT:
+        log(f"  portraits: pack walks to {n} portraits, expected {AT.PORTRAIT_COUNT} — section skipped")
+        return b""
+    log(f"  portraits: captured {n} portraits ({len(data)} bytes)")
+    return data
+
+
+def diff_portraits_item(z, game_dir=None):
+    """Incoming-pack row for the import picker. 'same' when the recipient's pack is already
+    byte-identical (re-importing is then a no-op), otherwise 'conflict' so it stays opt-in —
+    this replaces ALL of their portraits, which is never something to do silently."""
+    with z.open(PORTRAITS_ARC) as f:
+        inc_h = _sha_stream(f)
+    size = z.getinfo(PORTRAITS_ARC).file_size
+    loc_h = None
+    if game_dir:
+        try:
+            loc_h = _sha(AT.export_portrait_pack(Path(game_dir)))
+        except Exception:
+            loc_h = None
+    status = "same" if (loc_h and loc_h == inc_h) else ("new" if loc_h is None else "conflict")
+    note = ("identical to yours" if status == "same" else
+            "REPLACES every portrait you have")
+    return {"section": "portraits", "key": PORTRAITS_KEY, "status": status,
+            "arc": PORTRAITS_ARC, "local": loc_h, "incoming": inc_h,
+            "label": f"{PORTRAITS_LABEL}  ({size // (1 << 20)} MB — {note})",
+            "team": "", "category": "Portraits"}
+
+
+def apply_portraits(z, arc, game_dir, log=print):
+    """Install the pack's portrait bytes over the recipient's. Validated + index-synced inside
+    archive_textures.install_portrait_pack; nothing is written if the pack doesn't validate."""
+    with z.open(arc) as f:
+        data = f.read()
+    return AT.install_portrait_pack(data, Path(game_dir), log)
+
+
+def install_portraits_from_pack(pack_path, game_dir, log=print):
+    """apply_portraits for a caller that has a pack PATH rather than an open zip (the GUI defers
+    the install to its background finalize, after the texture pass's compact_1b)."""
+    with zipfile.ZipFile(pack_path, "r") as z:
+        return apply_portraits(z, PORTRAITS_ARC, game_dir, log)
+
+
+def revert_portraits(game_dir, log=print):
+    """Put the stock portraits back: reset the pixel pack AND portrait.iff (which holds the
+    per-portrait read table — a stock pack under a modded table reads garbage)."""
+    game_dir = Path(game_dir)
+    n = 0
+    for iff in (AT.PORTRAIT_PACK_NAME, "portrait.iff"):
+        try:
+            if AT.ensure_clean(iff, game_dir, log):
+                n += 1
+        except Exception as e:
+            log(f"  ERROR reverting {iff}: {e}")
+    return n
+
+
 # ── revert (undo what a pack applied, from the .orig backups) ─────────────────
 
 def read_pack_contents(pack_path):
     """Cheap inventory of a pack: {'tex_rels': [...], 'audio_keys': [...], 'roster': bool,
-    'scoreclock': dict|{}} — what a revert (or a preview of one) needs to know."""
-    out = {"tex_rels": [], "audio_keys": [], "roster": False, "scoreclock": {}}
+    'scoreclock': dict|{}, 'portraits': bool} — what a revert (or a preview of one) needs to know."""
+    out = {"tex_rels": [], "audio_keys": [], "roster": False, "scoreclock": {}, "portraits": False}
     with zipfile.ZipFile(pack_path, "r") as z:
         names = set(z.namelist())
         out["roster"] = "roster.json" in names
+        out["portraits"] = PORTRAITS_ARC in names
         if "scoreclock.json" in names:
             out["scoreclock"] = json.loads(z.read("scoreclock.json"))
         for n in sorted(names):
@@ -513,12 +808,20 @@ def revert_pack(root, game_dir, pack_path, log=print):
       audio       -> restore each stream's original bytes from <arc>.orig + delete the staged WAV.
       scoreclock  -> overlay reset (covered by the texture step) + surgical XEX undo (SOG rows
                      reverted, screen anchor back to stock Bottom-Left).
+      portraits   -> pixel pack AND portrait.iff both reset to stock (the read table has to go
+                     back with the pixels). Wipes the recipient's own portrait work too.
       roster      -> NOT revertible (field values overwrite in place; no .orig concept) — logged.
     Returns a counts dict. Slow when assets are large (each ensure_clean is an archive splice)."""
     root, game_dir = Path(root), Path(game_dir)
     inv = read_pack_contents(pack_path)
-    counts = {"tex_assets": 0, "audio": 0, "scoreclock": 0, "notes": []}
+    counts = {"tex_assets": 0, "audio": 0, "scoreclock": 0, "portraits": 0, "notes": []}
     sc = inv["scoreclock"]
+
+    if inv["portraits"]:
+        log("  reverting portraits (whole pack -> stock)…")
+        counts["portraits"] = revert_portraits(game_dir, log)
+        if not counts["portraits"]:
+            counts["notes"].append("portraits were already stock — nothing to revert")
 
     iffs, skipped = revert_iffs_for_pack(inv["tex_rels"], scoreclock=bool(sc))
     for folder in skipped:
@@ -632,6 +935,9 @@ def annotate(items, root):
         elif it.get("section") == "scoreclock":
             it.setdefault("team", "")
             it["category"] = "Scoreclock"
+        elif it.get("section") == "portraits":
+            it.setdefault("team", "")
+            it["category"] = "Portraits"
         elif it.get("section") == "tex":
             team, cat = texmap.get(str(it["key"]).split("/")[0], ("", ""))
             it["team"], it["category"] = team, cat
@@ -657,9 +963,11 @@ def local_items(root):
         items.append({"section": "tex", "key": rel, "label": rel})
     return annotate(items, root)
 
-def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author=""):
+def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author="",
+                portraits=b""):
     roster = roster or {}
     scoreclock = scoreclock or {}
+    portraits = portraits or b""
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -673,7 +981,8 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
                 "audio_wav": len(wavs),
                 "textures": len(texs),
                 "roster": len(roster),
-                "scoreclock": 1 if scoreclock else 0
+                "scoreclock": 1 if scoreclock else 0,
+                "portraits": AT.PORTRAIT_COUNT if portraits else 0
             },
         }, indent=1))
         if meta:
@@ -689,8 +998,15 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
             z.writestr("roster.json", json.dumps(roster, indent=1))
         if scoreclock:
             z.writestr("scoreclock.json", json.dumps(scoreclock, indent=1))
+        if portraits:
+            # STORED, not deflated: the blobs inside are already 0E4837-compressed, so deflate
+            # burns ~30s of CPU on both ends for well under 1% — and stored members import by
+            # a plain read.
+            z.writestr(zipfile.ZipInfo(PORTRAITS_ARC), portraits,
+                       compress_type=zipfile.ZIP_STORED)
     return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs),
-            "roster": len(roster), "scoreclock": 1 if scoreclock else 0}
+            "roster": len(roster), "scoreclock": 1 if scoreclock else 0,
+            "portraits": AT.PORTRAIT_COUNT if portraits else 0}
 
 def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
                 game_dir=None, author="", log=print):
@@ -700,7 +1016,8 @@ def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
     texs = load_textures(root)    if "tex"   in include else {}
     roster = load_roster(ros_path) if ("roster" in include and ros_path) else {}
     sc = load_scoreclock(game_dir, log) if ("scoreclock" in include and game_dir) else {}
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author)
+    por = load_portraits(game_dir, log) if ("portraits" in include and game_dir) else b""
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por)
 
 def export_selected(root, out_path, selected, ros_path=None, game_dir=None, author="", log=print):
     root = Path(root)
@@ -712,6 +1029,20 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
     if any(s == "roster" for s, _ in sel) and ros_path:
         full_roster = load_roster(ros_path)
         roster = {g: d for g, d in full_roster.items() if ("roster", g) in sel}
+        if GOALIE_MASKS_KEY in roster:
+            # Self-contained goalie masks: the record only NAMES a mask; the paint job is the
+            # texture. Force-include every mask asset the shipped goalies point at, the same way
+            # the scoreclock section drags its overlay_static art along.
+            folders = goalie_mask_tex_folders(roster[GOALIE_MASKS_KEY])
+            extra = {rel: p for rel, p in load_textures(root).items()
+                     if rel.lower().startswith(tuple(f + "/" for f in folders)) and rel not in texs}
+            if extra:
+                log(f"  goalie masks: auto-including {len(extra)} mask texture file(s) "
+                    f"from {len(folders)} mask asset(s)")
+                texs.update(extra)
+            else:
+                log(f"  goalie masks: no extracted texture files found for {len(folders)} mask "
+                    f"asset(s) — extract them in the IFF tab if the paint should ride along")
     sc = {}
     if ("scoreclock", SCORECLOCK_KEY) in sel and game_dir:
         log("  capturing scoreclock state (~2 min)…")
@@ -727,7 +1058,11 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
             if extra:
                 log(f"  scoreclock: auto-including {len(extra)} overlay_static texture file(s)")
                 texs.update(extra)
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author)
+    por = b""
+    if ("portraits", PORTRAITS_KEY) in sel and game_dir:
+        log("  capturing the portrait pack (~65 MB)…")
+        por = load_portraits(game_dir, log)
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por)
 
 
 # ── diff (incoming vs local) ──────────────────────────────────────────────────
@@ -754,7 +1089,7 @@ def diff_names(json_path, root):
     _, off2entry = _catalog_index(root)
     return doc.get("manifest", doc), _meta_items(in_meta, load_audio_meta(root), off2entry)
 
-def diff_pack(zip_path, root, ros_path=None):
+def diff_pack(zip_path, root, ros_path=None, game_dir=None):
     zip_path = Path(zip_path)
     if not zipfile.is_zipfile(zip_path):
         raise ValueError(f"'{zip_path.name}' is not a valid zip archive (.n2kpack).")
@@ -776,6 +1111,8 @@ def diff_pack(zip_path, root, ros_path=None):
         items += diff_roster(in_roster, ros_path)
         if in_sc.get("snapshot"):
             items.append(diff_scoreclock_item(in_sc))
+        if PORTRAITS_ARC in names:
+            items.append(diff_portraits_item(z, game_dir))
 
         for n in sorted(names):
             if n.startswith("audio_wav/") and n.endswith(".wav"):
@@ -867,11 +1204,13 @@ def _apply_tex(z, item, root, log):
 
 def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=None, log=print):
     """game_dir enables the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
-    in a worker thread when items may include it). game_dir=None skips it with a log line, so a
-    GUI can strip scoreclock rows out and replay them itself on a background thread."""
+    in a worker thread when items may include it) and the PORTRAITS section (~65MB read + one
+    archive relocate, a few seconds). game_dir=None skips both with a log line, so a GUI can strip
+    scoreclock rows out and replay them itself on a background thread."""
     root = Path(root)
     _, off2entry = _catalog_index(root)
-    counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "skipped": 0}
+    counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "portraits": 0,
+              "skipped": 0}
     meta_writes = {}
     roster_groups = {}
 
@@ -898,6 +1237,14 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                     counts["roster"] += 1
                 else:
                     log("  roster skipped: no Roster.ROS path set (Teams tab → Browse…)")
+                    counts["skipped"] += 1
+            elif it["section"] == "portraits" and z is not None:
+                if game_dir and Path(game_dir).is_dir():
+                    log("  installing the portrait pack (~65 MB)…")
+                    log("  " + apply_portraits(z, it["arc"], game_dir, log))
+                    counts["portraits"] += 1
+                else:
+                    log("  portraits skipped: no game files folder")
                     counts["skipped"] += 1
             elif it["section"] == "scoreclock":
                 if game_dir and Path(game_dir).is_dir():

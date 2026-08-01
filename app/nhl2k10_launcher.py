@@ -237,6 +237,10 @@ CATEGORY_FOLDER: dict = {
     "SFX":                 "SFX",
     "Arena_SFX":           "SFX",
     "PA_or_Commentary":    "PA",
+    # The on-ice official announcing a penalty ("two minutes for roughing") is a different
+    # voice and a different job from the building's PA announcer; it shipped mixed into the
+    # PA bucket, so it gets its own category/folder rather than a name convention.
+    "Referee":             "Referee",
     "ArenaMusic":          "Arena_Music",
     "ArenaMusic_Short":    "Arena_Music",
     "PxP":                 "Speech_PxP",
@@ -256,6 +260,7 @@ CATEGORY_LABELS: dict = {
     "Organ_Crowd":      "Organ / Crowd",
     "SFX":              "Sound Effects",
     "PA":               "PA Announcer",
+    "Referee":          "Referee",
     "Crowd_Ambient":    "Crowd Ambient",
     "Commentary":       "Commentary (Unsorted)",
     "Pre_Game_Faceoff": "Pre-Game / Faceoff",
@@ -268,7 +273,8 @@ CATEGORY_LABELS: dict = {
 
 # Folders that belong to the Speech tab (announcer voice work); everything else is
 # plain "Audio" (music / crowd / SFX). "Commentary" = the not-yet-sorted speech bucket.
-SPEECH_FOLDERS = {"Speech_PxP", "Speech_Color", "Speech_Reporter", "PA", "Commentary"}
+SPEECH_FOLDERS = {"Speech_PxP", "Speech_Color", "Speech_Reporter", "PA", "Referee",
+                  "Commentary"}
 
 # Treeview rows inserted per mainloop turn. The audio catalog is ~80k rows; filling it in one
 # pass froze the window for seconds on startup. Small enough to stay responsive, large enough
@@ -370,7 +376,10 @@ def category_audio_dir(root: Path, category: str) -> Path:
 #:   1 -> the original release
 #:   2 -> chatter/streamedchatter re-filed Color -> Crowd_Ambient; lines.bin split into
 #:        Reporter_/Color_ by voice; 9 crowd.bin + placeholder strays renamed
-SEED_VERSION = 3
+#:   3 -> the remaining numbered placeholders transcribed to real names
+#:   4 -> the 100 on-ice penalty announcements re-filed PA -> Referee and renamed
+#:        Referee_Penalty_<Team>
+SEED_VERSION = 4
 
 #: Leading tokens the voice-attribution pass added to lines.bin names. Two names that are equal
 #: after stripping these are the SAME line, reclassified by us -- not a user rename.
@@ -426,26 +435,48 @@ def _stale_seed_value(live: dict, seed: dict) -> dict | None:
       4. the live category is "Unknown" -> the extractor's fallback, never a user's choice,
          so a real category from the seed wins (the user's *name* still stands).
 
+    Rule 2 only recognises our old value when the rename was a prefix change. For a rename
+    that rewrites the whole string (PA_AnaheimPenaltyTwo -> Referee_Penalty_Anaheim) the seed
+    entry carries `prev_name`: the name the *previous* seed shipped for that key. A live entry
+    still holding it is ours by definition, so the new name lands; anything else is a user
+    rename and survives.
+
+    `team` rides along with whichever branch fires, and is also filled in on its own when the
+    live entry has none -- a blank team is the extractor's default, not a decision.
+
     Anything else is a user edit and is preserved. That is what keeps, say, a hand-identified
     `GoalHorn_Columbus_Cannon` from being reverted to `GoalHorn_Unidentified_03BA2000`.
     """
     ln, sn = live.get("name") or "", seed.get("name") or ""
     lc, sc = live.get("category") or "", seed.get("category") or ""
+    lt, st = live.get("team") or "", seed.get("team") or ""
     if not sn:
         return None
+
+    def _with_team(out: dict) -> dict:
+        if st and st != lt:
+            out["team"] = st
+        return out
+
     if ln == sn:
-        return {"category": sc} if sc and sc != lc else None
-    if _VOICE_PREFIX_RE.sub("", ln) == _VOICE_PREFIX_RE.sub("", sn) or _PLACEHOLDER_RE.match(ln):
+        out = {"category": sc} if sc and sc != lc else {}
+        return _with_team(out) or None
+    if (_VOICE_PREFIX_RE.sub("", ln) == _VOICE_PREFIX_RE.sub("", sn)
+            or _PLACEHOLDER_RE.match(ln)
+            or ln == (seed.get("prev_name") or "\0")):
         out = {"name": sn}
         if sc and sc != lc:
             out["category"] = sc
-        return out
+        return _with_team(out)
     # 4. the user renamed the stream but never categorised it. "Unknown" is the extractor's
     #    fallback bucket, not a choice anyone makes, so a real category from the seed is an
     #    improvement either way -- and their name is still left untouched.
+    out = {}
     if lc == "Unknown" and sc and sc != lc:
-        return {"category": sc}
-    return None
+        out["category"] = sc
+    if not lt:
+        _with_team(out)
+    return out or None
 
 
 def merge_speech_seed(root: Path, nm_map: dict, log=None) -> dict:
@@ -462,7 +493,10 @@ def merge_speech_seed(root: Path, nm_map: dict, log=None) -> dict:
     # `stem` is deliberately kept: it is the only record of channels/packets for streams the
     # scanner's min_pkts floor hides (the 543 three-packet strays), and op_extract's second
     # pass reads it back through STEM_RE to decode them.
-    new = {k: dict(v) for k, v in seed.items() if k not in nm_map}
+    # `prev_name` is bookkeeping for _stale_seed_value (what the *last* seed shipped); it is not
+    # part of the entry and must not be written into the user's names file.
+    new = {k: {kk: vv for kk, vv in v.items() if kk != "prev_name"}
+           for k, v in seed.items() if k not in nm_map}
 
     raw = astore.load_names_raw(root)
     fixes: dict[str, dict] = {}
@@ -1525,7 +1559,8 @@ class App(tk.Tk):
     # Both tabs are instances of the same track-browser pane over self.audio_rows:
     # the Audio tab shows every NON-speech folder (music/crowd/SFX) with a category
     # filter; the Speech tab splits announcer voice work into sub-tabs
-    # (Play-by-Play / Color / Reporter / PA / Unsorted-commentary), one fixed folder each.
+    # (Play-by-Play / Color / Reporter / PA / Referee / Unsorted-commentary), one fixed
+    # folder each.
     #
     # The three booth voices are Randy Hahn (play-by-play), Drew Remenda (colour) and
     # John Schrader (the intermission/rinkside reporter) -- all three are mixed together
@@ -1536,6 +1571,7 @@ class App(tk.Tk):
         ("color",    "  Color  ",        frozenset({"Speech_Color"})),
         ("reporter", "  Reporter  ",     frozenset({"Speech_Reporter"})),
         ("pa",       "  PA Announcer  ", frozenset({"PA"})),
+        ("referee",  "  Referee  ",      frozenset({"Referee"})),
         ("unsorted", "  Unsorted  ",     frozenset({"Commentary"})),
     )
 
@@ -1994,6 +2030,8 @@ class App(tk.Tk):
         ab = ttk.Frame(asg); ab.pack(fill=X, pady=(8, 0))
         ttk.Button(ab, text="Assign selected mask → selected goalies", style="Accent.TButton",
                    command=self._goalie_assign).pack(side=LEFT)
+        ttk.Button(ab, text="Re-apply saved → Roster.ROS",
+                   command=self._goalie_apply_saved).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear selected", command=self._goalie_clear_selected).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear ALL saved", command=self._goalie_clear_saved).pack(side=LEFT, padx=(8, 0))
         self._goalie_status = ttk.Label(asg, text="Press “Refresh goalies” with the game running to list goalies.",
@@ -2034,8 +2072,10 @@ class App(tk.Tk):
             self._goalie_show_mask_preview()
 
     def _goalie_show_mask_preview(self, *a):
-        """Decode + show the currently-selected mask (from the game files so repaints show; falls back
-        to the shipped CLEAN design). Threaded + cached so the UI never blocks."""
+        """Decode + show the currently-selected mask as it exists in the CURRENT game files, so a
+        repaint (this launcher's or anyone's) is what you see — same rule as the portrait preview.
+        Falls back to the shipped CLEAN design only when the live archives can't be read.
+        Threaded + cached (cache keyed on the asset's live bytes) so the UI never blocks."""
         sp = self._ga_mask_map.get(self._v_ga_mask.get())
         lbl = self._v_ga_mask.get()
         if not sp:
@@ -2043,30 +2083,38 @@ class App(tk.Tk):
             self._ga_mask_prev_lbl.config(text=""); return
         shell, pat = sp
         name = f"helmet_g{shell:02d}_pattern_{pat:02d}.iff"
-        if name in self._ga_prev_cache:
-            self._ga_set_mask_preview(self._ga_prev_cache[name], lbl); return
+        gd = self._get_game_root()
+        try:
+            stamp = archtex.asset_stamp(name, gd) if gd else None
+        except Exception:
+            stamp = None
+        hit = self._ga_prev_cache.get(name)
+        if hit is not None and hit[0] == stamp:
+            self._ga_set_mask_preview(hit[1], lbl, hit[2]); return
         self._ga_mask_preview.config(image="", text="loading…")
         import threading
         def work():
-            img = None
+            img, src = None, "CURRENT"
             try:
-                gd = self._get_game_root()
                 if gd:
-                    img = archtex.decode_preview(name, gd)
+                    img = archtex.decode_preview_current(name, gd)
             except Exception:
                 img = None
-            if img is None:
+            if img is None:                                  # no game folder / unreadable -> shipped design
+                src = "stock"
                 try:
-                    img = archtex.decode_preview(name)
+                    img = archtex.decode_preview(name, gd) if gd else archtex.decode_preview(name)
                 except Exception:
                     img = None
             def done():
-                self._ga_prev_cache[name] = img
-                self._ga_set_mask_preview(img, lbl)
+                self._ga_prev_cache[name] = (stamp, img, src)
+                self._ga_set_mask_preview(img, lbl, src)
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
-    def _ga_set_mask_preview(self, img, lbl):
+    def _ga_set_mask_preview(self, img, lbl, src="CURRENT"):
+        if src == "stock":
+            lbl = f"{lbl}\n(stock — game files unreadable)"
         if img is None:
             self._ga_mask_preview.config(image="", text="(preview\nunavailable)")
             self._ga_mask_prev_lbl.config(text=lbl); return
@@ -2233,25 +2281,28 @@ class App(tk.Tk):
             saved[key] = [mem_shell, pat, identity]
         self.cfg["goalie_masks"] = saved
         save_config(self.cfg)
-        import threading
-        def work():
-            try:
-                from launcher import goalie_equipment as ge
-            except ImportError:
-                import goalie_equipment as ge
-            assigns = {k: tuple(v) for k, v in self.cfg.get("goalie_masks", {}).items()}
-            n, err = ge.apply_masks(assigns)
-            def done():
-                if err:
-                    self._goalie_status.config(text=f"Saved to {n_sel} goalie(s). Not applied live "
-                                                    f"({err}) — it'll apply automatically on next Launch.")
-                else:
-                    self._goalie_status.config(text=f"Assigned “{label}” to {n_sel} goalie(s) — "
-                                                    f"wrote {n} record(s) live + saved for every Launch. "
-                                                    f"Masks show when the goalie next loads (start/reload a game).")
-                self._goalie_refresh()
-            self.after(0, done)
-        threading.Thread(target=work, daemon=True).start()
+        if not self._goalie_rows:
+            self._goalie_status.config(text="Saved, but nothing was written: press “Refresh goalies” "
+                                            "with the game running once so names can be matched to "
+                                            "rows in your save.")
+            self._goalie_populate(); return
+        # Only the goalies just selected — re-writing every saved assignment on each Assign would
+        # stomp masks the user has since changed by hand in Creation Zone.
+        looks = {}
+        for key in sel:
+            look = {"shell": mem_shell, "pattern": pat}
+            if identity:
+                look["colors"] = [c & 0xFFFFFF for c in self._pa().IDENTITY_COLORS]
+            looks[key] = look
+        n, nplayers, err = self._ros_write_by_name(self._goalie_rows, looks, "mask")
+        if err:
+            self._goalie_status.config(text=f"Saved to {n_sel} goalie(s), but the roster write "
+                                            f"failed: {err}")
+        else:
+            self._goalie_status.config(
+                text=f"Assigned “{label}” to {nplayers} goalie(s) — {self._wrote_phrase(n)}. "
+                     f"Reload the roster in-game to see it.")
+        self._goalie_populate()
 
     def _goalie_clear_selected(self):
         sel = list(self._goalie_tv.selection())
@@ -2274,30 +2325,32 @@ class App(tk.Tk):
         self._goalie_status.config(text="Cleared all saved assignments (live game state is unchanged until reload).")
         self._goalie_populate()
 
-    def _goalie_apply_saved_async(self, tries=18):
-        """Auto-apply saved goalie masks to the running game after launch. The roster isn't in
-        memory until the game boots to a roster-loaded state, so poll (~20 s apart) until it
-        applies — or give up after `tries`."""
+    def _goalie_apply_saved(self):
+        """Re-write every saved mask assignment into the current Roster.ROS.
+
+        The offline counterpart of the old post-launch memory patch: point the launcher at a
+        different save (or one the game has since rewritten) and press this to put your masks back.
+        Still needs the game running ONCE, for the name->row listing."""
         saved = self.cfg.get("goalie_masks", {})
         if not saved:
-            return
-        import threading
-        def work():
-            try:
-                from launcher import goalie_equipment as ge
-            except ImportError:
-                import goalie_equipment as ge
-            assigns = {k: tuple(v) for k, v in saved.items()}
-            n, err = ge.apply_masks(assigns)
-            def done():
-                if n > 0:
-                    self._log(f"[goalie] auto-applied {n} saved mask assignment(s) to the running game")
-                elif tries > 1:
-                    self.after(20000, lambda: self._goalie_apply_saved_async(tries - 1))
-                elif err:
-                    self._log(f"[goalie] auto-apply gave up ({err})")
-            self.after(0, done)
-        threading.Thread(target=work, daemon=True).start()
+            messagebox.showinfo("Apply saved", "There are no saved mask assignments yet."); return
+        if not self._goalie_rows:
+            messagebox.showinfo("Apply saved",
+                                "Press “Refresh goalies” with the game running once first — the "
+                                "launcher needs the roster to match names to rows in your save."); return
+        looks = {}
+        for key, v in saved.items():
+            look = {"shell": v[0], "pattern": v[1]}
+            if len(v) > 2 and v[2]:
+                look["colors"] = [c & 0xFFFFFF for c in self._pa().IDENTITY_COLORS]
+            looks[key] = look
+        n, nplayers, err = self._ros_write_by_name(self._goalie_rows, looks, "mask")
+        if err:
+            messagebox.showerror("Apply saved", err)
+        else:
+            self._goalie_status.config(
+                text=f"Re-applied {nplayers} saved assignment(s) — {self._wrote_phrase(n)}.")
+        self._goalie_populate()
 
     # ── Player Portraits tab (live in-memory portrait assignment) ───────────────
     # A player's UI portrait (shoulders-up headshot) is chosen by the u16 at player+0x1C ('portrait
@@ -2631,30 +2684,18 @@ class App(tk.Tk):
             messagebox.showinfo("Assign", "Pick a portrait on the right first."); return
         pkey = int(ssel[0])
         label = self._pa_key_name.get(pkey, f"portrait {pkey}")
-        saved = dict(self.cfg.get("player_portraits", {}))
-        for k in sel:
-            saved[k] = pkey
-        self.cfg["player_portraits"] = saved
-        save_config(self.cfg)
         n_sel = len(sel)
-        import threading
-        def work():
-            try:
-                from launcher import portrait_assign as pa
-            except ImportError:
-                import portrait_assign as pa
-            n, err = pa.apply_portraits({k: v for k, v in self.cfg.get("player_portraits", {}).items()})
-            def done():
-                if err:
-                    self._portrait_status.config(text=f"Saved to {n_sel} player(s). Not applied live ({err}) — "
-                                                      f"applies automatically on next Launch.")
-                else:
-                    self._portrait_status.config(text=f"Assigned “{label}” to {n_sel} player(s) — wrote {n} record(s) "
-                                                      f"live + saved for every Launch. The portrait updates when that "
-                                                      f"player next loads (reopen the roster / reload a game).")
-                self._portrait_populate()
-            self.after(0, done)
-        threading.Thread(target=work, daemon=True).start()
+        # Only the players just selected — see the note in _goalie_assign.
+        n, err = self._portrait_assign_keys({k: pkey for k in sel})
+        if err:
+            self._portrait_status.config(text=f"Saved to {n_sel} player(s), but the roster write "
+                                              f"failed: {err}")
+        else:
+            self._portrait_status.config(
+                text=f"Assigned “{label}” to {n_sel} player(s) — {self._wrote_phrase(n)}. The "
+                     f"portrait updates when that player next loads (reopen the roster / reload "
+                     f"a game).")
+        self._portrait_populate()
 
     def _portrait_clear_selected(self):
         sel = list(self._portrait_tv.selection())
@@ -2675,29 +2716,6 @@ class App(tk.Tk):
         save_config(self.cfg)
         self._portrait_status.config(text="Cleared all saved portrait assignments (live game state unchanged until reload).")
         self._portrait_populate()
-
-    def _portrait_apply_saved_async(self, tries=18):
-        """Auto-apply saved portrait assignments to the running game after launch (poll until the
-        roster is in memory, or give up after `tries`)."""
-        saved = self.cfg.get("player_portraits", {})
-        if not saved:
-            return
-        import threading
-        def work():
-            try:
-                from launcher import portrait_assign as pa
-            except ImportError:
-                import portrait_assign as pa
-            n, err = pa.apply_portraits({k: v for k, v in saved.items()})
-            def done():
-                if n > 0:
-                    self._log(f"[portrait] auto-applied {n} saved portrait assignment(s) to the running game")
-                elif tries > 1:
-                    self.after(20000, lambda: self._portrait_apply_saved_async(tries - 1))
-                elif err:
-                    self._log(f"[portrait] auto-apply gave up ({err})")
-            self.after(0, done)
-        threading.Thread(target=work, daemon=True).start()
 
     # ── NHL.com online portrait fetch ───────────────────────────────────────────
     # Download a player's official NHL headshot by name, reframe it to the game's portrait framing
@@ -2747,23 +2765,95 @@ class App(tk.Tk):
         used = {p["key"] for p in self._portrait_rows}
         return [(k, b) for k, b in sorted(m.items()) if k not in used]
 
-    def _portrait_assign_keys(self, assignments):
-        """Point players at portrait keys: save to cfg (re-applied on Launch) + live-write if the game
-        is running. assignments = {player_id 'first|last': portrait_key}. Returns (n_live, err)."""
+    # ── writing player assignments into Roster.ROS (not live memory) ────────────
+    #
+    # The Goalie and Portraits tabs LIST players out of the running game because that is the only
+    # place names resolve. The WRITE, though, goes to the save file: a live-memory patch dies with
+    # the Xenia process and can never reach a console, whereas Roster.ROS travels with the game
+    # files. player_assign.rows_for_live is the bridge (and does the safety checks).
+    def _pa(self):
+        try:
+            from launcher import player_assign as pa
+        except ImportError:
+            import player_assign as pa
+        return pa
+
+    def _wrote_phrase(self, n):
+        """Status wording for a Roster.ROS write count. 0 means the save already held those values
+        (re-assigning the same mask, say) — that is a no-op, not a failure, and must not read as one."""
+        name = Path(self._current_roster_path() or "Roster.ROS").name
+        return f"wrote {n} record(s) into {name}" if n else f"{name} already matched — nothing to change"
+
+    def _ros_write_by_name(self, live_recs, by_name, kind, log=None):
+        """Write per-player values into Roster.ROS, addressing rows via the live roster.
+
+        `by_name` = {'First|Last': value}; `kind` picks what the value means:
+          "portrait" -> an int portrait key      "mask" -> a goalie_look dict.
+        A name can occupy SEVERAL records (active roster + free-agent / all-star pools) and the game
+        may draw any of them, so every matching record is written — the same rule the old live path
+        used. Returns (n_rows_written, n_players, error_or_None).
+        """
+        log = log or self._log
+        ros = self._current_roster_path()
+        if not ros or not Path(ros).is_file():
+            return 0, 0, "no Roster.ROS is set — point the launcher at your save in Settings"
+        pa = self._pa()
+        try:
+            table = pa.PlayerTable(ros)
+            mapped, notes = pa.rows_for_live(table, live_recs)
+        except pa.RowMapError as e:
+            return 0, 0, str(e)
+        except Exception as e:
+            return 0, 0, f"can't read {Path(ros).name}: {e}"
+        for note in notes[:8]:
+            log(f"[roster] {note}")
+        if len(notes) > 8:
+            log(f"[roster] …and {len(notes) - 8} more")
+
+        writes, players = {}, set()
+        for row, rec in mapped:
+            key = f"{rec['first']}|{rec['last']}"
+            if key in by_name:
+                writes[row] = by_name[key]
+                players.add(key)
+        if not writes:
+            missing = sorted(set(by_name) - players)
+            return 0, 0, (f"none of those players are in the loaded roster "
+                          f"({', '.join(m.replace('|', ' ') for m in missing[:4])}…)" if missing
+                          else "nothing to write")
+        try:
+            if kind == "portrait":
+                npor, _nm, skipped = pa.apply_assignments(ros, portraits=writes, log=log)
+                n = npor
+            else:
+                _np, nmask, skipped = pa.apply_assignments(ros, masks=writes, log=log)
+                n = nmask
+        except Exception as e:
+            return 0, 0, f"writing {Path(ros).name} failed: {e}"
+        if skipped:
+            log(f"[roster] {len(skipped)} row(s) skipped — see above")
+        return n, len(players), None
+
+    def _portrait_assign_keys(self, assignments, log=None):
+        """Point players at portrait keys: save to cfg, then write them into Roster.ROS.
+
+        assignments = {player_id 'first|last': portrait_key}. Returns (n_rows_written, err).
+        The write is static, so it survives closing Xenia and travels with the game files; the
+        running game keeps showing the old face until it reloads the roster.
+        Worker threads must pass log=self._log_q.put — _log touches Tk widgets directly."""
         if not assignments:
             return 0, None
         saved = dict(self.cfg.get("player_portraits", {}))
         saved.update(assignments)
         self.cfg["player_portraits"] = saved
         save_config(self.cfg)
-        try:
-            from launcher import portrait_assign as pa
-        except ImportError:
-            import portrait_assign as pa
-        try:
-            return pa.apply_portraits(assignments)
-        except Exception as e:
-            return 0, str(e)
+        live = getattr(self, "_portrait_rows", None) or []
+        if not live:
+            return 0, ("no roster is loaded — press “Refresh players” with the game running once, "
+                       "so the launcher can match names to rows in your save")
+        n, _np, err = self._ros_write_by_name(live, {k: int(v) for k, v in assignments.items()},
+                                              "portrait", log=log)
+        return n, err
 
     def _portrait_nhl_fetch_selected(self):
         if self._op_busy():
@@ -2958,9 +3048,10 @@ class App(tk.Tk):
 
         def work():
             try:
-                if alloc_key is not None:               # recycled slot: point the player at it (live+saved)
-                    self._portrait_assign_keys({row["key"]: alloc_key})
-                    self._log_q.put(f"  gave {row['name']} portrait slot key {alloc_key} (live + saved).")
+                if alloc_key is not None:               # recycled slot: point the player at it
+                    self._portrait_assign_keys({row["key"]: alloc_key}, log=self._log_q.put)
+                    self._log_q.put(f"  gave {row['name']} portrait slot key {alloc_key} "
+                                    f"(written into Roster.ROS).")
                 status = archtex.replace_portraits("disc_b9610aac.iff",
                                                    [{"index": blob, "path": tmp}], game_dir, self._log_q.put)
                 self._log_q.put(f"  {status}")
@@ -3146,11 +3237,12 @@ class App(tk.Tk):
                     self._log_q.put(f"[portrait] {archtex.compact_1b(game_dir, self._log_q.put)}")
                 if assigns:
                     rep["freed"] = rep["assigned_slots"]
-                    _n, err = self._portrait_assign_keys(assigns)
+                    _n, err = self._portrait_assign_keys(assigns, log=self._log_q.put)
                     self._log_q.put(f"[portrait] re-pointed {len(assigns)} player(s): "
                                     f"{rep['assigned_slots']} matched→freed slot, "
                                     f"{len(assigns) - rep['assigned_slots']} no-match→shared silhouette"
-                                    + (f" (saved; live apply: {err})" if err else " (live + saved)"))
+                                    + (f" (saved to config; Roster.ROS write: {err})" if err
+                                       else " (written into Roster.ROS)"))
             finally:
                 ex.shutdown(wait=False, cancel_futures=True)
                 shutil.rmtree(tmpdir, ignore_errors=True)
@@ -4948,7 +5040,8 @@ class App(tk.Tk):
                   "Conflicts (same item changed both ends) are previewed so you choose which to keep.\n"
                   "• Audio Names = just naming/category/sample-rate (small, git-friendly JSON).\n"
                   "• Mod Pack = everything: audio names + replacement WAVs + replacement textures "
-                  "+ roster edits (team colours / arena names / team names) + your Scoreclock "
+                  "+ roster edits (team colours / arena names / team names / goalie masks — the "
+                  "mask textures ride along automatically) + your Scoreclock "
                   "(layout, Shots-on-Goal, hides, screen anchor). Audio & textures stage "
                   "into Modified (review, then Patch); roster edits apply straight onto your "
                   "Roster.ROS so you can share them without shipping your players/ratings; the "
@@ -5023,7 +5116,7 @@ class App(tk.Tk):
         fb = ttk.Frame(dlg, padding=(12, 0, 12, 6)); fb.pack(fill=X)
         ttk.Label(fb, text="Type:").pack(side=LEFT)
         ttk.Combobox(fb, textvariable=v_type,
-                     values=["All", "Audio", "Texture", "Roster", "Scoreclock"],
+                     values=["All", "Audio", "Texture", "Roster", "Scoreclock", "Portraits"],
                      state="readonly", width=10).pack(side=LEFT, padx=(3, 12))
         ttk.Label(fb, text="Team:").pack(side=LEFT)
         ttk.Combobox(fb, textvariable=v_team, values=teams, state="readonly",
@@ -5048,6 +5141,8 @@ class App(tk.Tk):
                 return ("roster", "Roster")                          # league-wide field groups
             if it["section"] == "scoreclock":
                 return ("scoreclock", "Scoreclock")                  # single whole-mod row
+            if it["section"] == "portraits":
+                return ("portraits", "Portraits")                    # single whole-pack row
             if it["section"] == "tex":
                 return ("tex", str(it["key"]).split("/")[0])          # the .iff folder
             return ("aud", it.get("category") or "Audio")
@@ -5057,6 +5152,8 @@ class App(tk.Tk):
                 return "Roster (applied over your Roster.ROS)"
             if kind == "scoreclock":
                 return "Scoreclock (applied onto your game files)"
+            if kind == "portraits":
+                return "Player Portraits (whole pack — replaces yours)"
             if kind == "tex":
                 return _labelmap.get(gid, gid)                        # friendly asset name
             return f"Audio — {gid}" if gid != "Audio" else "Audio"
@@ -5093,6 +5190,7 @@ class App(tk.Tk):
             if t == "Texture" and it["section"] != "tex": return False
             if t == "Roster" and it["section"] != "roster": return False
             if t == "Scoreclock" and it["section"] != "scoreclock": return False
+            if t == "Portraits" and it["section"] != "portraits": return False
             if v_team.get() != "All" and it.get("team", "") != v_team.get(): return False
             if v_cat.get() != "All" and it.get("category", "") != v_cat.get(): return False
             return True
@@ -5202,7 +5300,17 @@ class App(tk.Tk):
             sc_item["checked"] = False                       # opt-in: capture costs ~2 min
             sc_item["label"] += "   [auto-includes overlay_static textures; adds ~2 min]"
             items.append(sc_item)
-        else:
+        por_item = None                                      # Portraits (whole ~65 MB pack)
+        try:
+            por_item = mp.portraits_export_item(game_dir)
+        except Exception as e:
+            self._log(f"[modpack] portrait scan skipped: {e}")
+        if por_item:
+            por_item["checked"] = False                      # opt-in: adds ~65 MB to the pack
+            por_item["label"] += ("   [whole pack, ~65 MB — recipients should take your "
+                                  "Roster.ROS too]")
+            items.append(por_item)
+        if not sc_ok and not por_item:
             game_dir = None
         if not items:
             messagebox.showinfo("Export Mod Pack",
@@ -5221,20 +5329,23 @@ class App(tk.Tk):
         if not p: return
         keys = {(it["section"], it["key"]) for it in sel}
         with_sc = any(s == "scoreclock" for s, _ in keys)
+        with_por = any(s == "portraits" for s, _ in keys)
         self._log(f"─── Export Mod Pack ({len(sel)} item(s)) ───")
         def work():
             try:
                 res = mp.export_selected(root, p, keys, ros_path=ros_path,
-                                         game_dir=game_dir if with_sc else None,
+                                         game_dir=game_dir if (with_sc or with_por) else None,
                                          log=self._log_q.put)
                 self._log_q.put(f"Mod Pack: {res['audio_meta']} names, {res['audio_wav']} "
                                 f"audio, {res['textures']} texture(s), {res['roster']} roster "
-                                f"group(s), scoreclock: {'yes' if res['scoreclock'] else 'no'} "
+                                f"group(s), scoreclock: {'yes' if res['scoreclock'] else 'no'}, "
+                                f"portraits: {res['portraits'] or 'no'} "
                                 f"→ {Path(p).name}")
             except Exception as e:
                 self._log_q.put(f"Export failed: {e}")
-        self._run_in_thread(work, op_label="Building Mod Pack…" +
-                            (" (capturing scoreclock, ~2 min)" if with_sc else ""))
+        extra = ((" (capturing scoreclock, ~2 min)" if with_sc else "") +
+                 (" (+65 MB portrait pack)" if with_por else ""))
+        self._run_in_thread(work, op_label="Building Mod Pack…" + extra)
 
     def _import_modpack(self):
         root = self._get_root()
@@ -5247,7 +5358,8 @@ class App(tk.Tk):
         ros_path = self._current_roster_path()
         def work():
             try:
-                _manifest, items = mp.diff_pack(p, root, ros_path=ros_path)
+                _manifest, items = mp.diff_pack(p, root, ros_path=ros_path,
+                                                game_dir=self._get_game_root())
                 self._pending_import = (items, p)
             except Exception as e:
                 self._log_q.put(f"Import failed: {e}"); self._pending_import = None
@@ -5277,9 +5389,9 @@ class App(tk.Tk):
             iffs, skipped = mp.revert_iffs_for_pack(inv["tex_rels"], scoreclock=bool(inv["scoreclock"]))
         except Exception as e:
             messagebox.showerror("Revert Mod Pack", f"Could not read pack:\n{e}"); return
-        if not iffs and not inv["audio_keys"] and not inv["scoreclock"]:
+        if not iffs and not inv["audio_keys"] and not inv["scoreclock"] and not inv["portraits"]:
             messagebox.showinfo("Revert Mod Pack",
-                "This pack contains nothing revertible (no textures/audio/scoreclock)."); return
+                "This pack contains nothing revertible (no textures/audio/scoreclock/portraits)."); return
         lines = []
         if iffs:
             lines.append(f"• {len(iffs)} asset(s) reset to pristine (archives + staged files):\n   "
@@ -5290,6 +5402,8 @@ class App(tk.Tk):
             lines.append(f"• {len(inv['audio_keys'])} audio stream(s) restored to original")
         if inv["scoreclock"]:
             lines.append("• Scoreclock: layout back to stock, SOG + screen-anchor XEX patches undone")
+        if inv["portraits"]:
+            lines.append("• Portraits: ALL 1478 faces back to stock (your own portrait work goes too)")
         if inv["roster"]:
             lines.append("• Roster values are NOT revertible — restore your own ROS backup")
         if not messagebox.askyesno("Revert Mod Pack",
@@ -5314,10 +5428,12 @@ class App(tk.Tk):
                 self._sbl_load()                    # scene reset -> re-read the pristine file
             notes = ("\n\n" + "\n".join(counts["notes"])) if counts.get("notes") else ""
             self._log(f"Reverted: {counts['tex_assets']} asset(s), {counts['audio']} audio, "
-                      f"scoreclock: {'yes' if counts['scoreclock'] else 'no'}")
+                      f"scoreclock: {'yes' if counts['scoreclock'] else 'no'}, "
+                      f"portraits: {'yes' if counts.get('portraits') else 'no'}")
             messagebox.showinfo("Revert complete",
                 f"Assets reverted: {counts['tex_assets']}   Audio: {counts['audio']}   "
-                f"Scoreclock: {'yes' if counts['scoreclock'] else 'no'}{notes}\n\n"
+                f"Scoreclock: {'yes' if counts['scoreclock'] else 'no'}   "
+                f"Portraits: {'yes' if counts.get('portraits') else 'no'}{notes}\n\n"
                 "Relaunch the game to see the original look.")
         self._run_in_thread(work, op_label="Reverting mod pack…", on_done=done)
 
@@ -5341,8 +5457,11 @@ class App(tk.Tk):
             messagebox.showinfo("Import", "Nothing selected — nothing imported."); return
         root = self._get_root()
         if not root: return
+        # scoreclock + portraits both write straight into the game archives — deferred to the
+        # background finalize so the dialog thread doesn't stall on them
         sc_rows = [it for it in sel if it["section"] == "scoreclock"]
-        rest = [it for it in sel if it["section"] != "scoreclock"]
+        por_rows = [it for it in sel if it["section"] == "portraits" and it["status"] != "same"]
+        rest = [it for it in sel if it["section"] not in ("scoreclock", "portraits")]
         decisions = {f'{it["section"]}|{it["key"]}': "theirs" for it in sel if it["status"] == "conflict"}
         try:
             counts = mp.apply_items(root, rest, decisions, zip_path=zip_path,
@@ -5358,31 +5477,38 @@ class App(tk.Tk):
         tex_folders = sorted({Path(it["key"]).parent.as_posix() for it in rest
                               if it["section"] == "tex" and it["status"] != "same"})
         sc = sc_rows[0]["incoming"] if sc_rows else None
+        por = bool(por_rows)
         bg_note = ""
-        if tex_folders or sc:
+        if tex_folders or sc or por:
             parts = []
             if tex_folders: parts.append("imported textures are being applied to the game archives")
             if sc:          parts.append("the scoreclock is being replayed onto your game files")
+            if por:         parts.append("the portrait pack is being installed")
             bg_note = ("\n\nNow finishing in the background (a few minutes): " + "; ".join(parts) +
                        ". Watch the log — you'll get a message when it's done.")
+        por_note = ("\n\n⚠ The portrait pack replaces ALL your portraits. Portrait keys only line "
+                    "up with the roster they were authored for — use the pack author's Roster.ROS "
+                    "or faces will land on the wrong players." if por else "")
         messagebox.showinfo("Import complete",
             f"Names: {counts['meta']}   Audio: {counts['audio']}   Textures: {counts['tex']}   "
             f"Roster: {counts['roster']}"
             + ("\n\nAudio replacements are staged — use Apply All Mods to patch them."
                if counts["audio"] else "")
-            + roster_note + bg_note)
+            + roster_note + por_note + bg_note)
         if counts["roster"] and Path(self._v_roster.get().strip() or "x").is_file():
             try: self._teams_load()          # refresh the Teams grid from the patched save
             except Exception: pass
-        if tex_folders or sc:
-            self._import_finalize(sc, tex_folders, zip_path)
+        if tex_folders or sc or por:
+            self._import_finalize(sc, tex_folders, zip_path, portraits=por)
 
-    def _import_finalize(self, sc, tex_folders, zip_path):
+    def _import_finalize(self, sc, tex_folders, zip_path, portraits=False):
         """Background finish of a mod-pack import: (1) apply the just-imported texture files of
         every touched asset into the game archives (same clean-base path as Apply All), then
-        (2) replay the scoreclock section (DRAM rebuild + auto-flatten + XEX patches) and save it
-        as a preset. Textures go FIRST — the overlay texture apply resets blob0, so the layout
-        rebuild must come after (and the texture pass skips its own snapshot/restore then)."""
+        (2) install the portrait pack, then (3) replay the scoreclock section (DRAM rebuild +
+        auto-flatten + XEX patches) and save it as a preset. Textures go FIRST — the overlay texture
+        apply resets blob0, so the layout rebuild must come after (and the texture pass skips its
+        own snapshot/restore then). Portraits go after the texture pass's compact_1b, which would
+        otherwise shuffle the freshly-relocated pack."""
         game_dir = self._get_game_root()
         root = self._get_root()
         if not game_dir or not root:
@@ -5401,7 +5527,7 @@ class App(tk.Tk):
                     pass
         preset_name = f"Imported — {Path(zip_path).stem}" if zip_path else "Imported scoreclock"
         def work():
-            applied, sc_status, err = 0, None, None
+            applied, sc_status, por_status, err = 0, None, None, None
             try:
                 for iff in cand:
                     recs, edits = self._iff_all_edits(iff, root)
@@ -5427,13 +5553,23 @@ class App(tk.Tk):
                         self._log_q.put(f"  {archtex.compact_1b(game_dir, self._log_q.put)}")
                     except Exception as ce:
                         self._log_q.put(f"  (compact skipped: {ce})")
+                if portraits and zip_path:
+                    self._log_q.put("  installing the portrait pack (~65 MB)…")
+                    try:
+                        por_status = mp.install_portraits_from_pack(zip_path, game_dir,
+                                                                    self._log_q.put)
+                        self._log_q.put(f"  {por_status}")
+                    except Exception as pe:               # validated before any write — files intact
+                        por_status = f"FAILED — {pe}"
+                        self._log_q.put(f"  portrait pack {por_status}")
                 if sc:
                     sc_status = mp.apply_scoreclock(game_dir, sc, self._log_q.put)
             except Exception as e:
                 err = str(e)
-            self._imp_fin_result = (applied, sc_status, err)
+            self._imp_fin_result = (applied, sc_status, por_status, err)
         def done():
-            applied, sc_status, err = getattr(self, "_imp_fin_result", (0, None, "unknown"))
+            applied, sc_status, por_status, err = getattr(self, "_imp_fin_result",
+                                                          (0, None, None, "unknown"))
             self._imp_fin_result = None
             if err:
                 self._log(f"[modpack] import finish FAILED — {err}")
@@ -5441,6 +5577,10 @@ class App(tk.Tk):
             lines = []
             if tex_folders:
                 lines.append(f"Textures applied to the game archives ({applied} asset(s)).")
+            if por_status:
+                lines.append("Portrait pack installed — all faces replaced."
+                             if "FAILED" not in por_status else
+                             "⚠ Portrait pack FAILED — your portraits were left alone (check the log).")
             if sc_status:
                 self._log(f"[modpack] scoreclock: {sc_status}")
                 try:                              # save the imported look as a loadable preset
@@ -5902,11 +6042,10 @@ class App(tk.Tk):
         self._log("─── Launch NHL 2k10 ───")
         self._log(f"Game: {Path(game_path).name}")
         try:
+            # Just start the game. Portrait/mask assignments used to be re-patched into memory here,
+            # 60 s after launch; they are written straight into Roster.ROS now, so the game reads
+            # them itself — which is also what makes the modded files work on real hardware.
             subprocess.Popen([xenia_path, game_path])
-            if self.cfg.get("goalie_masks"):
-                self._log("[goalie] will auto-apply saved mask assignments once the roster loads…")
-                self.after(60000, self._goalie_apply_saved_async)   # give the game time to boot
-                self.after(60000, self._portrait_apply_saved_async)
         except Exception as e:
             messagebox.showerror("Launch failed", str(e))
 

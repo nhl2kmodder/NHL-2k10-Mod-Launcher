@@ -1,13 +1,15 @@
-"""goalie_equipment.py — live in-memory goalie mask assignment (Option B).
+"""goalie_equipment.py — READING goalie masks out of the running game.
 
-The Roster.ROS *file* stores the goalie mask index inside a per-record field that is scrambled/
-checksummed per save (`+0x118`), so it can't be edited on disk cleanly. **In memory it's plain**:
-the game reads the mask from the loaded player struct as
+The game reads a goalie's mask from the loaded player struct as
     shell   = (*(u32*)(player+0xB4) >> 23) & 0xF      (Goalie_GetMaskModelIndex   @0x840a8888)
     pattern =  *(u32*)(player+0xB8)        & 0x1F      (Goalie_GetMaskPatternIndex @0x840a9010)
-so we assign masks by writing those two fields in the running game. This only works WITH the
-launcher attached to Xenia (it patches memory) — it does NOT modify the game/roster files, and
-won't persist on its own. The launcher re-applies saved assignments on each launch.
+
+This module is now the LISTING half of the Goalie tab, not the writing half. Player NAMES only
+resolve in the running game (the record holds a pointer into a name pool; nothing in the save file
+spells the name inline), so the tab still enumerates live — but the assignment is written into
+**Roster.ROS** via player_assign.py, because the on-disk record is the same struct at the same
+offsets. A live memory patch dies with the Xenia process and can never reach a console; a file edit
+travels with the game files. set_mask()/apply_masks() below are kept for diagnostics only.
 
 Verified live (xenia_canary):
   g_RosterManager global @ guest VA 0x849DE29C -> manager base pointer.
@@ -36,6 +38,7 @@ OFF_FNAME  = 0x04
 OFF_POS    = 0x40
 OFF_SHELL  = 0xB4                        # shell = (dword >> 23) & 0xF
 OFF_PAT    = 0xB8                        # pattern = dword & 0x1F
+OFF_KEY    = 0x1C                        # u16 BE = portrait key (identity check against Roster.ROS)
 SHELL_SHIFT = 23
 SHELL_MASK  = 0xF
 PAT_MASK    = 0x1F
@@ -93,8 +96,14 @@ def _read_utf16(h, guest, maxchars=48):
 
 
 def enumerate_goalies(h):
-    """Return [{index, addr(guest), first, last, name, shell, pattern}] for every goalie in the
-    loaded roster, or [] if the roster manager isn't reachable (game not at a roster-loaded state)."""
+    """Return [{index, addr(guest), first, last, name, shell, pattern, portrait, roster_count}] for
+    every goalie in the loaded roster, or [] if the roster manager isn't reachable (game not at a
+    roster-loaded state).
+
+    `index`/`roster_count` line a live record up with the same row in Roster.ROS (same table, same
+    stride, same order); `portrait` is the per-row key that double-checks the match. See
+    player_assign.rows_for_live — that pairing is what lets the Goalie tab write the SAVE FILE
+    instead of live memory."""
     mgr = manager_base(h)
     if not mgr:
         return []
@@ -124,7 +133,9 @@ def enumerate_goalies(h):
         if not (last or first):
             continue
         out.append({"index": i, "addr": arr + base, "first": first, "last": last,
-                    "name": (first + " " + last).strip(), "shell": shell, "pattern": pat})
+                    "name": (first + " " + last).strip(), "shell": shell, "pattern": pat,
+                    "portrait": struct.unpack_from(">H", blob, base + OFF_KEY)[0],
+                    "roster_count": cnt})
     return out
 
 

@@ -438,24 +438,63 @@ def load_catalog():
     return rows
 
 
-def decode_preview(name: str, clean_dir: Path = None):
-    """Decode the primary texture -> PIL RGBA for preview (no file written), or None."""
+def decode_preview(name: str, clean_dir: Path = None, clean: bool = True):
+    """Decode the primary texture -> PIL RGBA for preview (no file written), or None.
+    clean=True (default) reads the pristine .orig archives — the shipped design. clean=False reads
+    the LIVE archives, so applied mods/repaints show (see decode_preview_current)."""
     if name in SCENE_ASSETS:
         return decode_preview_at(*SCENE_ASSETS[name][:5], clean_dir)
-    loc = resolve(name, clean_dir, clean=True)
+    loc = resolve(name, clean_dir, clean=clean)
     if not loc:
         return None
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=clean), "rb") as f:
         f.seek(off); data = f.read(size + 0x200000)
     blobs = _walk_blobs(data, size)
     vram, fetch = _find_primary(blobs)
     if not vram:
         return None
     fmt, bpu, block, w, h, tiled, mip0 = fetch
+    vo = _primary_vram_off(blobs, len(vram["dec"]), mip0)
     try:
-        return _to_straight(T.decode(_dxt_endian(vram["dec"][:mip0], fmt), w, h, fmt, bpu, block, tiled, 0).convert("RGBA"), fmt)
+        return _to_straight(T.decode(_dxt_endian(vram["dec"][vo:vo + mip0], fmt), w, h, fmt, bpu, block, tiled, 0).convert("RGBA"), fmt)
     except Exception:
+        return None
+
+
+def _primary_vram_off(blobs, vlen, mip0):
+    """Where the primary texture's mip0 starts inside the VRAM blob. Normally 0 (the record carries
+    the +0x6c==1 placeholder and the loader places it), but a relocate-GROW replace APPENDS the new
+    pixels and redirects the record's stored offset — so a repainted asset's texture is no longer at
+    the head of the blob. Reading it as 0 shows a band of garbage over the old data."""
+    dram = next((b["dec"] for b in blobs if b["dec"] and len(b["dec"]) == 0xE0), None)
+    if dram is None:
+        return 0
+    v = _BE(dram, 0x6C)
+    if v <= 1:                                        # placeholder -> loader-placed at the head
+        return 0
+    vo = v - 1
+    return vo if 0 < vo and vo + mip0 <= vlen else 0
+
+
+def decode_preview_current(name: str, arc_dir: Path = None):
+    """Decode the primary texture from the CURRENT game files (mods/repaints applied) -> PIL RGBA,
+    or None. Same idea as decode_portrait_current: no .orig preference, so what you see is what the
+    game will load. Falls back to nothing — callers decide whether to show the clean design."""
+    return decode_preview(name, arc_dir, clean=False)
+
+
+def asset_stamp(name: str, arc_dir: Path = None):
+    """Cheap cache key for an asset's CURRENT bytes: (archive path, mtime_ns, offset, size). Changes
+    whenever a replace/repaint could have altered the asset. None if it doesn't resolve."""
+    loc = resolve(name, arc_dir)
+    if not loc:
+        return None
+    arc, off, size, _idx, _f3 = loc
+    p = _arc_file(arc_dir, arc)
+    try:
+        return (str(p), p.stat().st_mtime_ns, off, size)
+    except OSError:
         return None
 
 
@@ -1030,6 +1069,8 @@ def _runtime_map(name: str):
 # blob in place. (Every earlier search missed this pack for being over a 60MB size cap.) A friendly
 # display name is mapped for the UI.
 PORTRAIT_PACKS = {"disc_b9610aac.iff": "player_portraits"}
+PORTRAIT_PACK_NAME = "disc_b9610aac.iff"
+PORTRAIT_COUNT = 1478                                 # portraits in the pack (fixed by portrait.iff)
 _PORTRAIT_MIP0 = 0x10000                              # 256x256 DXT4_5 mip0 bytes
 # Portraits are engine-locked to 256x256 DXT4_5 (the loader hardcodes format/size — 512x512 overflows
 # the fixed 0x20000 VRAM slot, and 4444/8888 mis-tile as a loader-placed pack; both verified in-game).
@@ -1533,6 +1574,65 @@ def replace_portraits(name, edits, game_dir, log=print) -> str:
     return _relocate(name, bytes(new_res), idx, game_dir, 256, 256, "DXT4_5", log)
 
 
+def _portrait_pairs(pack: bytes):
+    """[(hdrOff, hdrTot, pixOff, pixTot)] — the (0xE0 header, portrait) blob pairs in a pixel pack.
+    Same walk _sync_portrait_index uses to rebuild portrait.iff's read table, so a pack that yields
+    PORTRAIT_COUNT pairs here is exactly a pack that can be indexed."""
+    blobs = _walk_blobs(pack, len(pack))
+    pairs, i = [], 0
+    while i + 1 < len(blobs):
+        a, b = blobs[i], blobs[i + 1]
+        if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                and b["dec"] is not None and len(b["dec"]) >= _PORTRAIT_MIP0):
+            pairs.append((a["off"], a["tot"], b["off"], b["tot"])); i += 2
+        else:
+            i += 1
+    return pairs
+
+
+def export_portrait_pack(game_dir=None) -> bytes:
+    """The WHOLE portrait pixel pack as the game currently holds it — every portrait, already
+    encoded and 0E4837-compressed. Shipping these bytes verbatim (rather than 1478 PNGs to be
+    re-encoded on the recipient's machine) makes an imported portrait pack byte-identical to the
+    author's, which is the only way to guarantee the mip chains and the portrait.iff read table
+    line up. Reads the CURRENT files, not .orig, so applied portrait mods are what you get."""
+    game_dir = Path(game_dir) if game_dir else None
+    loc = resolve(PORTRAIT_PACK_NAME, game_dir)
+    if not loc:
+        raise ValueError(f"{PORTRAIT_PACK_NAME}: not found in game TOC")
+    arc, off, size, _idx, _f3 = loc
+    with open(_arc_file(game_dir, arc), "rb") as f:
+        f.seek(off)
+        return f.read(size)
+
+
+def install_portrait_pack(pack: bytes, game_dir, log=print) -> str:
+    """Install a WHOLE portrait pixel pack (from export_portrait_pack) over the game's own.
+
+    Not a splice: the incoming bytes REPLACE the asset outright, so the recipient ends up with the
+    author's exact portraits regardless of what they had before. Validated before anything is
+    written — the pack must walk to PORTRAIT_COUNT header/portrait pairs, because portrait.iff's
+    read table at +0xA210 is a fixed 1478-entry array of exact compressed offsets/sizes and the game
+    seeks through it instead of walking the pack. Sync that table, then relocate.
+
+    IMPORTANT: applying single-portrait edits afterwards still works (they splice + re-sync), but a
+    later `ensure_clean` on this asset throws the whole pack away back to stock."""
+    game_dir = Path(game_dir)
+    pack = bytes(pack)
+    loc = resolve(PORTRAIT_PACK_NAME, game_dir)
+    if not loc:
+        raise ValueError(f"{PORTRAIT_PACK_NAME}: not found in game TOC")
+    arc, _off, _size, idx, _f3 = loc
+    pairs = _portrait_pairs(pack)
+    if len(pairs) != PORTRAIT_COUNT:
+        raise ValueError(f"portrait pack rejected: walks to {len(pairs)} portraits, expected "
+                         f"{PORTRAIT_COUNT} — game files untouched")
+    _backup_once(game_dir / arc, log)
+    log(f"  portrait pack: installing {len(pairs)} portraits ({len(pack)} bytes)")
+    _sync_portrait_index(pack, game_dir, log, entries=pairs)
+    return _relocate(PORTRAIT_PACK_NAME, pack, idx, game_dir, 256, 256, "DXT4_5", log)
+
+
 # Stock fetch-constant dwords 3/4 in every portrait's 0xE0 descriptor (fetch constant @0x94;
 # verified identical across blobs). d3 bits23-24 = mip_filter (1=linear, 2=BaseMap), d4 bits6-9 =
 # mip_max_level. The card screens draw the portrait small, so the GPU footprint picks the 64x64
@@ -1778,24 +1878,16 @@ def _sync_bundle_index(pack_name: str, new_pack: bytes, game_dir: Path, log=prin
     log(f"  {index_iff} read-table synced ({changed} entr{'y' if changed == 1 else 'ies'} updated)")
 
 
-def _sync_portrait_index(new_pack: bytes, game_dir: Path, log=print):
+def _sync_portrait_index(new_pack: bytes, game_dir: Path, log=print, entries=None):
     """Rewrite portrait.iff's per-portrait read table to match the (re-spliced) pixel pack. The game
     doesn't walk disc_b9610aac.iff — it seeks each portrait via portrait.iff's blob-order table at
     +0xA210: 1478 x [smallOff, smallSize, bigOff, bigSize] (exact compressed offsets/sizes). A splice
     changes the edited blob's size and SHIFTS every later blob, so stale entries truncate/corrupt
     reads (proven in-game: an over-size blob read only bigSize bytes -> garbage). In-place, same size."""
-    blobs = _walk_blobs(new_pack, len(new_pack))
-    entries = []
-    i = 0
-    while i + 1 < len(blobs):
-        a, b = blobs[i], blobs[i + 1]
-        if (a["dec"] is not None and len(a["dec"]) == 0xE0
-                and b["dec"] is not None and len(b["dec"]) >= _PORTRAIT_MIP0):
-            entries.append((a["off"], a["tot"], b["off"], b["tot"])); i += 2
-        else:
-            i += 1
-    if len(entries) != 1478:
-        log(f"  WARNING portrait.iff NOT synced (found {len(entries)} pairs, expected 1478)")
+    # `entries` lets a caller that already walked the pack skip a second ~12s decompress pass
+    entries = _portrait_pairs(new_pack) if entries is None else entries
+    if len(entries) != PORTRAIT_COUNT:
+        log(f"  WARNING portrait.iff NOT synced (found {len(entries)} pairs, expected {PORTRAIT_COUNT})")
         return
     iloc = resolve("portrait.iff", game_dir)
     if not iloc:

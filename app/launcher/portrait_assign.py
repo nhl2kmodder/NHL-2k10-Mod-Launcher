@@ -6,9 +6,11 @@ header hash of one portrait blob in disc_b9610aac.iff. So a player shows portrai
 we reassign by writing that u16 in the running game. Reverse-engineered from Function_83D32188 /
 FUN_840a69e0 (the reader is literally `*(u16*)(player+0x1C)`); confirmed live (507->200 = grey).
 
-Like the goalie-equipment tab this is a LIVE memory patch, NOT a file edit: the Roster.ROS stores
-players in a different, mostly-empty on-disk layout where the key isn't plainly at +0x1C, so we write
-the loaded player array and the launcher re-applies saved assignments on each launch.
+Like goalie_equipment.py, this module is now the LISTING half of its tab: it enumerates the running
+game because that is the only place player names resolve. The assignment itself is written into
+**Roster.ROS** by player_assign.py — the on-disk record is the same struct, so the key really is at
++0x1C there too, and a file edit (unlike a memory patch) survives Xenia closing and works on real
+hardware. set_portrait_key()/apply_portraits() below are kept for diagnostics only.
 
 key<->blob comes from archive_textures.portrait_key_blob_map(). Roster walk mirrors goalie_equipment.py.
 """
@@ -74,8 +76,12 @@ def _read_utf16(h, guest, maxchars=48):
 
 
 def enumerate_players(h):
-    """[{index, addr(guest), first, last, name, key}] for every NAMED player in the loaded roster,
-    or [] if the roster manager isn't reachable (game not at a roster-loaded state)."""
+    """[{index, addr(guest), first, last, name, key, roster_count}] for every NAMED player in the
+    loaded roster, or [] if the roster manager isn't reachable (game not at a roster-loaded state).
+
+    `index` is the record's slot in the live player array and `roster_count` the array's length —
+    together they let a caller line a live record up with the same row in Roster.ROS, which is the
+    same table with the same stride and order (see player_assign.rows_for_live)."""
     mgr = manager_base(h)
     if not mgr:
         return []
@@ -99,7 +105,7 @@ def enumerate_players(h):
         if not (last or first):
             continue
         out.append({"index": i, "addr": arr + base, "first": first, "last": last,
-                    "name": (first + " " + last).strip(), "key": key})
+                    "name": (first + " " + last).strip(), "key": key, "roster_count": cnt})
     return out
 
 
