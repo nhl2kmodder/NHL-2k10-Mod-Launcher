@@ -1,10 +1,19 @@
 """team_colors.py — read/edit NHL 2k10 TEAM colors in a Roster.ROS save.
 
 The team PRIMARY / SECONDARY colors (the ones shown on the scoreclock and the
-team-select screen) live in chunk **0x8489FAF3** (stride 412) as two blocks of 30:
-  - team records 0..29  = the 30 NHL teams' colors, in the roster's own team order
-  - LED  records 30..59 = the same teams' arena-LED colors (+30)
+team-select screen) live in chunk **0x8489FAF3** (stride 412) — the same 412-byte
+record table team_order.py works on, just framed 0x63 bytes earlier:
+  - the league-0 records = the NHL teams' colors, in the roster's own team order
+  - each team's AHL affiliate record holds that team's arena-LED colors (``led=True``)
 Within a record: PRIMARY  @ +0x14C (3 bytes RGB), SECONDARY @ +0x14F (3 bytes RGB).
+
+⚠ Nothing here may assume **30**. An expansion team is an ordinary league-0 record
+(Seattle and Vegas make it 32), so the team list, the record indices and the
+affiliate lookup are all derived from the roster. The old code required exactly 30
+teams and hard-coded "affiliate = record + 30"; with 32 league-0 records that
+silently fell back to a stock alphabetical code list, which after a reorder maps
+codes onto the *wrong* records. The affiliate is now found the way affiliates.py
+defines it: the league-1 record wearing the same ASSET key.
 
 Every record carries its own index at +0x12B and its team id at +0x12C. On a stock
 save those are equal (0..29) for the team records, while the LED block runs +0x12B
@@ -42,8 +51,7 @@ PRIMARY_OFF   = 0x14C
 SECONDARY_OFF = 0x14F
 REC_IDX_OFF   = 0x12B       # this record's own index (0..59+)
 TEAM_ID_OFF   = 0x12C       # this record's team id (0..29; wraps for the LED block)
-LED_OFFSET    = 30          # record N+30 holds the same team's arena-LED colors
-NTEAMS        = 30
+NTEAMS        = 30          # the SHIPPING league-0 count — only used by the stock fallback
 FRAME_SHIFT   = 0x63        # this module's record 0 starts 0x63 bytes before team_order's
 
 
@@ -62,9 +70,11 @@ def _team_base(ros: "RF.RosFile", c) -> int:
     id byte is this module's +0x12B), hence FRAME_SHIFT.
 
     The legacy id-signature probe is kept as a fallback: ``c.foff`` is not the table start
-    (it lands 7 records in), so it walks record-sized shifts around it looking for 30
-    consecutive records with +0x12B == +0x12C == k. Raises rather than guess — a wrong base
-    would write colours into neighbouring records.
+    (it lands 7 records in), so it walks record-sized shifts around it looking for a run of
+    records with +0x12B == +0x12C == k. It scores every shift and takes the best rather than
+    demanding a perfect run of 30 — an expansion team or a reorder breaks the run (Seattle
+    carries index 30 at record 23), and demanding 30 made this raise on a modded save.
+    Raises rather than guess — a wrong base would write colours into neighbouring records.
     """
     try:
         import team_order as TO
@@ -75,14 +85,18 @@ def _team_base(ros: "RF.RosFile", c) -> int:
     except Exception:
         pass
     d, S = ros.data, c.stride
+    best, score = None, 0
     for shift in range(-16, 17):
         b = c.foff + shift * S
         if b < 0 or b + (NTEAMS - 1) * S + TEAM_ID_OFF >= len(d):
             continue
-        if all(d[b + k * S + REC_IDX_OFF] == k and d[b + k * S + TEAM_ID_OFF] == k
-               for k in range(NTEAMS)):
-            return b
-    raise RuntimeError("team colour table not found: no run of 30 records with "
+        n = sum(1 for k in range(NTEAMS)
+                if d[b + k * S + REC_IDX_OFF] == k and d[b + k * S + TEAM_ID_OFF] == k)
+        if n > score:
+            best, score = b, n
+    if best is not None and score >= NTEAMS - 4:      # 30 records, a few may have been reordered
+        return best
+    raise RuntimeError("team colour table not found: no run of records with "
                        "+0x12B == +0x12C == k near chunk 0x%08X" % TEAM_COLOR_CHUNK)
 
 
@@ -101,18 +115,55 @@ def team_map(ros_path=None) -> dict:
     """
     if ros_path:
         try:
-            try:
-                import team_order as TO
-            except ImportError:
-                from . import team_order as TO
-            m = {t["code"].upper(): t["slot"] for t in TO.read_order(ros_path) if t["code"]}
-            if len(m) == NTEAMS:
+            m = {t["code"].upper(): t["record"] for t in _TO().read_order(ros_path) if t["code"]}
+            # >= NTEAMS, not == : an expansion team is an ordinary league-0 record, so a roster
+            # with Seattle and Vegas reports 32. Only a SHORT list (a code the file didn't give
+            # us) is untrustworthy, because a missing code would shift nothing — every record
+            # index here is read straight out of the file.
+            if len(m) >= NTEAMS:
                 return m
         except Exception:
             pass
     if len(RE.NHL_CODES) != NTEAMS:
         raise RuntimeError(f"expected {NTEAMS} team codes, got {len(RE.NHL_CODES)}")
     return {code.upper(): i for i, code in enumerate(RE.NHL_CODES)}
+
+
+def _TO():
+    try:
+        import team_order as TO
+    except ImportError:
+        from . import team_order as TO
+    return TO
+
+
+def led_record(ros_path, code: str):
+    """Record index holding `code`'s arena-LED colours — its AHL affiliate's record.
+
+    Was "team record + 30", which only held on a stock 30-team roster: the affiliate block
+    starts right after the league-0 block, so adding Seattle and Vegas pushed it to +32 and
+    their own affiliates sit far higher still (records 81/82). The affiliate is identified
+    the way affiliates.py defines ownership — **it wears its parent's ASSET key** — which is
+    stable no matter where either record ends up. Returns None if the team has no affiliate.
+    """
+    TO = _TO()
+    d = Path(ros_path).read_bytes()
+    base, count = TO.find_table(d)
+    want = None
+    for i in range(count):
+        r = base + i * TO.STRIDE
+        if (TO._u32(d, r + TO.OFF_LEAGUE) >> 28) == 0 and \
+                TO._text(d, r + TO.OFF_CODE).strip().upper() == code.upper():
+            want = TO._text(d, r + TO.OFF_AKEY).strip().upper()
+            break
+    if not want:
+        return None
+    for i in range(count):
+        r = base + i * TO.STRIDE
+        if (TO._u32(d, r + TO.OFF_LEAGUE) >> 28) == 1 and \
+                TO._text(d, r + TO.OFF_AKEY).strip().upper() == want:
+            return i
+    return None
 
 
 def _rgb(d, off):
@@ -124,9 +175,10 @@ def load(ros_path) -> dict:
     ros = RF.RosFile(str(ros_path)); d = ros.data; c = _color_chunk(ros)
     base = _team_base(ros, c)
     out = {}
+    nrec = max(0, (len(d) - base) // c.stride)
     for code, rec in team_map(ros_path).items():
-        if not (0 <= rec < NTEAMS):
-            continue
+        if not (0 <= rec < nrec):        # was `< 30`, which dropped the last two teams once
+            continue                     # Seattle and Vegas made the league-0 block 32 long
         b = base + rec * c.stride
         out[code] = {"rec": rec,
                      "primary":   _rgb(d, b + PRIMARY_OFF),
@@ -142,7 +194,9 @@ def set_color(ros_path, code, primary=None, secondary=None,
     ros_path = Path(ros_path)
     rec = team_map(ros_path)[code.upper()]
     if led:
-        rec += LED_OFFSET
+        rec = led_record(ros_path, code)
+        if rec is None:
+            raise KeyError(f"{code.upper()} has no AHL affiliate record, so no LED colours")
     if backup:
         bak = ros_path.with_suffix(ros_path.suffix + ".colorbak")
         if not bak.exists():

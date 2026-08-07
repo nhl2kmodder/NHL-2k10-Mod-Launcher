@@ -18,9 +18,13 @@ of a 237-entry directory) put every chunk 0xB28 too far in and, worse, at the wr
 DELTA = 0x73 were both compensating for by hand.
 
 There are **19 chunks**, not the 237 the header's 0x08 field suggests; entry 19 onward is
-already chunk-0 data being misread as directory. The directory therefore self-terminates:
-an entry whose pointer is null, lands inside the directory, runs past EOF, or goes backwards
-is the first byte of the data section.
+already chunk-0 data being misread as directory. 19 is confirmed by `Roster_FixupPointers
+@0x83D53AA0`, which hardcodes one block per table for i = 0..18 and none past it.
+
+Chunks are located *only* by their own directory pointer. They happen to tile the file in
+directory order in a shipped save, but nothing reads them that way, so a relocated chunk and
+the dead space it leaves behind are both legal — see ros_grow.py, which grows the arena table
+by appending a longer copy at EOF.
 
 With the pointers read correctly every record table tiles **exactly** — `size == count *
 stride` to the byte for all 19 chunks (2715x420 players, 96x412 teams, 40x40 arenas, ...).
@@ -45,6 +49,7 @@ from pathlib import Path
 
 DIR_OFF = 0x0C              # first directory entry
 DIR_ENT = 12                # u32 type_hash | u32 count | u32 data_ptr
+DIR_MAX = 19                # exactly 19 — see _read_dir
 
 
 def _be(d, o): return struct.unpack_from(">I", d, o)[0]
@@ -90,27 +95,44 @@ class RosFile:
         self.path = Path(path)
         self.data = bytearray(self.path.read_bytes())
         self.orig_size = len(self.data)
+        # The file is a fixed-length save SECTION; the u32 at 0x00 is the size of the *meaningful*
+        # image inside it, and anything past that is pad the game never reads (see ros_grow.py).
+        # A stock file has no pad, so image_size == orig_size and nothing below changes. On a
+        # padded file every offset must be bounded by the image, not by EOF, or the last chunk
+        # swallows 129 KB of zeros and the header-size check fails against a legal file.
+        img = _be(self.data, 0) + 4 if len(self.data) >= 4 else 0
+        self.image_size = img if 0 < img <= self.orig_size else self.orig_size
+        self.pad = self.orig_size - self.image_size
         self.chunks: list[Chunk] = []
         self._parse()
 
     def _read_dir(self):
-        """[(index, hash, count, data_offset)] — reads until the directory self-terminates.
+        """[(index, hash, count, data_offset)] — the 19 directory entries.
 
-        The count at 0x08 is an upper bound, not the entry count (see the module header): the
-        bytes after the last real entry are chunk-0 data. An entry is real only while its
-        self-relative pointer resolves to a sane, non-decreasing position in the data section.
+        The count at 0x08 is an upper bound, not the entry count (see the module header). The
+        real length is **exactly 19**, and that is not a guess: `Roster_FixupPointers @0x83D53AA0`
+        contains one hardcoded block per table reading count@`0x0c+12i` / ptr@`0x10+12i` of the
+        manager struct (which IS this file image at `filebase+4`) for i = 0..18, and nothing
+        past entry 18. Entry 19 onward is chunk-0 data.
+
+        CORRECTED 2026-08-04: this used to stop early on an entry whose data offset went
+        *backwards*, on the assumption that the chunks tile the file in directory order. They
+        do in a shipped save, but that is an artifact of how the game writes it, not a rule the
+        game reads by — each table is located solely by its own directory slot. Growing a table
+        by relocating it to EOF (see ros_grow.py) leaves every later entry pointing "backwards"
+        and used to truncate the directory to 5 chunks here. Order is now irrelevant.
         """
-        d, out, prev = self.data, [], 0
-        for i in range(min(_be(d, 8), (len(d) - DIR_OFF) // DIR_ENT)):
+        d, out = self.data, []
+        dir_end = DIR_OFF + DIR_MAX * DIR_ENT
+        for i in range(min(DIR_MAX, (len(d) - DIR_OFF) // DIR_ENT)):
             fo = DIR_OFF + i * DIR_ENT
             h, cnt, ptr = _be(d, fo), _be(d, fo + 4), _be(d, fo + 8)
             if ptr == 0:
                 break
             off = fo + 8 + ptr - 1                                  # self-relative
-            if off < fo + DIR_ENT or off > self.orig_size or off < prev:
-                break                                               # landed in the directory / EOF / backwards
+            if off < dir_end or off > self.image_size:
+                break                                               # landed in the directory / past EOF
             out.append((i, h, cnt, off))
-            prev = off
         if not out:
             raise ValueError("no readable chunk directory — is this a Roster.ROS?")
         return out
@@ -120,7 +142,7 @@ class RosFile:
         order = sorted(range(len(ents)), key=lambda k: (ents[k][3], k))   # by data offset, ties by index
         for k, j in enumerate(order):
             i, h, cnt, off = ents[j]
-            nxt = ents[order[k + 1]][3] if k + 1 < len(order) else self.orig_size
+            nxt = ents[order[k + 1]][3] if k + 1 < len(order) else self.image_size
             self.chunks.append(Chunk(i, h, cnt, off, nxt - off))
         self.chunks.sort(key=lambda c: c.index)                     # directory order, for a stable display
         for c in self.chunks:

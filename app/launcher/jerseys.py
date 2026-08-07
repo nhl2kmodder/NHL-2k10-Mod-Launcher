@@ -40,11 +40,49 @@ def _doc() -> dict:
         return {"jerseys": []}
 
 
+# Jerseys that exist on this install but not in the shipped map — an expansion team's, which is
+# every jersey whose asset key post-dates the map. Registered at runtime by the IFF tab (see
+# `extra_teams.frontend_pairs`) rather than baked in, because the set depends on the roster.
+_EXTRA: dict = {}
+
+
+def set_extra_jerseys(pairs) -> int:
+    """Register (uniform asset, front-end sheet) pairs discovered on this install.
+
+    Same contract as the shipped map: the in-game uniform is the canonical row and the sheet is
+    hidden behind it, so Seattle's jersey is one row that fans its edit out to the team-select
+    art — exactly how the 30 shipping teams already behave. Replaces any previous registration.
+    """
+    global _EXTRA
+    m = {}
+    for uni, sheet in pairs:
+        m.setdefault(uni, []).append(sheet)
+    if m == _EXTRA:
+        return len(m)
+    _EXTRA = m
+    for f in (_by_member, hidden_members):
+        f.cache_clear()
+    return len(m)
+
+
+def _entries() -> list:
+    """The shipped map plus anything registered at runtime, in one shape."""
+    out = list(_doc().get("jerseys", []))
+    known = {m for e in out for m in e.get("members", [])}
+    for uni, sheets in _EXTRA.items():
+        if uni in known:
+            continue
+        out.append({"name": uni, "members": [uni] + list(sheets),
+                    "uniforms": [uni], "frontend_sheets": list(sheets),
+                    "paired_by": "expansion team, by asset key"})
+    return out
+
+
 @lru_cache(maxsize=1)
 def _by_member() -> dict:
     """asset name -> its jersey entry."""
     out = {}
-    for e in _doc().get("jerseys", []):
+    for e in _entries():
         for m in e.get("members", []):
             out[m] = e
     return out
@@ -65,7 +103,7 @@ def hidden_members() -> frozenset:
     """Every mapped asset that is NOT its jersey's canonical row — hide these so the editor shows
     one row per jersey instead of the same shirt two or four times."""
     out = set()
-    for e in _doc().get("jerseys", []):
+    for e in _entries():
         for m in e.get("members", []):
             if m != e["name"]:
                 out.add(m)
@@ -93,5 +131,5 @@ def twin_edits(iff: str, idx: int) -> list:
 
 
 def stats() -> str:
-    d = _doc().get("jerseys", [])
+    d = _entries()
     return f"{len(d)} jerseys, {sum(len(e.get('members', [])) for e in d)} assets"

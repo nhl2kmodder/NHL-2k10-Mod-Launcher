@@ -11,7 +11,7 @@ ana,ice,ice_ana_finals.iff,0A,0x35080000,0x5AAF4,1
 ana,rink,rink_ana.iff,0A,0x15210000,0xD3817C,1
 ana,led,led_ana.iff,0A,0x4A6C800,0x33C5C,1
 ana,arena_presentation,arena_presentation_ana.iff,0A,0x42CD000,0x29A7A,1
-ana,arena_audio,arena_ana.iff,0A,0x5838000,0x5FDD3A,1
+ana,arena,arena_ana.iff,0A,0x5838000,0x5FDD3A,1
 ana,zamboni,zamboni_ana.iff,0A,0x36E43800,0x2F865,1
 ana,zamboni_team,zamboni_team_ana.iff,0A,0x375B9800,0x34384,1
 atl,logo,logo_atl.iff,0B,0x18AF7800,0xE6B2,1
@@ -26,7 +26,7 @@ atl,ice,ice_atl_finals.iff,0A,0x35137000,0x673E3,1
 atl,rink,rink_atl.iff,0A,0x15F48800,0xD393A3,1
 atl,led,led_atl.iff,0A,0x4AA0800,0x3C02D,1
 atl,arena_presentation,arena_presentation_atl.iff,0A,0x42F7000,0x1C31E,1
-atl,arena_audio,arena_atl.iff,0A,0x5E36000,0x6661BB,1
+atl,arena,arena_atl.iff,0A,0x5E36000,0x6661BB,1
 atl,zamboni,zamboni_atl.iff,0A,0x36E73800,0x2F865,1
 atl,zamboni_team,zamboni_team_atl.iff,0A,0x375EE000,0x357AD,1
 bos,logo,logo_bos.iff,0B,0x18B36800,0xCB11,1
@@ -41,7 +41,7 @@ bos,ice,ice_bos_finals.iff,0A,0x35207000,0x62101,1
 bos,rink,rink_bos.iff,0A,0x16C82000,0xD9D4C8,1
 bos,led,led_bos.iff,0A,0x4ADD000,0x32E87,1
 bos,arena_presentation,arena_presentation_bos.iff,0A,0x4313800,0x16C18,1
-bos,arena_audio,arena_bos.iff,0A,0x649C800,0x72092C,1
+bos,arena,arena_bos.iff,0A,0x649C800,0x72092C,1
 bos,zamboni,zamboni_bos.iff,0A,0x36EA3800,0x2F865,1
 bos,zamboni_team,zamboni_team_bos.iff,0A,0x37623800,0x33F70,1
 buf,logo,logo_buf.iff,0B,0x18B4E000,0xBAAB,1
@@ -56,7 +56,7 @@ buf,ice,ice_buf_finals.iff,0A,0x352CD000,0x6EBB2,1
 buf,rink,rink_buf.iff,0A,0x17A1F800,0xD9D4EA,1
 buf,led,led_buf.iff,0A,0x4B10000,0x3370E,1
 buf,arena_presentation,arena_presentation_buf.iff,0A,0x432A800,0x545F3,1
-buf,arena_audio,arena_buf.iff,0A,0x6BBD800,0x5DB926,1
+buf,arena,arena_buf.iff,0A,0x6BBD800,0x5DB926,1
 buf,zamboni,zamboni_buf.iff,0A,0x36ED3800,0x2F865,1
 buf,zamboni_team,zamboni_team_buf.iff,0A,0x37657800,0x33CE2,1
 car,logo,logo_car.iff,0B,0x18B7F000,0xAE59,1
@@ -71,7 +71,7 @@ car,ice,ice_car_finals.iff,0A,0x353AC000,0x5BC67,1
 car,rink,rink_car.iff,0A,0x187BD000,0xDA29F9,1
 car,led,led_car.iff,0A,0x4B43800,0x31D4F,1
 car,arena_presentation,arena_presentation_car.iff,0A,0x437F000,0x5B211,1
-car,arena_audio,arena_car.iff,0A,0x7199800,0x64A376,1
+car,arena,arena_car.iff,0A,0x7199800,0x64A376,1
 car,zamboni,zamboni_car.iff,0A,0x36F03800,0x2F865,1
 car,zamboni_team,zamboni_team_car.iff,0A,0x3768B800,0x34598,1
 cbj,logo,logo_cbj.iff,0B,0x18BA1800,0xEEB2,1
@@ -86,7 +86,7 @@ cbj,ice,ice_cbj_finals.iff,0A,0x35465000,0x6B853,1
 cbj,rink,rink_cbj.iff,0A,0x19560000,0xD3C056,1
 cbj,led,led_cbj.iff,0A,0x4B75800,0x34525,1
 cbj,arena_presentation,arena_presentation_cbj.iff,0A,0x43DA800,0x385DC,1
-cbj,arena_audio,arena_cbj.iff,0A,0x77E4000,0x6F569B,1
+cbj,arena,arena_cbj.iff,0A,0x77E4000,0x6F569B,1
 cbj,zamboni,zamboni_cbj.iff,0A,0x36F33800,0x2F865,1
 cbj,zamboni_team,zamboni_team_cbj.iff,0A,0x376C0000,0x34F32,1
 cgy,logo,logo_cgy.iff,0B,0x18BBE000,0xD04F,1
@@ -101,7 +101,7 @@ cgy,ice,ice_cgy_finals.iff,0A,0x3553E000,0x6C78E,1
 cgy,rink,rink_cgy.iff,0A,0x1A29C800,0xD9D61D,1
 cgy,led,led_cgy.iff,0A,0x4BAA000,0x398B9,1
 cgy,arena_presentation,arena_presentation_cgy.iff,0A,0x4413000,0x17FCC,1
-cgy,arena_audio,arena_cgy.iff,0A,0x7ED9800,0x5B67B2,1
+cgy,arena,arena_cgy.iff,0A,0x7ED9800,0x5B67B2,1
 cgy,zamboni,zamboni_cgy.iff,0A,0x36F63800,0x2F865,1
 cgy,zamboni_team,zamboni_team_cgy.iff,0A,0x376F5000,0x3935A,1
 chi,logo,logo_chi.iff,0B,0x18BE3800,0x11B41,1
@@ -116,7 +116,7 @@ chi,ice,ice_chi_finals.iff,0A,0x35618800,0x700A7,1
 chi,rink,rink_chi.iff,0A,0x1B03A000,0xD4156E,1
 chi,led,led_chi.iff,0A,0x4BE4000,0x3716B,1
 chi,arena_presentation,arena_presentation_chi.iff,0A,0x442B000,0x1C995,1
-chi,arena_audio,arena_chi.iff,0A,0x8490000,0x6DDA25,1
+chi,arena,arena_chi.iff,0A,0x8490000,0x6DDA25,1
 chi,zamboni,zamboni_chi.iff,0A,0x36F93800,0x2F865,1
 chi,zamboni_team,zamboni_team_chi.iff,0A,0x3772E800,0x3471A,1
 col,logo,logo_col.iff,0B,0x18C17000,0xF99D,1
@@ -131,7 +131,7 @@ col,ice,ice_col_finals.iff,0A,0x356FA800,0x79EDB,1
 col,rink,rink_col.iff,0A,0x1BD7B800,0xD37EB7,1
 col,led,led_col.iff,0A,0x4C1B800,0x367FB,1
 col,arena_presentation,arena_presentation_col.iff,0A,0x4448000,0x81675,1
-col,arena_audio,arena_col.iff,0A,0x8B6E000,0x704426,1
+col,arena,arena_col.iff,0A,0x8B6E000,0x704426,1
 col,zamboni,zamboni_col.iff,0A,0x36FC3800,0x2F865,1
 col,zamboni_team,zamboni_team_col.iff,0A,0x37763000,0x34841,1
 dal,logo,logo_dal.iff,0B,0x18D93000,0xA5CF,1
@@ -146,7 +146,7 @@ dal,ice,ice_dal_finals.iff,0A,0x35A05800,0x61BB5,1
 dal,rink,rink_dal.iff,0A,0x1F275000,0xD9F8C4,1
 dal,led,led_dal.iff,0A,0x4CEE000,0x31544,1
 dal,arena_presentation,arena_presentation_dal.iff,0A,0x452E000,0x4D47E,1
-dal,arena_audio,arena_dal.iff,0A,0xA291800,0x6AA1EE,1
+dal,arena,arena_dal.iff,0A,0xA291800,0x6AA1EE,1
 dal,zamboni,zamboni_dal.iff,0A,0x37083800,0x2F865,1
 dal,zamboni_team,zamboni_team_dal.iff,0A,0x3784A800,0x34925,1
 det,logo,logo_det.iff,0B,0x18DB2800,0xD941,1
@@ -161,7 +161,7 @@ det,ice,ice_det_finals.iff,0A,0x35ACA800,0x65BD7,1
 det,rink,rink_det.iff,0A,0x20015000,0xD9823D,1
 det,led,led_det.iff,0A,0x4D1F800,0x316A9,1
 det,arena_presentation,arena_presentation_det.iff,0A,0x457B800,0x51EC9,1
-det,arena_audio,arena_det.iff,0A,0xA93C000,0x55631E,1
+det,arena,arena_det.iff,0A,0xA93C000,0x55631E,1
 det,zamboni,zamboni_det.iff,0A,0x370B3800,0x2F865,1
 det,zamboni_team,zamboni_team_det.iff,0A,0x3787F800,0x34254,1
 edm,logo,logo_edm.iff,0B,0x18DF0000,0xE706,1
@@ -176,7 +176,7 @@ edm,ice,ice_edm_finals.iff,0A,0x35B97800,0x68711,1
 edm,rink,rink_edm.iff,0A,0x20DAD800,0xD9C1B5,1
 edm,led,led_edm.iff,0A,0x4D51000,0x38B7C,1
 edm,arena_presentation,arena_presentation_edm.iff,0A,0x45CD800,0x21FC5,1
-edm,arena_audio,arena_edm.iff,0A,0xAE92800,0x59F68F,1
+edm,arena,arena_edm.iff,0A,0xAE92800,0x59F68F,1
 edm,zamboni,zamboni_edm.iff,0A,0x370E3800,0x2F865,1
 edm,zamboni_team,zamboni_team_edm.iff,0A,0x378B4000,0x39ABE,1
 fla,logo,logo_fla.iff,0B,0x18E1F800,0xE1EF,1
@@ -191,7 +191,7 @@ fla,ice,ice_fla_finals.iff,0A,0x35C69800,0x66E7E,1
 fla,rink,rink_fla.iff,0A,0x21B4A000,0xDA858D,1
 fla,led,led_fla.iff,0A,0x4D8A000,0x387E8,1
 fla,arena_presentation,arena_presentation_fla.iff,0A,0x45EF800,0x16C1A,1
-fla,arena_audio,arena_fla.iff,0A,0xB432000,0x64E28A,1
+fla,arena,arena_fla.iff,0A,0xB432000,0x64E28A,1
 fla,zamboni,zamboni_fla.iff,0A,0x37113800,0x2F865,1
 fla,zamboni_team,zamboni_team_fla.iff,0A,0x378EE000,0x343A8,1
 lak,logo,logo_lak.iff,0B,0x18E74800,0x111D8,1
@@ -206,7 +206,7 @@ lak,ice,ice_lak_finals.iff,0A,0x35E09800,0x6F5C8,1
 lak,rink,rink_lak.iff,0A,0x23621000,0xD9D53F,1
 lak,led,led_lak.iff,0A,0x4DF6800,0x31AD2,1
 lak,arena_presentation,arena_presentation_lak.iff,0A,0x463F000,0x6EEDA,1
-lak,arena_audio,arena_lak.iff,0A,0xBF7D000,0x62E6DB,1
+lak,arena,arena_lak.iff,0A,0xBF7D000,0x62E6DB,1
 lak,zamboni,zamboni_lak.iff,0A,0x371B1800,0x2F865,1
 lak,zamboni_team,zamboni_team_lak.iff,0A,0x3795E000,0x34BEA,1
 min,logo,logo_min.iff,0B,0x18EB3800,0xCF0B,1
@@ -221,7 +221,7 @@ min,ice,ice_min_finals.iff,0A,0x35EF0800,0x65B6A,1
 min,rink,rink_min.iff,0A,0x243BE800,0xD4C0FF,1
 min,led,led_min.iff,0A,0x4E28800,0x35A6B,1
 min,arena_presentation,arena_presentation_min.iff,0A,0x46AE000,0x3B65E,1
-min,arena_audio,arena_min.iff,0A,0xC5AB800,0x6B062D,1
+min,arena,arena_min.iff,0A,0xC5AB800,0x6B062D,1
 min,zamboni,zamboni_min.iff,0A,0x371E1800,0x2F865,1
 min,zamboni_team,zamboni_team_min.iff,0A,0x37993000,0x349F3,1
 mtl,logo,logo_mtl.iff,0B,0x18ECD000,0xB5A9,1
@@ -236,7 +236,7 @@ mtl,ice,ice_mtl_finals.iff,0A,0x35FBD800,0x5BB2C,1
 mtl,rink,rink_mtl.iff,0A,0x25A90800,0xD9F69D,1
 mtl,led,led_mtl.iff,0A,0x4E92800,0x319AB,1
 mtl,arena_presentation,arena_presentation_mtl.iff,0A,0x46EA000,0x2EADF,1
-mtl,arena_audio,arena_mtl.iff,0A,0xD1F9000,0x5C5A7F,1
+mtl,arena,arena_mtl.iff,0A,0xD1F9000,0x5C5A7F,1
 mtl,zamboni,zamboni_mtl.iff,0A,0x37241800,0x2F865,1
 mtl,zamboni_team,zamboni_team_mtl.iff,0A,0x37A03800,0x39B90,1
 njd,logo,logo_njd.iff,0B,0x18EF9000,0xD92E,1
@@ -251,7 +251,7 @@ njd,ice,ice_njd_finals.iff,0A,0x36076800,0x5DAAA,1
 njd,rink,rink_njd.iff,0A,0x26830000,0xD9D526,1
 njd,led,led_njd.iff,0A,0x4EC4800,0x3137F,1
 njd,arena_presentation,arena_presentation_njd.iff,0A,0x4719000,0x25EC9,1
-njd,arena_audio,arena_njd.iff,0A,0xD7BF000,0x6CFF9A,1
+njd,arena,arena_njd.iff,0A,0xD7BF000,0x6CFF9A,1
 njd,zamboni,zamboni_njd.iff,0A,0x37271800,0x2F865,1
 njd,zamboni_team,zamboni_team_njd.iff,0A,0x37A3D800,0x34441,1
 nsh,logo,logo_nsh.iff,0B,0x18F20000,0xE58E,1
@@ -266,7 +266,7 @@ nsh,ice,ice_nsh_finals.iff,0A,0x36133800,0x5FB4C,1
 nsh,rink,rink_nsh.iff,0A,0x275CD800,0xD3EBAA,1
 nsh,led,led_nsh.iff,0A,0x4EF6000,0x31DA7,1
 nsh,arena_presentation,arena_presentation_nsh.iff,0A,0x473F000,0xD0603,1
-nsh,arena_audio,arena_nsh.iff,0A,0xDE8F000,0x6044C7,1
+nsh,arena,arena_nsh.iff,0A,0xDE8F000,0x6044C7,1
 nsh,zamboni,zamboni_nsh.iff,0A,0x372A1800,0x2F865,1
 nsh,zamboni_team,zamboni_team_nsh.iff,0A,0x37A72000,0x34E59,1
 nyi,logo,logo_nyi.iff,0B,0x18F49800,0xEBC4,1
@@ -281,7 +281,7 @@ nyi,ice,ice_nyi_finals.iff,0A,0x361F4800,0x67297,1
 nyi,rink,rink_nyi.iff,0A,0x2830C800,0xD393F5,1
 nyi,led,led_nyi.iff,0A,0x4F28000,0x31EBA,1
 nyi,arena_presentation,arena_presentation_nyi.iff,0A,0x480F800,0x16C1A,1
-nyi,arena_audio,arena_nyi.iff,0A,0xE493800,0x5BC2A9,1
+nyi,arena,arena_nyi.iff,0A,0xE493800,0x5BC2A9,1
 nyi,zamboni,zamboni_nyi.iff,0A,0x372D1800,0x2F865,1
 nyi,zamboni_team,zamboni_team_nyi.iff,0A,0x37AA7000,0x349BB,1
 nyr,logo,logo_nyr.iff,0B,0x18F68000,0xC77B,1
@@ -296,7 +296,7 @@ nyr,ice,ice_nyr_finals.iff,0A,0x362C4800,0x602DE,1
 nyr,rink,rink_nyr.iff,0A,0x29046000,0xD9B996,1
 nyr,led,led_nyr.iff,0A,0x4F5A000,0x38559,1
 nyr,arena_presentation,arena_presentation_nyr.iff,0A,0x4826800,0x1824E,1
-nyr,arena_audio,arena_nyr.iff,0A,0xEA50000,0x7162CC,1
+nyr,arena,arena_nyr.iff,0A,0xEA50000,0x7162CC,1
 nyr,zamboni,zamboni_nyr.iff,0A,0x37301800,0x2F865,1
 nyr,zamboni_team,zamboni_team_nyr.iff,0A,0x37ADC000,0x364B6,1
 ott,logo,logo_ott.iff,0B,0x18F88800,0xF40D,1
@@ -311,7 +311,7 @@ ott,ice,ice_ott_finals.iff,0A,0x36386800,0x70304,1
 ott,rink,rink_ott.iff,0A,0x29DE2000,0xDAD8F9,1
 ott,led,led_ott.iff,0A,0x4F92800,0x31904,1
 ott,arena_presentation,arena_presentation_ott.iff,0A,0x483F000,0x1AA7B,1
-ott,arena_audio,arena_ott.iff,0A,0xF166800,0x524E79,1
+ott,arena,arena_ott.iff,0A,0xF166800,0x524E79,1
 ott,zamboni,zamboni_ott.iff,0A,0x37331800,0x2F865,1
 ott,zamboni_team,zamboni_team_ott.iff,0A,0x37B12800,0x398E7,1
 phi,logo,logo_phi.iff,0B,0x18FA8800,0x8FEB,1
@@ -326,7 +326,7 @@ phi,ice,ice_phi_finals.iff,0A,0x36468800,0x5E629,1
 phi,rink,rink_phi.iff,0A,0x2AB90000,0xD9D4FA,1
 phi,led,led_phi.iff,0A,0x4FC4800,0x33826,1
 phi,arena_presentation,arena_presentation_phi.iff,0A,0x485A000,0x2904E,1
-phi,arena_audio,arena_phi.iff,0A,0xF68B800,0x61E68E,1
+phi,arena,arena_phi.iff,0A,0xF68B800,0x61E68E,1
 phi,zamboni,zamboni_phi.iff,0A,0x37361800,0x2F865,1
 phi,zamboni_team,zamboni_team_phi.iff,0A,0x37B4C800,0x34073,1
 pho,logo,logo_pho.iff,0B,0x18FBB800,0xE353,1
@@ -341,7 +341,7 @@ pho,ice,ice_pho_finals.iff,0A,0x36526800,0x5C17F,1
 pho,rink,rink_pho.iff,0A,0x2B92D800,0xD9CF88,1
 pho,led,led_pho.iff,0A,0x4FF8800,0x31589,1
 pho,arena_presentation,arena_presentation_pho.iff,0A,0x4883800,0x48BF5,1
-pho,arena_audio,arena_pho.iff,0A,0xFCAA000,0x66FD33,1
+pho,arena,arena_pho.iff,0A,0xFCAA000,0x66FD33,1
 pho,zamboni,zamboni_pho.iff,0A,0x37391800,0x2F865,1
 pho,zamboni_team,zamboni_team_pho.iff,0A,0x37B81000,0x34479,1
 pit,logo,logo_pit.iff,0B,0x18FE3000,0xDE43,1
@@ -356,7 +356,7 @@ pit,ice,ice_pit_finals.iff,0A,0x365E0800,0x6ABC3,1
 pit,rink,rink_pit.iff,0A,0x2C6CA800,0xD36EAE,1
 pit,led,led_pit.iff,0A,0x502A000,0x36AC4,1
 pit,arena_presentation,arena_presentation_pit.iff,0A,0x48CC800,0x1441E,1
-pit,arena_audio,arena_pit.iff,0A,0x1031A000,0x53F8EA,1
+pit,arena,arena_pit.iff,0A,0x1031A000,0x53F8EA,1
 pit,zamboni,zamboni_pit.iff,0A,0x373C1800,0x2F865,1
 pit,zamboni_team,zamboni_team_pit.iff,0A,0x37BB5800,0x34745,1
 sjs,logo,logo_sjs.iff,0B,0x1901D800,0xCE9D,1
@@ -371,7 +371,7 @@ sjs,ice,ice_sjs_finals.iff,0A,0x36738800,0x673F8,1
 sjs,rink,rink_sjs.iff,0A,0x2DAB0000,0xDA4B81,1
 sjs,led,led_sjs.iff,0A,0x5095000,0x40942,1
 sjs,arena_presentation,arena_presentation_sjs.iff,0A,0x48E1800,0x8A54D,1
-sjs,arena_audio,arena_sjs.iff,0A,0x10FCA000,0x6BF4ED,1
+sjs,arena,arena_sjs.iff,0A,0x10FCA000,0x6BF4ED,1
 sjs,zamboni,zamboni_sjs.iff,0A,0x374BE000,0x2F865,1
 sjs,zamboni_team,zamboni_team_sjs.iff,0A,0x37C25800,0x349F1,1
 stl,logo,logo_stl.iff,0B,0x19048800,0xA2A1,1
@@ -386,7 +386,7 @@ stl,ice,ice_stl_finals.iff,0A,0x36889800,0x5CBBA,1
 stl,rink,rink_stl.iff,0A,0x2EF03800,0xD9D567,1
 stl,led,led_stl.iff,0A,0x510A000,0x364F3,1
 stl,arena_presentation,arena_presentation_stl.iff,0A,0x496C800,0x16C29,1
-stl,arena_audio,arena_stl.iff,0A,0x11830800,0x6D1CB3,1
+stl,arena,arena_stl.iff,0A,0x11830800,0x6D1CB3,1
 stl,zamboni,zamboni_stl.iff,0A,0x3751E000,0x2F865,1
 stl,zamboni_team,zamboni_team_stl.iff,0A,0x37C96000,0x34BF5,1
 tbl,logo,logo_tbl.iff,0B,0x1907A800,0xF55B,1
@@ -401,7 +401,7 @@ tbl,ice,ice_tbl_finals.iff,0A,0x36944800,0x6E2F1,1
 tbl,rink,rink_tbl.iff,0A,0x2FCA1000,0xD9AE26,1
 tbl,led,led_tbl.iff,0A,0x5140800,0x32F21,1
 tbl,arena_presentation,arena_presentation_tbl.iff,0A,0x4983800,0xE57D,1
-tbl,arena_audio,arena_tbl.iff,0A,0x11F02800,0x654000,1
+tbl,arena,arena_tbl.iff,0A,0x11F02800,0x654000,1
 tbl,zamboni,zamboni_tbl.iff,0A,0x3754E000,0x2F865,1
 tbl,zamboni_team,zamboni_team_tbl.iff,0A,0x37CCB000,0x350EB,1
 tor,logo,logo_tor.iff,0B,0x190B1800,0x8C23,1
@@ -416,7 +416,7 @@ tor,ice,ice_tor_finals.iff,0A,0x36A22800,0x635D6,1
 tor,rink,rink_tor.iff,0A,0x30A3C000,0xD9B3AB,1
 tor,led,led_tor.iff,0A,0x5173800,0x31A97,1
 tor,arena_presentation,arena_presentation_tor.iff,0A,0x4992000,0x297C2,1
-tor,arena_audio,arena_tor.iff,0A,0x12556800,0x67B753,1
+tor,arena,arena_tor.iff,0A,0x12556800,0x67B753,1
 tor,zamboni,zamboni_tor.iff,0A,0x37E27000,0x2F865,1
 tor,zamboni_team,zamboni_team_tor.iff,0A,0x37D00800,0x391BD,1
 van,logo,logo_van.iff,0B,0x190E5800,0xFD6D,1
@@ -431,7 +431,7 @@ van,ice,ice_van_finals.iff,0A,0x36AEA800,0x733D6,1
 van,rink,rink_van.iff,0A,0x317D7800,0xD41561,1
 van,led,led_van.iff,0A,0x51A5800,0x31B1A,1
 van,arena_presentation,arena_presentation_van.iff,0A,0x49BB800,0x5C59C,1
-van,arena_audio,arena_van.iff,0A,0x12BD2000,0x67EA5F,1
+van,arena,arena_van.iff,0A,0x12BD2000,0x67EA5F,1
 van,zamboni,zamboni_van.iff,0A,0x37E57000,0x2F865,1
 van,zamboni_team,zamboni_team_van.iff,0A,0x37D3A000,0x394BA,1
 wsh,logo,logo_wsh.iff,0B,0x1912A000,0xAA17,1
@@ -446,7 +446,7 @@ wsh,ice,ice_wsh_finals.iff,0A,0x36D50800,0x60D27,1
 wsh,rink,rink_wsh.iff,0A,0x3420D800,0xD9D4FE,1
 wsh,led,led_wsh.iff,0A,0x523F800,0x3238D,1
 wsh,arena_presentation,arena_presentation_wsh.iff,0A,0x4A19000,0x1F356,1
-wsh,arena_audio,arena_wsh.iff,0A,0x13DAF000,0x6C1592,1
+wsh,arena,arena_wsh.iff,0A,0x13DAF000,0x6C1592,1
 wsh,zamboni,zamboni_wsh.iff,0A,0x37EF7800,0x2F865,1
 wsh,zamboni_team,zamboni_team_wsh.iff,0A,0x37DEA800,0x341E5,1
 global,ui,HighlightCreate.iff,0B,0x3727b800,0x1ffa68,1

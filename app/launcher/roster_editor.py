@@ -46,10 +46,16 @@ def _is_region(s: str) -> bool:
 _STR_RX = re.compile(rb'(?:\x00[\x20-\x7e]){2,}')   # UTF-16BE ascii run, >=2 chars
 
 class Slot:
-    """One editable UTF-16BE string occupying [off, next_off) bytes (incl. its 00 00 terminator)."""
-    __slots__ = ("off", "text", "cap_chars")
-    def __init__(self, off, text, cap_chars):
+    """One editable UTF-16BE string occupying [off, next_off) bytes (incl. its 00 00 terminator).
+
+    `shared` means more than one team RECORD points at this exact string — an expansion team
+    cloned from a shipping team starts out sharing its donor's arena, so renaming it here would
+    rename the donor's too. Editors must refuse to write a shared slot.
+    """
+    __slots__ = ("off", "text", "cap_chars", "shared")
+    def __init__(self, off, text, cap_chars, shared=False):
         self.off, self.text, self.cap_chars = off, text, cap_chars
+        self.shared = shared
 
 class Team:
     """One NHL team's editable strings, as they actually exist in the save.
@@ -180,6 +186,92 @@ class RosterEditor:
                 if pref:
                     teams[code].team = slot(*pref)
         self.teams = [teams[c] for c in NHL_CODES if c in teams]
+        self._records_pass(teams)
+
+    # --- authoritative pass: the team RECORD table ------------------------------------
+    def _records_pass(self, teams):
+        """Rebuild the team list from the 412-byte team records, which POINT at their strings.
+
+        The scan above is a heuristic over a fixed byte window and a frozen 30-code list, so it
+        misses any team the game didn't ship with: an expansion team's strings are allocated
+        wherever the pool had room (Seattle's sit past the window's ' Minors' end marker, Vegas's
+        lowercase nickname sits *before* its start), and its code isn't in NHL_CODES. Every team
+        record instead carries self-relative pointers to its own city / nickname / lowercase /
+        code / arena, which is exact and survives both a rename and a team reorder.
+
+        So: take the record table as the source of truth for the team LIST, its order, and those
+        four strings, and keep the scan only for the two fields no pointer covers — the state and
+        the 'Carolina'-style team prefix. Falls back to the scanned list if team_order is
+        unavailable or the table can't be located, so a broken import can never empty the tab.
+        """
+        try:
+            try:
+                import team_order as TO
+            except ImportError:
+                from . import team_order as TO
+            d = self.data
+            base, count = TO.find_table(d)
+        except Exception:
+            return
+        # A donor's string is SHARED until the clone gets its own (Seattle and Vegas both still
+        # point at Anaheim's arena), and renaming one would silently rename the others.
+        # Counted over LEAGUE-0 records only: every AHL affiliate legitimately points at its
+        # parent's arena record — that is how the game ships — so counting all 96 records would
+        # mark all 30 shipping arenas shared and block renames that are perfectly safe.
+        refs = {}
+        for i in range(count):
+            r = base + i * TO.STRIDE
+            if TO._u32(d, r + TO.OFF_LEAGUE) >> 28 != 0:
+                continue
+            for o in (TO.OFF_CITY, TO.OFF_NICK, TO.OFF_CODE, TO.OFF_LOWER, TO.OFF_ARENA):
+                t = TO._target(d, r + o)
+                if t is not None:
+                    refs[t] = refs.get(t, 0) + 1
+
+        out = []
+        for i in range(count):
+            r = base + i * TO.STRIDE
+            if TO._u32(d, r + TO.OFF_LEAGUE) >> 28 != 0:
+                continue
+            code = TO._text(d, r + TO.OFF_CODE).strip()
+            if not code:
+                continue
+            t = teams.get(code) or Team(code)
+            for attr, off in (("city", TO.OFF_CITY), ("nickname", TO.OFF_NICK),
+                              ("nick_lower", TO.OFF_LOWER)):
+                s = self._slot_at(TO._target(d, r + off), refs)
+                if s is not None:
+                    setattr(t, attr, s)
+            # +0xCC points at an ARENA record whose first field points at the arena's name.
+            arec = TO._target(d, r + TO.OFF_ARENA)
+            if arec is not None and 0 <= arec < len(d) - 4:
+                s = self._slot_at(TO._target(d, arec), refs)
+                if s is not None:
+                    s.shared = s.shared or refs.get(arec, 0) > 1   # shared arena RECORD counts too
+                    t.arena = s
+            out.append(t)
+        if out:
+            self.teams = out
+
+    def _slot_at(self, off, refs):
+        """A Slot for the UTF-16BE string at file offset `off` (None if that isn't a string).
+
+        Capacity is the gap to the next string, found by scanning the pool AROUND `off` rather
+        than inside self.region — an expansion team's strings live outside that window.
+        """
+        d = self.data
+        if off is None or not (0 <= off < len(d) - 1) or d[off] != 0 or not (0x20 <= d[off + 1] < 0x7f):
+            return None
+        text = self._read_str(off)
+        if not text:
+            return None
+        end = off + len(text) * 2 + 2                       # past the 00 00 terminator
+        nxt = None
+        for m in _STR_RX.finditer(d, end, min(len(d), end + 0x200)):
+            if m.start() % 2 == off % 2:     # a zero-filled gap can make the regex match on the
+                nxt = m.start(); break       # wrong byte parity — that is not a string start
+        cap = max(len(text), ((nxt - off) // 2 - 1) if nxt else len(text))
+        return Slot(off, text, cap, shared=refs.get(off, 0) > 1)
 
     def set_nickname(self, team: "Team", new_text: str):
         """Set a team's display nickname AND keep its lowercase internal key in sync."""
@@ -200,14 +292,24 @@ class RosterEditor:
         REFUSED (ValueError) — growing it would require relocating the string and repointing
         its reference, which corrupts the save if done by shifting. Returns the count changed.
         """
-        plan, too_long = [], []
+        plan, too_long, shared = [], [], []
         for slot, new in edits:
             if slot is None or new == slot.text:
                 continue
-            if len(new) > slot.cap_chars:        # cap_chars = bytes-to-next-string//2 - 1
+            if slot.shared:                      # more than one team points at these bytes
+                shared.append((slot, new))
+            elif len(new) > slot.cap_chars:      # cap_chars = bytes-to-next-string//2 - 1
                 too_long.append((slot, new))
             else:
                 plan.append((slot, new))
+        if shared:
+            lines = "\n".join(f"  • '{s.text}' → '{n}'" for s, n in shared)
+            raise ValueError(
+                "These strings are shared by more than one team — writing here would rename "
+                "the others too (both New Yorks share one city string; a cloned expansion "
+                "team still shares its donor's arena):\n" + lines +
+                "\n\nGiving one team its own copy needs a string-pool allocation, which this "
+                "editor doesn't do — the AHL affiliate tool is where that lives.")
         if too_long:
             lines = "\n".join(f"  • '{s.text}' → '{n}'  "
                               f"(slot fits {s.cap_chars} chars, name is {len(n)})"

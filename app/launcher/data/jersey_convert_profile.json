@@ -1,0 +1,893 @@
+{
+ "_comment": [
+  "Calibration for the NHL 23 -> NHL 2K10 jersey converter (launcher/jersey_convert.py).",
+  "",
+  "Everything here is MEASURED, not guessed. Provenance per block:",
+  "",
+  "  body.scale -- NHL 23's jersey base and 2K10's uniform_base flatten the shirt the SAME",
+  "    way; they differ by one anisotropic scale about the texture centre. Fitted against the",
+  "    matched Chicago pair in Jersey_Conversion_Proto/: the four sleeve-stripe centres land",
+  "    at 167.5/196.5/826.5/855.5 vs the stock sheet's 168.5/198.0/827.0/856.5 -- within ~1px",
+  "    on two parameters, and stripe SPACING already agreed to half a pixel before fitting.",
+  "    One layout per game, so this calibration is team-independent.",
+  "",
+  "  body.relax -- half-width, in destination pixels from the texture centre, of the core that",
+  "    keeps body.scale untouched. Both scales are below 1, so the destination asks for ~18px of",
+  "    source past the left/right edges and ~50px past the top/bottom that do not exist. Outside",
+  "    the core that shortfall is eased out (see _relaxed_axis) instead of being padded with a",
+  "    replicated edge row -- the pad is what smeared the neck tag down the back panel, and",
+  "    absorbing it across the whole panel instead is what rode the hem stripes ~45px up the",
+  "    shirt. x=384 keeps the fitted sleeve stripes (x 167.5..855.5) inside the core; y=256 puts",
+  "    the whole easing band in the hem/waist run of the front and back panels, where the art is",
+  "    flat stripes and ~1.1x of stretch does not read.",
+  "",
+  "  stamps/letters/helmet grids -- the sheets are cell grids on a 128px pitch (64px on the",
+  "    helmet). Confirmed two ways: measured ink boxes across CHI/BOS/VAN/TOR/NYR/DET land on",
+  "    the same cells while the ink inside them varies per team, and the cells agree with the",
+  "    pixel-shader source rects already decoded in",
+  "    UniformSubstance/mesh/renderdoc_uniform/stamps/stamp_layout.json (crest 0,0,512,512;",
+  "    letter A 768,256,896,512; C 896,256,1024,512).",
+  "",
+  "  nhl23_font -- the NHL 23 font atlas is one fixed 1024x1024 EA sheet. Glyph runs were",
+  "    segmented by connected components and labelled by structure (see `bands`), not by",
+  "    hardcoded pixel rows, so a re-export that shifts slightly still resolves.",
+  "",
+  "  keying -- 2K10 glyph art is COLOUR-KEYED, not literal: the shader reads blue as the fill",
+  "    mask and green/red as the two outline masks and substitutes team palette colours",
+  "    (uniform_colors.py). Shipped sheets that only need one outline use blue + red and leave",
+  "    green unused, which is why a two-layer NHL 23 glyph converts to blue+red by default."
+ ],
+ "version": 2,
+ "body": {
+  "src_size": [
+   2048,
+   2048
+  ],
+  "dst_size": [
+   1024,
+   1024
+  ],
+  "scale": [
+   1.0,
+   1.0
+  ],
+  "center": [
+   0.5,
+   0.5
+  ],
+  "_comment": [
+   "The NHL 23 base is 2048 and 2K10's is 1024, so this is now nothing but the halving --",
+   "every panel gets its OWN crop below instead. It used to carry one anisotropic scale about",
+   "the texture centre for the whole atlas, on the premise that the two layouts differed by",
+   "that one number. They do not: NHL 23 lays the torso out as a single tube from the back hem",
+   "(y=40) through the shoulders (y=1024) to the front hem (y=1996), while 2K10 splits it into",
+   "two boxes -- back y[1,509], front y[609,1021] -- with the sleeve islands in the band",
+   "between them. No single scale-about-centre can hit both, so the hem stripes landed at the",
+   "waist and the cuff stripes at the bicep. `relax` was the patch for the fallout of that",
+   "(a scale under 1 asks for source rows past the edge) and goes with it."
+  ]
+ },
+ "garments": {
+  "_comment": [
+   "Each 2K10 base region (see data/uniform_uv_regions.png, baked from the captured player",
+   "mesh) says which NHL 23 source file fills it and how that source maps in.",
+   "",
+   "  fit=body    -- use body.scale above (jersey back/front/arms: one shared UV island set).",
+   "  fit=rect    -- map src_rect (in the source file's own pixel space) onto the region's",
+   "                 bounding box. NHL 23 keeps pants and socks in SEPARATE files whose UV",
+   "                 layout we have no mesh for, so these rects were SOLVED BACKWARDS from the",
+   "                 Chicago pair: the stripe band's position inside the 2K10 island fixes the",
+   "                 crop that puts the NHL 23 stripe in the same place. Two features per axis,",
+   "                 so they are the least certain numbers in this file and are meant to be",
+   "                 nudged in the tab, which writes overrides back here.",
+   "  fit=borrow  -- 2K10 has a collar island; NHL 23 has no collar texture at all (the bottom",
+   "                 left of its base is the black undershirt). So the collar is BORROWED from",
+   "                 the hem trim, which is the same stripe sequence the collar wears, rotated",
+   "                 upright. Lossy by construction, and modern collars differ from 2009 ones",
+   "                 anyway -- expect to touch this one up.",
+   "",
+   "  per_island  -- map the source onto each connected island separately rather than onto the",
+   "                 region's bounding box. Needed wherever a region is several separate pieces",
+   "                 that each carry the WHOLE design: the two pant legs, the collar bars.",
+   "  mirror_odd  -- flip every island after the first horizontally, because bilateral garments",
+   "                 are laid out as mirror images (the left leg's stripe faces right)."
+  ],
+  "jersey_back": {
+   "src": "base",
+   "fit": "rect",
+   "src_rect": [
+    321,
+    0,
+    702,
+    512
+   ],
+   "_": "Runs to the EDGE of the warped 1024 space on purpose. The NHL 23 base stacks the two torso panels, back over front, and each ends in a plain red hem below its last stripe -- measured on the warped Calgary home base, the back's stripe block is rows 33..144 with red above it to row 0, and the front's is rows 880..979 with red below it to row 1023. Stopping at 20 and 998 clipped most of both hems, so the rect fit stretched the stripe block to fill the island and the garment ended ON a stripe instead of on red. 512 is the panel split, and the two blocks sit 33 and 45 rows in from their own edges, which is as symmetric as the source art actually is."
+  },
+  "jersey_front": {
+   "src": "base",
+   "fit": "rect",
+   "src_rect": [
+    321,
+    512,
+    702,
+    1024
+   ]
+  },
+  "jersey_arms": {
+   "src": "base",
+   "fit": "arm",
+   "src_panels": [
+    [
+     41,
+     353,
+     341,
+     671
+    ],
+    [
+     983,
+     353,
+     683,
+     671
+    ]
+   ],
+   "_": "Sampled through the sleeve's cylinder parameterisation, not resized onto the island's bounding box -- the 2K10 arm unwrap tapers to the cuff and runs diagonally, so a rect fit both widens the stripe ring and rides it up the arm. Each panel is [x_at_t0, y_at_s0, x_at_t1, y_at_s1] in the WARPED body's 1024 space (src is 'base', so build_base has already run body_transform); x_at_t0 is the cuff end, so the right sleeve's mirrored panel is written x_at_t0 > x_at_t1 instead of needing a flip flag.",
+   "__anchor": "BOTH ends are ANATOMICAL and MEASURED -- nothing here is fitted to how a stripe happens to look. x_at_t0 = 41 is the NHL 23 sleeve panel's cuff seam and x_at_t1 = 341 its armhole seam, both read off the jersey normal map as the two vertical seam ridges that are present in EVERY kit's normal (Calgary home and Anaheim away agree to a pixel: ridges at 31..33 / 39..41 = the cuff trim bar, and the armhole curve crossing 330 at the panel's ends and ~350 at its middle). They bracket the same fabric the 2K10 arm island does: build_arm_param puts t=0 at the island's cuff-most vertex and t=1 at its shoulder-most, and the seam ring shared with the torso is the t=1 edge. Corroborated independently: with this window the NHL 23 stripe band (warped x 157..228) lands at t 0.38..0.62, and the STOCK 2K10 Calgary ring -- measured off the game's own art through this same parameterisation -- sits at t 0.39..0.52. The band STARTS in the same place to within 0.01 of t; it runs higher only because the NHL 23 design's band is genuinely wider (23% of the sleeve against 2K10's 15%).",
+   "__dead_end": "Do NOT re-solve x0/x1 by matching the source band to the stock ring at BOTH ends. The two eras' bands are different widths, so forcing them equal inflates the window to [-68, 505] -- off the left edge of the texture at one end and deep inside the torso panel at the other. Measured twice now (Anaheim away, then Calgary home); era art is an anchor for one end only.",
+   "__superseded": "The old window was [125, 429] with an `src_armholes` clamp at 333. Both are gone: 429 ran 88 px PAST the armhole into the torso panel (which is what dragged Anaheim's black neck yoke down the upper arm), and the clamp only papered over that by holding one column, which smeared the torso's side piping into streaks. 125 was worse -- it started a third of the way UP the panel, so the cuff third of every NHL 23 sleeve was thrown away and the stripe ring landed at t 0.10..0.33, down inside the glove. That is the 'arms are coming way too low' report. With x_at_t1 now AT the armhole there is nothing left to clamp."
+  },
+  "pants": {
+   "src": "pant",
+   "fit": "rect",
+   "src_rect": [
+    777,
+    715,
+    1496,
+    2048
+   ],
+   "per_island": true,
+   "mirror_odd": true
+  },
+  "collar": {
+   "src": "base",
+   "fit": "borrow",
+   "src_rect": [
+    344,
+    873,
+    696,
+    990
+   ],
+   "rotate": 90,
+   "per_island": true
+  },
+  "socks": {
+   "src": "sock",
+   "fit": "rect",
+   "src_rect": [
+    0,
+    105,
+    1024,
+    1000
+   ]
+  }
+ },
+ "strip": {
+  "_comment": [
+   "Logos baked into the NHL 23 base that 2K10 wants OUT of the base and INTO the stamp",
+   "sheet. Rects are search WINDOWS in the 1024-space base (AFTER the body transform), not",
+   "the logos themselves -- the blob is found inside the window, so a bigger or smaller crest",
+   "still lands, and a window only has to be roughly right.",
+   "",
+   "A blob touching the window border is discarded as clipped cloth rather than treated as",
+   "part of the logo, which is what keeps a loose window safe.",
+   "",
+   "The cloth under a logo is reconstructed by ramping along each row between the nearest",
+   "pixels that are NOT decal, and 'not decal' is decided in a band `seed_pad` wide around",
+   "the window (see lift_logos): edge energy, plus the flat areas those edges enclose, plus",
+   "anything whose colour never appears in the band. The band is the point -- inside a 134px",
+   "box a collar and a shoulder yoke look the same, and the earlier border-only rule wiped",
+   "the ends of Anaheim's yoke while leaving Chicago's collar behind. Cloth shows up around",
+   "the window; a decal does not.",
+   "",
+   "Windows below were measured off the warped Chicago base:",
+   "  crest 428-590 x 630-790, shoulder patches 378-440 / 580-645 x 478-542,",
+   "  adidas mark 495-525 x 438-462, NHL shield 500-520 x 572-598, neck 460-560 x 455-570.",
+   "The neck is NHL 23's collar-and-undershirt art. It is mostly a hole in the 2K10 UV map,",
+   "but its top bleeds into the sleeve island, so it is cleared like any other decal.",
+   "",
+   "`stamp` names the stamp slot the cut-out logo is copied into (null = strip only).",
+   "",
+   "The right shoulder is STRIP-ONLY by default even though a shoulder_right stamp slot does",
+   "exist (see stamps._optional_comment). Leaving it empty makes the game stamp the LEFT mark",
+   "on both shoulders, which is what all but 6 shipped kits do and is right for any jersey",
+   "whose shoulders match. Filling it is a deliberate choice for a genuinely asymmetric kit:",
+   "set this region's `stamp` to \"shoulder_right\", or point the slot at art from the tab.",
+   "Untested caveat before you do: the right shoulder's stamp UV may already be mirrored, in",
+   "which case a logo lifted straight off the NHL 23 base lands reversed \u2014 check in-game.",
+   "Windows were re-measured when body.scale went to 1.0: each was pushed through the old dst->src map (scale 0.9655/0.9108 plus its relax easing), so they name the same cloth."
+  ],
+  "threshold": 34,
+  "margin": 8,
+  "min_area": 60,
+  "seed_pad": 48,
+  "merge_gap": 24,
+  "min_thickness": 9,
+  "regions": [
+   {
+    "name": "crest",
+    "window": [
+     396,
+     609,
+     624,
+     848
+    ],
+    "stamp": "crest"
+   },
+   {
+    "name": "shoulder_left",
+    "window": [
+     334,
+     446,
+     450,
+     571
+    ],
+    "stamp": "shoulder_patch"
+   },
+   {
+    "name": "shoulder_right",
+    "window": [
+     574,
+     446,
+     690,
+     571
+    ],
+    "stamp": null
+   },
+   {
+    "name": "maker_mark",
+    "window": [
+     477,
+     415,
+     543,
+     468
+    ],
+    "stamp": null
+   },
+   {
+    "name": "league_mark",
+    "window": [
+     483,
+     571,
+     537,
+     620
+    ],
+    "stamp": null
+   },
+   {
+    "name": "neck",
+    "window": [
+     442,
+     424,
+     580,
+     613
+    ],
+    "stamp": null
+   }
+  ]
+ },
+ "stamps": {
+  "size": [
+   2048,
+   512
+  ],
+  "cell": [
+   128,
+   256
+  ],
+  "slots": {
+   "crest": {
+    "rect": [
+     0,
+     0,
+     512,
+     512
+    ],
+    "keyed": false
+   },
+   "pants_patch": {
+    "rect": [
+     512,
+     0,
+     256,
+     256
+    ],
+    "keyed": false
+   },
+   "shoulder_patch": {
+    "rect": [
+     512,
+     256,
+     256,
+     256
+    ],
+    "keyed": false
+   },
+   "shoulder_right": {
+    "rect": [
+     768,
+     0,
+     256,
+     256
+    ],
+    "keyed": false
+   },
+   "capt_a": {
+    "rect": [
+     768,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "capt_c": {
+    "rect": [
+     896,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_0": {
+    "rect": [
+     1024,
+     0,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_1": {
+    "rect": [
+     1024,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_2": {
+    "rect": [
+     1152,
+     0,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_3": {
+    "rect": [
+     1152,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_4": {
+    "rect": [
+     1280,
+     0,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_5": {
+    "rect": [
+     1280,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_6": {
+    "rect": [
+     1408,
+     0,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_7": {
+    "rect": [
+     1408,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_8": {
+    "rect": [
+     1536,
+     0,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "digit_9": {
+    "rect": [
+     1536,
+     256,
+     128,
+     256
+    ],
+    "keyed": true
+   },
+   "cup_patch": {
+    "rect": [
+     1664,
+     0,
+     128,
+     256
+    ],
+    "keyed": false
+   },
+   "league_patch": {
+    "rect": [
+     1664,
+     256,
+     128,
+     128
+    ],
+    "keyed": false
+   },
+   "pants_sponsor": {
+    "rect": [
+     1792,
+     0,
+     256,
+     128
+    ],
+    "keyed": false
+   },
+   "jersey_sponsor": {
+    "rect": [
+     1792,
+     128,
+     256,
+     128
+    ],
+    "keyed": false
+   },
+   "sponsor_3": {
+    "rect": [
+     1792,
+     256,
+     256,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_0": {
+    "rect": [
+     1664,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_1": {
+    "rect": [
+     1792,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_2": {
+    "rect": [
+     1728,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_3": {
+    "rect": [
+     1856,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_4": {
+    "rect": [
+     1920,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   },
+   "small_num_5": {
+    "rect": [
+     1984,
+     384,
+     64,
+     128
+    ],
+    "keyed": false
+   }
+  },
+  "_slot_comment": [
+   "These rects are NOT eyeballed off the Chicago sheet any more \u2014 they are read out of the",
+   "uniform .iff's own DRAM blob (blob 0). At DRAM 0x540 sits a 2-word header, then 27",
+   "(x,y,w,h) u32 rects at 0x550..0x700: that IS the game's slot table, and it corrected",
+   "five of the hand-measured rects below. 0x700 follows with the letters-sheet descriptor",
+   "(3968, 256, 119, ...) and ~0x8b0 with a 16-bit per-character ADVANCE-WIDTH table",
+   "(default 0x26 = 38, 'A' = 0x48) \u2014 that is the name kerning, see the letters section.",
+   "Only the TEN DIGIT rects and the 0x540 header vary between teams; every patch rect is",
+   "byte-identical across all 30 clubs, so the table is layout, not per-team configuration.",
+   "",
+   "The right-hand block, by what the stock marks actually are:",
+   "  1664 x 0-256   Stanley Cup Final patch      1792 x 0-128    Reebok 'E' oval (PANTS mark)",
+   "  1664 x 256-384 NHL shield                   1792 x 128-256  Reebok wordmark (JERSEY hem)",
+   "                                              1792 x 256-384  CCM wordmark",
+   "  y 384-512  SIX 64-wide cells at x = 1664, 1728, 1792, 1856, 1920, 1984 (the DRAM table",
+   "  lists them 1664, 1792, 1728, 1856, 1920, 1984). Only 1664, 1792 and 1984 ever carry art",
+   "  (119/119 each); the other three are empty on every shipped uniform. Preserved as-is.",
+   "The pants and jersey sponsor slots are named for the garment each mark is worn on, which",
+   "is also why they sit one above the other in that order."
+  ],
+  "_optional_comment": [
+   "How 'dynamic' stamping actually works. Occupancy across all 119 shipped uniforms, using",
+   "the DRAM rects above:",
+   "  ALWAYS present  crest, capt_a, capt_c, the ten digits, cup_patch, league_patch,",
+   "                  sponsor_3, small_num_0/1/5           119/119",
+   "  NEVER used      small_num_2/3/4                        0/119",
+   "  OPTIONAL        shoulder_patch 58   pants_patch 53   shoulder_right 6",
+   "                  jersey_sponsor 87   pants_sponsor 83",
+   "",
+   "TWO SHOULDER SLOTS, not one. shoulder_patch (512,256) is the LEFT shoulder and",
+   "shoulder_right (768,0) is the RIGHT. When shoulder_right is empty the game stamps the",
+   "left mark on both shoulders, which is why 52 of the 58 patched kits look symmetric.",
+   "Exactly six ship a distinct right-shoulder mark:",
+   "  cgy_home, cgy_away  Canada flag  / Alberta flag shield",
+   "  pho_alt             Coyotes roundel / coyote head",
+   "  dmk_home, dmk_away  two different Ducks wordmarks",
+   "  atl_alt             near-identical swoops",
+   "So a one-shoulder-only kit is expressible, and there is no CPU-side enable flag to hunt",
+   "for: an empty slot IS the disable. The tab's per-slot toggle is real.",
+   "",
+   "FRONT-OF-JERSEY NUMBERS are not a texture concern at all \u2014 SOLVED, see uniform_colors.py.",
+   "They are a 2-bit enum in the Roster.ROS uniform record's +0x18 flags word: 0x00200000 =",
+   "big number centred below the crest (ATL alt, DAL home/alt), 0x00400000 = small number on",
+   "the upper right chest (BUF home/away/alt, DAL away, NYI home/away, SJS home/away/alt,",
+   "TBL home/away). Mutually exclusive; 0x00800000 alongside them marks a throwback kit. The",
+   "digits come from this sheet's normal digit set either way, so a converted kit gets a chest",
+   "number for free with a one-bit roster edit and no extra art."
+  ],
+  "preserve": [
+   "cup_patch",
+   "league_patch",
+   "pants_sponsor",
+   "jersey_sponsor",
+   "sponsor_3",
+   "small_num_0",
+   "small_num_1",
+   "small_num_2",
+   "small_num_3",
+   "small_num_4",
+   "small_num_5"
+  ],
+  "art": {
+   "_comment": [
+    "Slots filled from bundled art in data/stamp_art/ instead of copied from the stock",
+    "sheet, because the shipped 2009 marks are out of date. Each entry is drawn AFTER the",
+    "preserve pass, so clearing one in the tab falls back to the stock art. These defaults",
+    "apply only when a sheet is COMPOSED from NHL 23 art; editing an existing kit leaves",
+    "every slot alone until you change it (build_stamps(..., canvas=...)).",
+    "",
+    "`tint` paints the art a literal RGB, keeping its shading. It is NOT the glyphs'",
+    "colour-key pass and there is no shader substitution behind it: these slots render",
+    "exactly the colour stored, which is why the tab offers a colour picker for them. Left",
+    "out, the art goes down as authored (the Stanley Cup patch is full-colour already).",
+    "",
+    "`choices` are the alternatives offered in the tab for that slot."
+   ],
+   "cup_patch": {
+    "file": "stanley_cup_patch.png"
+   },
+   "jersey_sponsor": {
+    "file": "fanatics_logo.png"
+   },
+   "pants_sponsor": {
+    "file": "pants_ccm.png",
+    "choices": [
+     "pants_ccm.png",
+     "pants_bauer.png"
+    ]
+   }
+  }
+ },
+ "letters": {
+  "size": [
+   3968,
+   256
+  ],
+  "cell": [
+   128,
+   256
+  ],
+  "_comment": [
+   "31 cells of 128px. Cells 2 and 3 are unused on every shipped sheet. Verified: A-Z centres",
+   "run 575.5 -> 3775.5, exactly 128.0 apart over 25 gaps."
+  ],
+  "slots": {
+   "'": 0,
+   ".": 1,
+   "A": 4,
+   "B": 5,
+   "C": 6,
+   "D": 7,
+   "E": 8,
+   "F": 9,
+   "G": 10,
+   "H": 11,
+   "I": 12,
+   "J": 13,
+   "K": 14,
+   "L": 15,
+   "M": 16,
+   "N": 17,
+   "O": 18,
+   "P": 19,
+   "Q": 20,
+   "R": 21,
+   "S": 22,
+   "T": 23,
+   "U": 24,
+   "V": 25,
+   "W": 26,
+   "X": 27,
+   "Y": 28,
+   "Z": 29,
+   "c": 30
+  },
+  "keyed": true
+ },
+ "helmet": {
+  "size": [
+   1024,
+   256
+  ],
+  "logo": [
+   0,
+   0,
+   256,
+   256
+  ],
+  "digit_origin": [
+   256,
+   0
+  ],
+  "digit_cell": [
+   64,
+   128
+  ],
+  "_comment": [
+   "Digits are 64px cells from x=256: row 0 holds 0 2 4 6 8, row 1 holds 1 3 5 7 9 -- the",
+   "same even/odd split the stamp sheet uses. x>576 is unused on every shipped sheet."
+  ],
+  "keyed": true
+ },
+ "nhl23_font": {
+  "_comment": [
+   "The atlas is segmented at runtime; these bands say what the components MEAN. Bands are",
+   "resolved by structure (y centre, and x for the captaincy column which shares rows with",
+   "the big digits) rather than fixed pixel rows, so a slightly different export still maps.",
+   "`expect` is a sanity check -- a mismatch is reported, never silently accepted."
+  ],
+  "size": [
+   1024,
+   1024
+  ],
+  "bands": [
+   {
+    "name": "letters_1",
+    "y": [
+     0,
+     100
+    ],
+    "x": [
+     0,
+     1024
+    ],
+    "labels": [
+     "A",
+     "B",
+     "C",
+     "D",
+     "E",
+     "F",
+     "G",
+     "H",
+     "I",
+     "J",
+     "K",
+     "L",
+     "'",
+     "M",
+     ".",
+     "N",
+     "O"
+    ]
+   },
+   {
+    "name": "letters_2",
+    "y": [
+     100,
+     200
+    ],
+    "x": [
+     0,
+     1024
+    ],
+    "labels": [
+     "P",
+     "Q",
+     "R",
+     "S",
+     "T",
+     "U",
+     "V",
+     "W",
+     "X",
+     "Y",
+     "Z",
+     "-",
+     "ring",
+     "dia_l",
+     "dia_r"
+    ]
+   },
+   {
+    "name": "capt_c",
+    "y": [
+     200,
+     480
+    ],
+    "x": [
+     820,
+     1024
+    ],
+    "labels": [
+     "C"
+    ]
+   },
+   {
+    "name": "capt_a",
+    "y": [
+     480,
+     700
+    ],
+    "x": [
+     820,
+     1024
+    ],
+    "labels": [
+     "A"
+    ]
+   },
+   {
+    "name": "digits_hi",
+    "y": [
+     200,
+     480
+    ],
+    "x": [
+     0,
+     820
+    ],
+    "labels": [
+     "0",
+     "1",
+     "2",
+     "3",
+     "4"
+    ]
+   },
+   {
+    "name": "digits_lo",
+    "y": [
+     480,
+     700
+    ],
+    "x": [
+     0,
+     820
+    ],
+    "labels": [
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   {
+    "name": "helmet",
+    "y": [
+     700,
+     900
+    ],
+    "x": [
+     0,
+     1024
+    ],
+    "labels": [
+     "0",
+     "1",
+     "2",
+     "3",
+     "4",
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   },
+   {
+    "name": "pant",
+    "y": [
+     900,
+     1024
+    ],
+    "x": [
+     0,
+     1024
+    ],
+    "labels": [
+     "0",
+     "1",
+     "2",
+     "3",
+     "4",
+     "5",
+     "6",
+     "7",
+     "8",
+     "9"
+    ]
+   }
+  ]
+ },
+ "key_colors": {
+  "_comment": "Innermost layer first. fill -> blue, then the outlines -> red, then green.",
+  "fill": [
+   0,
+   0,
+   255
+  ],
+  "edge1": [
+   255,
+   0,
+   0
+  ],
+  "edge2": [
+   0,
+   255,
+   0
+  ]
+ }
+}

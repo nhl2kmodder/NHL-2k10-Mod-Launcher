@@ -34,12 +34,27 @@ REQUIRED = (
     "global_iff_runtime_map.csv",    # global.iff record -> file offset (captured live)
     "fe_components.json",            # Front-end tab: component map
     "fe_uniform_map.json",           # Front-end tab: team-select jersey decal sheets
-    "frontend_logo_tile_map.json",   # Front-end tab: logo atlas tiles
+    # SUPERSEDED — describes STOCK tile indices only, and adding a team shifts every index past the
+    # insertion point. Tile names are now derived live from the logos_*.iff index
+    # (logos_atlas.tile_labels); do not read this file. Kept only so old builds still validate.
+    "frontend_logo_tile_map.json",   # Front-end tab: logo atlas tiles (stock-only, unread)
     "team_fields.json",              # Teams tab: team-record field defs (seed for %APPDATA% copy)
     "jersey_map.json",               # IFF tab: jersey -> its front-end twin (one edit, both copies)
     "live_offsets.json",             # IFF tab: content-matched tail-texture offsets (rink/arena/led/…)
     "audio_authored_names.json",     # Audio tab: the gameplay-SFX inventory (authored_sfx.py)
     "authored_sfx_labels.json",      # Audio tab: transcribed names for the PA banks (see above)
+    "jersey_convert_profile.json",   # Jersey Conversion tab: UV calibration + slot layout
+    "uniform_uv_regions.png",        # Jersey Conversion tab: the base's garment-island masks
+    # Stamp placement. Without these the preview still renders, but EVERY stamp silently vanishes
+    # -- no crest, no numbers -- because the shader path has no decal quads to evaluate against.
+    "stamp_shader.json",             # Jersey Editor: per-site shader constants and slot roles
+    "decal_atlas.npz",               # Jersey Editor: the mesh's baked decal channel (interp 3)
+    # The two vision models the head builder runs on the reference photographs. Between them they
+    # are 20 MB, which is most of the install -- but without the landmarker there is no fit at all,
+    # and without the segmenter every head gets the base head's hair recoloured (the projector has
+    # no other way to tell hair from the arena behind it). See face_builder._detector/_segmenter.
+    "face_landmarker.task",          # Head editor: 478-point face fit + head pose
+    "selfie_multiclass.tflite",      # Head editor: hair / skin / clothing segmentation
 )
 
 

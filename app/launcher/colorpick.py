@@ -31,8 +31,13 @@ def to_rgb(hx: str) -> tuple[int, int, int]:
     return (int(h[1:3], 16), int(h[3:5], 16), int(h[5:7], 16))
 
 
-def ask_color(parent, initial: str = "#808080", title: str = "Colour") -> str | None:
-    """Modal: paste/type a hex, or click Pick. Returns '#RRGGBB' or None."""
+def ask_color(parent, initial: str = "#808080", title: str = "Colour",
+              swatches=None) -> str | None:
+    """Modal: paste/type a hex, click Pick, or take one of `swatches`. -> '#RRGGBB' or None.
+
+    `swatches` is [(hex, label), ...] -- colours already in play, offered as one-click sources.
+    Matching a palette entry to the jersey otherwise means eyedropping the sheet in another app.
+    """
     start = parse_hex(initial) or "#808080"
     win = Toplevel(parent)
     win.title(title)
@@ -52,6 +57,17 @@ def ask_color(parent, initial: str = "#808080", title: str = "Colour") -> str | 
     swatch.pack(side=LEFT, padx=8)
     msg = ttk.Label(body, text="", foreground="#c33", font=("Segoe UI", 8))
     msg.pack(anchor="w")
+
+    if swatches:
+        ttk.Label(body, text="On this kit:").pack(anchor="w", pady=(8, 2))
+        grid = ttk.Frame(body); grid.pack(anchor="w")
+        for n, (hx, lbl) in enumerate(swatches):
+            hx = parse_hex(hx) or "#000000"
+            sw = Label(grid, text=lbl or " ", bg=hx, width=6, height=2, relief="ridge",
+                       borderwidth=1, font=("Segoe UI", 7),
+                       fg="#000" if sum(to_rgb(hx)) > 360 else "#FFF")
+            sw.grid(row=n // 6, column=n % 6, padx=1, pady=1)
+            sw.bind("<Button-1>", lambda _e, h=hx: var.set(h))
 
     def refresh(*_):
         hx = parse_hex(var.get())

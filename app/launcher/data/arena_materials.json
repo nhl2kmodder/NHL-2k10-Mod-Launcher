@@ -1,0 +1,290 @@
+{
+ "_note": "material id -> texture-record indices (first = the material own texture). Recovered from a RenderDoc capture: submesh material id (pinned by index-buffer byte match) x Xenos fetch-constant VRAM address -> texture record. Only assets with a capture appear here.",
+ "arena_van.iff": {
+  "0": [
+   0,
+   12,
+   13
+  ],
+  "1": [
+   1
+  ],
+  "3": [
+   3
+  ],
+  "4": [
+   4,
+   12,
+   13
+  ],
+  "5": [
+   5,
+   12,
+   13
+  ],
+  "6": [
+   6,
+   12,
+   13
+  ],
+  "8": [
+   8,
+   12,
+   13
+  ],
+  "9": [
+   9,
+   12,
+   13
+  ],
+  "11": [
+   14,
+   12,
+   13
+  ],
+  "12": [
+   15,
+   12,
+   13
+  ],
+  "14": [
+   17,
+   12,
+   13
+  ],
+  "15": [
+   18,
+   12,
+   13
+  ],
+  "16": [
+   19,
+   12,
+   13
+  ],
+  "17": [
+   20,
+   12,
+   13
+  ],
+  "18": [
+   21,
+   12,
+   13
+  ],
+  "19": [
+   22,
+   12,
+   13
+  ],
+  "20": [
+   23,
+   12,
+   13
+  ],
+  "22": [
+   25,
+   12,
+   13
+  ],
+  "23": [
+   26,
+   85,
+   12,
+   13
+  ],
+  "25": [
+   28,
+   12,
+   13
+  ],
+  "26": [
+   29
+  ],
+  "27": [
+   30,
+   12,
+   13
+  ],
+  "28": [
+   31,
+   12,
+   13
+  ],
+  "29": [
+   32,
+   12,
+   13
+  ],
+  "30": [
+   33,
+   12,
+   13
+  ],
+  "31": [
+   34,
+   12,
+   13
+  ],
+  "32": [
+   35,
+   85,
+   12
+  ],
+  "34": [
+   37,
+   85,
+   12
+  ],
+  "35": [
+   38,
+   85,
+   12
+  ],
+  "39": [
+   43,
+   85,
+   12,
+   13
+  ],
+  "40": [
+   10,
+   12,
+   13,
+   85
+  ],
+  "43": [
+   46,
+   85,
+   12,
+   13
+  ],
+  "46": [
+   85,
+   12
+  ],
+  "48": [
+   51,
+   85,
+   12
+  ],
+  "49": [
+   52,
+   85,
+   12,
+   13
+  ],
+  "50": [
+   53,
+   85,
+   12,
+   13
+  ],
+  "52": [
+   85,
+   12
+  ],
+  "57": [
+   61,
+   12,
+   85
+  ],
+  "59": [
+   63,
+   85,
+   12
+  ],
+  "61": [
+   17,
+   85,
+   12,
+   63
+  ],
+  "62": [
+   66,
+   85,
+   12,
+   63
+  ],
+  "63": [
+   67,
+   85,
+   12,
+   63
+  ],
+  "66": [
+   63,
+   85,
+   12
+  ],
+  "68": [
+   63,
+   85,
+   12
+  ],
+  "69": [
+   72,
+   85,
+   12,
+   63
+  ],
+  "70": [
+   73,
+   85,
+   12,
+   63
+  ],
+  "71": [
+   63,
+   85,
+   12
+  ],
+  "72": [
+   46,
+   85,
+   12,
+   63
+  ],
+  "78": [
+   63,
+   85
+  ],
+  "79": [
+   79,
+   85,
+   63
+  ],
+  "80": [
+   80,
+   85,
+   63
+  ],
+  "82": [
+   82,
+   85,
+   63
+  ],
+  "85": [
+   69,
+   85,
+   63
+  ]
+ },
+ "_runtime_note": "material id -> runtime surface. These materials never sample an archive texture: the game re-uploads the pixels from guest RAM every frame (vkCmdCopyBufferToImage) and the mesh only supplies a 0..1 UV quad. Verified in arena.rdc: screens eid 14946 -> 512x512, ribbon eids 14881/14912 -> 2048x64. Source artwork lives in led_<team>.iff.",
+ "_runtime": {
+  "arena_van.iff": {
+   "78": {
+    "kind": "ribbon",
+    "w": 2048,
+    "h": 64,
+    "label": "LED ribbon board - runtime 2048x64 surface"
+   },
+   "83": {
+    "kind": "screen",
+    "w": 512,
+    "h": 512,
+    "label": "jumbotron screens - runtime 512x512 surface"
+   }
+  }
+ }
+}

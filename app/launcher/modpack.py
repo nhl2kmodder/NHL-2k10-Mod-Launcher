@@ -25,11 +25,32 @@ pixel pack (~65MB, all 1478 faces), installed over the recipient's outright. All
 it carries no player->portrait assignments (those live in Roster.ROS, and portrait keys only mean
 anything against the roster they were authored for) — see the section header for why.
 
-Four whole-league groups, each one selectable checkbox:
+A sixth section — EXPANSION TEAMS — is the only one that ADDS a club rather than editing one.
+It ships a RECIPE per club (donor + the field diff against that donor), because both sides build
+it the same way: `expansion.create_expansion_team` clones a shipping club into a spare record and
+`extra_teams.ensure_team_assets` clones the donor's whole art family onto the new asset key. The
+club's own textures ride in the normal textures section (auto-included on export). Applied BEFORE
+the roster groups, since those address teams by code. See that section's header for the details.
+
+A seventh section — PLAYER HEADS — ships a custom FACE, and it is the only section that carries
+model geometry. Per head: blob 0 of player_head_id_NNNN.iff (the reshaped mesh), whichever of the
+three 512x512 surfaces differ from the artist's, and the roster binding (which row wears it, plus
+that row's eye colour). Which heads are "edited" is read off the files — live archive bytes vs the
+pristine `.orig` bytes — so it needs no launcher config, and every edited head is a checkbox: tick
+one, tick twenty, or leave them all ticked and the pack carries every head you have made. Applied
+LAST, because expansion clubs add player records and a head's identity is a row number. See that
+section's header for the id-collision rule and the identity chain.
+
+Whole-league groups, each one selectable checkbox:
   * team_colors  — {CODE: {primary, secondary}}      (chunk 0x8489FAF3, via team_colors.py)
   * arena_names  — {CODE: arena}                      (string pool, via roster_editor.py)
+  * arena_fields — {CODE: {dasher, dasher2, capacity}} (chunk 0xE35B988E, via arena_colors.py)
   * team_names   — {CODE: {city, state, team, name}}  (string pool, via roster_editor.py)
   * goalie_masks — {row: {shell, pattern, colors, cage, ...}} (player records, via player_assign.py)
+
+arena_fields is keyed by team code like the rest, but the record it writes belongs to a BUILDING:
+teams that share an arena (an AHL affiliate rides its parent club's) resolve to the same record, so
+applying it is idempotent-by-repetition and the count reported is arenas touched, not teams.
 
 goalie_masks is the one roster group that is PER-PLAYER rather than per-team, so it carries its
 own identity plumbing (see that section's header). Selecting it also force-includes the mask
@@ -43,6 +64,8 @@ Identity keys:
   texture       ->  its relative path under Textures/Extracted/  (deterministic filename)
   roster group  ->  the group name ("team_colors" | "arena_names" | "team_names" | "goalie_masks")
   scoreclock    ->  the single key "scoreclock" (whole-mod, all-or-nothing)
+  expansion team->  its ASSET KEY ("SEA") — the thing that names all of its art
+  player head   ->  its HEAD ASSET ID ("3040") — the same slot on every install
 
 Merge model per item:
   NEW (recipient lacks it) -> add;
@@ -54,6 +77,7 @@ import json
 import zipfile
 import hashlib
 import shutil
+import struct
 import time
 from pathlib import Path
 
@@ -69,11 +93,13 @@ try:
     from . import roster_editor as RE
     from . import player_assign as PA
     from . import team_order as TO
+    from . import arena_colors as AC
 except ImportError:
     import team_colors as TC
     import roster_editor as RE
     import player_assign as PA
     import team_order as TO
+    import arena_colors as AC
 
 FORMAT = "nhl2k10-modpack"
 VERSION = 1
@@ -81,11 +107,13 @@ FILE_IDS = ["0A", "0B", "1A", "1B"]
 PACK_EXT = ".n2kpack"
 NAMES_EXT = ".n2knames.json"
 
-ROSTER_GROUP_ORDER = ["team_order", "team_colors", "arena_names", "team_names", "goalie_masks"]
+ROSTER_GROUP_ORDER = ["team_order", "team_colors", "arena_names", "arena_fields",
+                      "team_names", "goalie_masks"]
 ROSTER_GROUPS = {
     "team_order":   "Team Order — the order teams are listed in every menu",
     "team_colors":  "Team Colours — primary + secondary (all teams)",
     "arena_names":  "Arena Names (all teams)",
+    "arena_fields": "Arena Boards & Seats — dasher colours + seating capacity (all teams)",
     "team_names":   "Team Names — city / state / team / name (all teams)",
     "goalie_masks": "Goalie Masks — mask + pattern colours + cage (every custom-mask goalie)",
 }
@@ -380,6 +408,17 @@ def load_roster(ros_path):
             out["team_names"]  = names
     except Exception:
         pass
+    try:
+        # The ARENA record, not the team record — dasher boards and seating capacity. Keyed by team
+        # code like every other group, but several teams share a building (AHL affiliates ride their
+        # parent club's arena), so applying it is idempotent-by-repetition rather than one-per-record.
+        ar = {}
+        for code, v in AC.load(ros_path).items():
+            ar[code] = {"dasher": v["dasher"], "dasher2": v["dasher2"], "capacity": v["capacity"]}
+        if ar:
+            out["arena_fields"] = ar
+    except Exception:
+        pass
     gm = load_goalie_masks(ros_path)
     if gm:
         out["goalie_masks"] = gm
@@ -430,7 +469,7 @@ def apply_roster(ros_path, groups, log=print):
     if "team_order" in groups:
         try:
             TO.apply_order(ros_path, groups["team_order"], log=log)
-            applied["team_order"] = TO.NHL
+            applied["team_order"] = len(groups["team_order"])
         except Exception as e:
             log(f"  team_order failed: {e}")
             applied["team_order"] = 0
@@ -446,6 +485,21 @@ def apply_roster(ros_path, groups, log=print):
             except Exception as e:
                 log(f"  team_colors: '{code}' failed: {e}")
         applied["team_colors"] = n
+
+    if "arena_fields" in groups:
+        n, seen = 0, set()
+        for code, v in groups["arena_fields"].items():
+            try:
+                ar = AC.set_arena(ros_path, code, dasher=v.get("dasher"), dasher2=v.get("dasher2"),
+                                  capacity=v.get("capacity"), log=log)
+                # Shared buildings would otherwise be counted once per tenant.
+                if ar not in seen:
+                    seen.add(ar); n += 1
+            except KeyError:
+                log(f"  arena_fields: '{code}' has no arena in this roster — skipped")
+            except Exception as e:
+                log(f"  arena_fields: '{code}' failed: {e}")
+        applied["arena_fields"] = n
 
     if "goalie_masks" in groups:
         try:
@@ -506,6 +560,302 @@ def apply_roster(ros_path, groups, log=print):
             applied[g] = touched[g]
 
     return applied
+
+
+# ── expansion teams (a club that does not exist in the recipient's files at all) ──
+#
+# Every other section edits something the recipient already has.  This one ADDS a club: a team
+# record built in a spare created-team slot (`expansion.py`) plus the whole family of art assets
+# its asset key names (`extra_teams.ensure_team_assets`).  Without it a pack carrying Seattle's
+# jersey lands on a roster with no Seattle and an archive with no `uniform_sea_home.iff`, and
+# every one of those textures is silently dropped.
+#
+# What ships is a RECIPE, not bytes.  Both sides build the club the same way — byte-clone a
+# SHIPPING donor club — so the pack only has to name the donor and carry what the author changed
+# on top of it: `fields` is the 4-byte-field diff of the author's record against that donor
+# (colours, record book, division, anything else edited), which is a handful of ints instead of
+# a 412-byte blob that would need every pointer re-aimed on arrival.
+#
+# The donor is read off the ROSTER, not the art: a cloned record shares the donor's arena (+0xCC)
+# and head-coach (+0xD8) pointers, and the one sharer that is a CATALOGUED club is the donor.
+# Content-matching the uniforms (`extra_teams.infer_donor`) stops working the moment the author
+# repaints them, which is the normal case for a club worth sharing.
+#
+# The club's PLAYERS are the donor's, on both sides, because that is what `create_expansion_team`
+# writes — player names are pool-allocated strings, not inline record data, so they cannot be
+# carried as values.  A recipient who wants the author's actual roster takes their Roster.ROS.
+#
+# Ordering matters and is enforced in `apply_items`: expansion runs BEFORE the roster groups
+# (team_order permutes records, and every other group addresses teams by CODE, so the club has to
+# exist first) and before the recipient's next Apply All (which needs the TOC entries to exist
+# before it can write the pack's textures into them).
+
+EXPANSION_KEY = "expansion"
+
+# Identity that must be allocated locally, never copied: the team id and the uniform-owner slot
+# are "one past whatever this file already uses", so the author's values would collide.
+_EXP_LOCAL_FIELDS = {TO.OFF_ID, 0xF0}
+
+
+def _expansion_modules():
+    """(expansion, extra_teams) — imported lazily; extra_teams pulls in the whole archive stack,
+    which a roster-only pack never needs."""
+    try:
+        from . import expansion as EX
+        from . import extra_teams as ET
+    except ImportError:
+        import expansion as EX
+        import extra_teams as ET
+    return EX, ET
+
+
+def _team_offsets(d):
+    """{CODE: record offset} for every team record in the file."""
+    base, count = TO.find_table(d)
+    out = {}
+    for i in range(count):
+        o = base + i * TO.STRIDE
+        code = TO._text(d, o + TO.OFF_CODE).strip().upper()
+        if code:
+            out.setdefault(code, o)
+    return out
+
+
+def _catalogued_codes(d):
+    """Display codes of the clubs that SHIPPED — i.e. the ones a recipient is guaranteed to have,
+    so the ones an expansion club may be cloned from."""
+    _EX, ET = _expansion_modules()
+    known = ET._catalogued_keys()
+    base, count = TO.find_table(d)
+    out = {}
+    for i in TO.league0_slots(d, base, count):
+        o = base + i * TO.STRIDE
+        akey = TO._text(d, o + TO.OFF_AKEY).strip()
+        if akey.lower() in known:
+            out[TO._text(d, o + TO.OFF_CODE).strip().upper()] = akey.upper()
+    return out
+
+
+def _donor_of(d, o):
+    """(donor code, donor asset key) for the expansion record at `o`, or (None, None).
+
+    A cloned record still points at the donor's arena and head coach — those two pointers
+    together single out the club it was built from.
+    """
+    arena, coach = TO._target(d, o + 0xCC), TO._target(d, o + 0xD8)
+    base, count = TO.find_table(d)
+    shipped = _catalogued_codes(d)
+    hits = []
+    for i in TO.league0_slots(d, base, count):
+        p = base + i * TO.STRIDE
+        if p == o:
+            continue
+        code = TO._text(d, p + TO.OFF_CODE).strip().upper()
+        if code in shipped and TO._target(d, p + 0xCC) == arena and TO._target(d, p + 0xD8) == coach:
+            hits.append(code)
+    if not hits:
+        return None, None
+    return hits[0], shipped[hits[0]]
+
+
+def _record_diff(d, o, donor_o):
+    """{"0xNNN": value} for every plain (non-pointer, non-locally-allocated) field where the
+    author's record differs from the donor it was cloned from."""
+    ptr = set(TO.PTR_FIELDS)
+    out = {}
+    for f in range(0, TO.STRIDE, 4):
+        if f in ptr or f in _EXP_LOCAL_FIELDS:
+            continue
+        v, dv = TO._u32(d, o + f), TO._u32(d, donor_o + f)
+        if v != dv:
+            out["0x%03X" % f] = v
+    return out
+
+
+def load_expansion(ros_path):
+    """{AKEY: recipe} for every expansion club in this roster — the clubs whose asset key the
+    shipped catalog doesn't know (`extra_teams.extra_teams`), i.e. the ones a recipient lacks."""
+    out = {}
+    ros_path = Path(ros_path) if ros_path else None
+    if not ros_path or not ros_path.is_file():
+        return out
+    _EX, ET = _expansion_modules()
+    d = ros_path.read_bytes()
+    offs = _team_offsets(d)
+    for t in ET.extra_teams(ros_path):
+        o = offs.get(t["code"].upper())
+        if o is None:
+            continue
+        donor_code, donor_akey = _donor_of(d, o)
+        if not donor_code:
+            continue                      # can't name a donor -> can't be rebuilt; don't ship it
+        entry = {
+            "code":  t["code"], "city": t["city"], "nick": t["nick"],
+            "akey":  t["akey"].upper(),
+            "lower": TO._text(d, o + TO.OFF_LOWER),
+            "donor": donor_code, "donor_akey": donor_akey,
+            "fields": _record_diff(d, o, offs[donor_code]),
+        }
+        out[entry["akey"]] = entry
+    return out
+
+
+def _expansion_family_folders(exp):
+    """(folder prefixes, shared-folder file STEMS) for every club in `exp`.
+
+    A staged texture lives under its asset's FOLDER (`Uniform/VGK/AWAY`), not under the .iff
+    name, and one folder can host many assets — `Logos/` holds all 30+ team logos. So a club's
+    own folders are matched by prefix, and shared folders by the asset's own primary file, the
+    same split `revert_iffs_for_pack` makes in the other direction. By STEM, not full filename:
+    an edited logo is normally `vgk.png` sitting next to (and outranking) the extracted `vgk.dds`.
+    """
+    _EX, ET = _expansion_modules()
+    folders, files = set(), set()
+    by_folder = {}
+    try:
+        for row in AT.load_catalog():
+            by_folder.setdefault(AT.asset_iff(row["iff"]), set()).add(row["iff"])
+    except Exception:
+        pass
+    for e in exp.values():
+        for _cat, iff in ET.family_names((e.get("akey") or "").lower()):
+            try:
+                folder = AT.asset_iff(iff)
+            except Exception:
+                continue
+            if len(by_folder.get(folder, ())) > 1:        # shared (Logos/) -> match by stem
+                try:
+                    files.add(Path(AT.texture_filename(iff, None).lower()).stem)
+                except Exception:
+                    pass
+            else:
+                folders.add(folder.lower() + "/")
+    return folders, files
+
+
+def expansion_texture_files(root, exp):
+    """{rel: path} — every staged texture file belonging to these clubs' asset families."""
+    folders, files = _expansion_family_folders(exp)
+    pre = tuple(sorted(folders))
+    out = {}
+    for rel, p in load_textures(root).items():
+        r = rel.lower().replace("\\", "/")
+        if (pre and r.startswith(pre)) or Path(r).stem in files:
+            out[rel] = p
+    return out
+
+
+def _expansion_label(akey, e):
+    e = e or {}
+    name = " ".join(x for x in (e.get("city"), e.get("nick")) if x) or akey
+    n = len(e.get("fields") or {})
+    return (f"{name} ({e.get('code', akey)}) — new club cloned from {e.get('donor', '?')}"
+            f", plus its art assets" + (f"   [{n} edited field(s)]" if n else ""))
+
+
+def _expansion_item(akey, e):
+    return {"section": EXPANSION_KEY, "key": akey, "label": _expansion_label(akey, e),
+            "team": e.get("code", akey), "category": "Expansion team"}
+
+
+def local_expansion_items(ros_path):
+    data = load_expansion(ros_path)
+    return [_expansion_item(k, data[k]) for k in sorted(data)]
+
+
+def diff_expansion(in_exp, ros_path):
+    local = load_expansion(ros_path) if ros_path else {}
+    items = []
+    for k in sorted(in_exp):
+        inc, loc = in_exp[k], local.get(k)
+        status = "new" if loc is None else ("same" if loc == inc else "conflict")
+        items.append({"section": EXPANSION_KEY, "key": k, "status": status,
+                      "incoming": inc, "local": loc, "label": _expansion_label(k, inc),
+                      "team": inc.get("code", k), "category": "Expansion team"})
+    return items
+
+
+def apply_expansion(ros_path, game_dir, teams, log=print):
+    """Build each incoming club in the recipient's files: roster record (+ players) first, then
+    the asset family its key names.  Returns {'teams': n, 'assets': n}.
+
+    A club whose code already exists is NOT rebuilt — only the author's field edits are written
+    over it, so re-importing a pack, or importing two packs that share a club, is idempotent.
+    """
+    EX, ET = _expansion_modules()
+    ros_path = Path(ros_path)
+
+    # The audio ids `create_expansion_team` is about to hand out only exist on an install whose
+    # speech DB has been grown, so grow the recipient's first.  It is a data edit through the
+    # normal TOC path and it no-ops once the ids are there, so importing twice is harmless.
+    if teams and game_dir and Path(game_dir).is_dir():
+        try:
+            from . import expansion_audio as EA
+        except ImportError:
+            import expansion_audio as EA
+        try:
+            log("  " + EA.apply(game_dir, log=log))
+        except Exception as ex:
+            log(f"  audio slots NOT added — {ex}")
+            log("  the club will still work, but it will borrow another team's name call")
+
+    made = 0
+    for akey in sorted(teams):
+        e = teams[akey]
+        code = (e.get("code") or akey).upper()
+        d = ros_path.read_bytes()
+        offs = _team_offsets(d)
+        if code in offs:
+            log(f"  {code}: already in this roster — updating its fields only")
+        else:
+            donor = (e.get("donor") or "").upper()
+            if donor not in offs:
+                log(f"  {code}: donor {donor or '?'} is not in this roster — skipped")
+                continue
+            cap = EX.capacity(ros_path)
+            if not cap["records"]:
+                log(f"  {code}: no spare created-team record left in this roster — skipped")
+                continue
+            try:
+                EX.create_expansion_team(ros_path, code, e.get("city") or code,
+                                         e.get("nick") or code, akey=e.get("akey") or code,
+                                         lower=e.get("lower") or None, donor=donor, log=log)
+            except Exception as ex:
+                log(f"  {code}: could not be built — {ex}")
+                continue
+        # the author's edits on top of the clone (colours, record book, division, …)
+        fields = e.get("fields") or {}
+        if fields:
+            buf = bytearray(ros_path.read_bytes())
+            o = _team_offsets(buf).get(code)
+            if o is not None:
+                for f, v in fields.items():
+                    struct.pack_into(">I", buf, o + int(f, 16), int(v) & 0xFFFFFFFF)
+                ros_path.write_bytes(bytes(buf))
+                log(f"  {code}: {len(fields)} edited field(s) written")
+        made += 1
+
+    assets = 0
+    if made and game_dir and Path(game_dir).is_dir():
+        for akey in sorted(teams):
+            e = teams[akey]
+            try:
+                log(f"  {akey}: preparing art assets…")
+                log("  " + ET.ensure_team_assets(game_dir, ros_path,
+                                                 akey=(e.get("akey") or akey).lower(),
+                                                 donor=(e.get("donor_akey") or "").lower() or None,
+                                                 log=log))
+                assets += 1
+            except Exception as ex:
+                log(f"  {akey}: asset preparation FAILED — {ex}")
+    elif made:
+        log("  expansion assets skipped: no game files folder — the club exists in the roster but "
+            "owns no art yet (Teams tab → Prepare expansion team assets…)")
+    if made:
+        # A freshly built club is its own farm club (+0xD4 points at itself) until the AHL table
+        # is rebuilt — the one thing a recipe can't carry, since the affiliate is its own record.
+        log("  note: run Teams tab → rebuild AHL affiliates to give the new club(s) a farm team")
+    return {"teams": made, "assets": assets}
 
 
 # ── scoreclock (captured whole-mod state, re-applied onto the recipient's files) ──
@@ -739,15 +1089,520 @@ def revert_portraits(game_dir, log=print):
     return n
 
 
+# ── player heads (a custom face: geometry + maps + the roster slot it is bound to) ────
+#
+# The unit shipped per head is the whole face the Head Editor authored:
+#   * the GEOMETRY  — blob 0 of player_head_id_NNNN.iff, the reshaped vertex positions;
+#   * the MAPS      — whichever of colour / normal / occlusion differ from the artist's;
+#   * the BINDING   — which roster row wears it (+0xB2) and that row's eye colour.
+# All three or it isn't a face: maps without geometry are Makar's skin on a stranger's skull, and
+# geometry without the binding is a head nobody in the recipient's league is wearing.
+#
+# WHICH heads: exactly the ones whose bytes in the live archives differ from the pristine `.orig`
+# bytes. That is the same "file-visible signature, no launcher config" rule the goalie-mask section
+# uses, and it is honest in a way a registry of "heads I installed" could never be — it reads the
+# game as it actually is, so a head installed by an older build, by a script, or by hand still
+# exports, and one that was restored to stock stops exporting the moment it is. The scan is a
+# chunked compare with an early exit over 447 assets (~440 MB, sequential, sorted by archive
+# offset); measured at well under a second warm, and it is only ever run when a picker is opened.
+#
+# WHAT THE ID MEANS: a head id is an ASSET slot, identical on every install, so the pack keeps it.
+# It is not portable — the geometry is a vertex-for-vertex replacement of THAT asset's mesh and
+# `write_dram` is size-preserving, so the same bytes simply do not fit any other slot. Which makes
+# a collision (the recipient has some other player wearing that id) a roster problem, not an asset
+# problem, and it is solved on the roster: the squatters are moved onto free head slots so the
+# imported face still belongs to exactly one player — the rule the whole head feature is built on.
+#
+# IDENTITY across rosters is the same descending-confidence chain as goalie masks, with one extra
+# and much stronger link: player NAMES are readable off disk (the UTF-16BE name pool), so a head
+# does not have to fall back to an ordinal the way a mask does.
+#   row  ->  portrait (+0x1C) verifies it, and finds it when the row moved  ->  first+last name.
+
+HEADS_KEY = "heads"
+# Colour and normal are the two the head pipeline authors, and deliberately the only two shipped.
+# The third surface, occlusion, DOES come back different from stock on an installed head — measured
+# on head 3040: 56% of its texels move, up to 143 levels — but that is not authorship, it is the
+# install re-encoding the whole VRAM blob and DXT1 not landing on the same block endpoints twice.
+# (Control: an untouched head's occlusion decodes byte-identical live vs pristine, so the drift is
+# the write, not the reader.) Shipping it would carry a generation of that loss into the recipient's
+# file for no content — and their own install re-encodes it anyway. If a head tool ever really
+# paints occlusion, add it here; until then the artist's AO stays the artist's on both sides.
+HEAD_MAPS = ("color", "normal")
+
+
+def _head_mods():
+    """char_model / face_builder / face_shape, imported late.
+
+    They pull in numpy and (through face_builder) the head-building stack, which is a lot of import
+    for a module whose other five sections never touch it — and a launcher with no head work to
+    share should not fail to open the Mod Pack tab because of it.
+    """
+    try:
+        from . import char_model as C, face_builder as FB, face_shape as FS
+    except ImportError:
+        import char_model as C, face_builder as FB, face_shape as FS
+    return C, FB, FS
+
+
+def head_asset(head_id) -> str:
+    return "player_head_id_%04d.iff" % int(head_id)
+
+
+def edited_head_ids(game_dir=None, log=print):
+    """Head ids whose live archive bytes differ from the pristine ones. See the section header.
+
+    Compared in 256 KB chunks with an early exit, and the reads are issued in archive order so the
+    two files are walked forwards rather than seeked at random.
+    """
+    C, _FB, _FS = _head_mods()
+    try:
+        d = AT._dir(game_dir)
+        ids = C.head_ids(game_dir)
+    except Exception as e:
+        log(f"  heads: cannot scan ({e})")
+        return []
+    plan = []
+    for i in ids:
+        nm = head_asset(i)
+        try:
+            live = AT.resolve(nm, d, clean=False)
+            pristine, from_clean = AT.resolve_clean(nm, d)
+        except Exception:
+            continue
+        if live and pristine:
+            plan.append((i, live, pristine, from_clean))
+    plan.sort(key=lambda x: (x[1][0], x[1][1]))
+
+    out, handles = [], {}
+    try:
+        for i, live, pristine, from_clean in plan:
+            if live[2] != pristine[2]:                     # size changed -> certainly edited
+                out.append(i)
+                continue
+            fl = handles.setdefault((live[0], False),
+                                    open(AT._arc_file(d, live[0], clean=False), "rb"))
+            fp = handles.setdefault((pristine[0], from_clean),
+                                    open(AT._arc_file(d, pristine[0], clean=from_clean), "rb"))
+            fl.seek(live[1])
+            fp.seek(pristine[1])
+            left, same = live[2], True
+            while left > 0:
+                n = min(left, 1 << 18)
+                if fl.read(n) != fp.read(n):
+                    same = False
+                    break
+                left -= n
+            if not same:
+                out.append(i)
+    finally:
+        for f in handles.values():
+            try:
+                f.close()
+            except Exception:
+                pass
+    return sorted(out)
+
+
+def _head_binding(t, head_id):
+    """(row, entry-fields) for the roster row wearing `head_id`, or (None, {}) — see the header.
+
+    A head the Head Editor authored is worn by exactly one row (it refuses to install onto a shared
+    slot). Should some other tool have shared it anyway, the LOWEST row wins and the rest are named
+    in `shared_with` so the label can say so rather than silently picking one.
+    """
+    if t is None:
+        return None, {}
+    rows = sorted(t.head_usage().get(int(head_id), []))
+    if not rows:
+        return None, {}
+    row = rows[0]
+    first, last = t.name(row)
+    return row, {
+        "row": row,
+        "portrait": t.portrait(row),
+        "first": first,
+        "last": last,
+        "eye": t.eye_color(row),
+        "shared_with": rows[1:],
+    }
+
+
+def head_payload(head_id, game_dir):
+    """({'geometry': bytes|None, 'maps': {label: png_bytes}}, {'geometry': sha|None, label: sha})
+
+    Only the parts that DIFFER from the artist's asset are carried. The Head Editor writes colour
+    and normal and leaves occlusion alone, so a typical head ships two maps — but this asks the
+    files rather than assuming, so a head built by some other route ships whatever it changed.
+    """
+    import io
+    C, _FB, _FS = _head_mods()
+    nm, blobs, shas = head_asset(head_id), {"geometry": None, "maps": {}}, {}
+
+    try:
+        live_dram = C.blob(True, game_dir, nm)
+        stock_dram = C.blob(False, game_dir, nm)
+    except Exception:
+        live_dram = stock_dram = None
+    if live_dram is not None and live_dram != stock_dram:
+        blobs["geometry"] = live_dram
+        shas["geometry"] = _sha(live_dram)
+
+    try:
+        recs = {r["label"]: r for r in AT.list_textures(nm, game_dir)}
+    except Exception:
+        recs = {}
+    for label in HEAD_MAPS:
+        rec = recs.get(label)
+        if rec is None:
+            continue
+        try:
+            now = AT.decode_record(nm, rec, game_dir, live=True)
+            was = AT.decode_record(nm, rec, game_dir, live=False)
+        except Exception:
+            continue
+        if now is None or was is None or now.tobytes() == was.tobytes():
+            continue
+        buf = io.BytesIO()
+        now.convert("RGB").save(buf, "PNG", optimize=True)
+        blobs["maps"][label] = buf.getvalue()
+        shas[label] = _sha(blobs["maps"][label])
+    return blobs, shas
+
+
+def load_heads(game_dir, ros_path=None, ids=None, log=print):
+    """{"<head_id>": entry} for every edited head — metadata plus the shas the diff compares on.
+
+    `ids` limits the scan to a known set (the export path already knows which rows were ticked, so
+    it never re-scans 447 assets). The payload bytes are NOT read here: this feeds a picker.
+    """
+    if not game_dir:
+        return {}
+    t = None
+    if ros_path and Path(ros_path).is_file():
+        try:
+            t = PA.PlayerTable(Path(ros_path))
+        except Exception as e:
+            log(f"  heads: roster not readable ({e}) — heads will ship without a player binding")
+    out = {}
+    for hid in (sorted(int(i) for i in ids) if ids is not None
+                else edited_head_ids(game_dir, log)):
+        _row, bind = _head_binding(t, hid)
+        _blobs, shas = head_payload(hid, game_dir)
+        if not shas:                                  # bytes differ but nothing we can carry
+            log(f"  heads: {head_asset(hid)} differs from stock but no geometry or map could be "
+                f"read out of it — skipped")
+            continue
+        out[str(hid)] = {"head_id": int(hid), "sha": shas,
+                         "maps": sorted(shas.keys() - {"geometry"}),
+                         "geometry": shas.get("geometry") is not None, **bind}
+    return out
+
+
+def _head_who(e):
+    who = (" ".join(x for x in (e.get("first"), e.get("last")) if x)).strip()
+    return who or (f"portrait {e['portrait']}" if e.get("portrait") is not None else "no player")
+
+
+def _head_label(e):
+    parts = []
+    if e.get("geometry"):
+        parts.append("model")
+    if e.get("maps"):
+        parts.append(" + ".join(e["maps"]))
+    what = ", ".join(parts) or "nothing"
+    who = _head_who(e)
+    tail = f" — worn by {who}" if e.get("row") is not None else " — no roster row wears it"
+    return f"Head {e['head_id']} ({what}){tail}"
+
+
+def head_export_items(game_dir, ros_path=None, log=print):
+    """Picker rows for export: one per edited head, all checked by default (that IS the bulk
+    option — leave them alone and every head you have edited goes in the pack)."""
+    return [{"section": HEADS_KEY, "key": k, "label": _head_label(e), "team": "",
+             "category": "Player head"}
+            for k, e in sorted(load_heads(game_dir, ros_path, log=log).items(),
+                               key=lambda kv: int(kv[0]))]
+
+
+def local_head_items(game_dir, ros_path=None, log=print):
+    return head_export_items(game_dir, ros_path, log)
+
+
+# A map that has been through the game's texture pipeline once more than the pack's copy is not a
+# different map. Installing re-encodes to DXT, and DXT does not land on the same block endpoints
+# twice, so a head imported and then re-diffed against its own pack differs by a hair. Measured on
+# head 3040: that re-encode moves the colour map by 0.10 levels on average (25 at the worst block),
+# while a genuinely different head differs by 22.5 — better than two orders of magnitude of gap.
+# A mean of 1 level sits deep inside it, so "same" means same face, and no threshold has to be
+# right to within a factor of ten for that to hold.
+HEAD_MAP_SAME_MEAN = 1.0
+
+
+def _head_maps_same(z, key, entry, game_dir):
+    """Is the recipient's installed head the same face as the pack's, allowing for re-encode noise?"""
+    import io
+    import numpy as np
+    from PIL import Image
+    nm = head_asset(int(entry.get("head_id", key)))
+    try:
+        recs = {r["label"]: r for r in AT.list_textures(nm, game_dir)}
+    except Exception:
+        return False
+    for label in (entry.get("maps") or []):
+        rec = recs.get(label)
+        if rec is None:
+            return False
+        try:
+            theirs = np.asarray(Image.open(io.BytesIO(z.read(f"heads/{key}/{label}.png")))
+                                .convert("RGB"), np.int16)
+            mine = np.asarray(AT.decode_record(nm, rec, game_dir, live=True).convert("RGB"), np.int16)
+        except Exception:
+            return False
+        if mine.shape != theirs.shape:
+            return False
+        if float(np.abs(mine - theirs).mean()) > HEAD_MAP_SAME_MEAN:
+            return False
+    return True
+
+
+def diff_heads(in_heads, game_dir=None, ros_path=None, z=None):
+    """Incoming-pack rows. `same` when the recipient already wears this face (geometry byte for
+    byte, maps within encoder noise), so re-importing a pack is a no-op; anything else is a
+    conflict they opt into."""
+    items = []
+    for k in sorted(in_heads, key=lambda s: int(s)):
+        inc = in_heads[k]
+        loc = None
+        if game_dir:
+            try:
+                _blobs, shas = head_payload(int(k), game_dir)
+                loc = shas or None
+            except Exception:
+                loc = None
+        if loc is None:
+            status = "new"
+        elif loc == inc.get("sha"):
+            status = "same"                       # authored here, or an untouched copy of the pack
+        elif (loc.get("geometry") == (inc.get("sha") or {}).get("geometry")
+              and z is not None and _head_maps_same(z, k, inc, game_dir)):
+            status = "same"                       # already imported once — see HEAD_MAP_SAME_MEAN
+        else:
+            status = "conflict"
+        note = {"new": "not on your install",
+                "same": "identical to yours",
+                "conflict": "REPLACES the head you have in this slot"}[status]
+        items.append({"section": HEADS_KEY, "key": k, "status": status, "incoming": inc,
+                      "local": loc, "label": f"{_head_label(inc)}  [{note}]",
+                      "team": "", "category": "Player head"})
+    return items
+
+
+def _resolve_head_row(t, want_row, portrait, first, last):
+    """(row, note) — the recipient row this head belongs to, or (None, why-not).
+
+    row -> portrait -> name, in descending confidence. Unlike a goalie mask there is no ordinal
+    fallback and there should not be: a mask on the wrong goalie is a wrong colour, a face on the
+    wrong player is a different man, so a head that cannot be pinned is left unbound rather than
+    guessed onto somebody.
+    """
+    if want_row is None:
+        return None, "the pack carries no roster row for this head"
+    nrec = t.nrec
+    if 0 <= want_row < nrec and (portrait is None or t.portrait(want_row) == portrait):
+        return want_row, ""
+    if portrait is not None:
+        hits = t.find_rows_by_portrait_key(portrait)
+        if len(hits) == 1:
+            return hits[0], f"row {want_row} moved -> {hits[0]} (matched by portrait {portrait})"
+        if len(hits) > 1:
+            return hits[0], (f"row {want_row} moved -> {hits[0]} (portrait {portrait} is on "
+                             f"{len(hits)} rows — took the first)")
+    if first or last:
+        hits = t.find_rows_by_name(first=first or None, last=last or None)
+        if len(hits) == 1:
+            return hits[0], f"row {want_row} moved -> {hits[0]} (matched by name)"
+        if len(hits) > 1:
+            return hits[0], (f"row {want_row} moved -> {hits[0]} ({len(hits)} rows are named "
+                             f"{(first + ' ' + last).strip()} — took the first)")
+    if 0 <= want_row < nrec:
+        return want_row, f"row {want_row}: neither portrait nor name matches — applied by row anyway"
+    return None, f"row {want_row} does not exist in this roster ({nrec} records)"
+
+
+def _clear_head_slot(t, head_id, keep_row, game_dir, log):
+    """Move every OTHER row wearing `head_id` onto a head nobody is using. Returns rows moved.
+
+    The imported face is about to overwrite that asset, so anyone else pointing at it would wake up
+    wearing it — the exact "one head, one player" breakage the feature exists to prevent. They are
+    moved rather than the import being refused, because a free slot is a real shipped face: those
+    players change appearance, which is a visible, reversible, honest outcome, and it is logged
+    player by player so the recipient can see who was touched.
+    """
+    C, _FB, _FS = _head_mods()
+    others = [r for r in t.head_usage().get(int(head_id), []) if r != keep_row]
+    if not others:
+        return 0
+    free = sorted(set(C.head_ids(game_dir)) - set(t.head_usage()))
+    moved = 0
+    for r in others:
+        if not free:
+            log(f"  heads: row {r} also wears head {head_id} and there is no free head slot left "
+                f"to move it to — it will share this face")
+            continue
+        hid = free.pop(0)
+        t.set_head(r, hid, validate=False)
+        who = (" ".join(t.name(r))).strip() or f"row {r}"
+        log(f"  heads: {who} also wore head {head_id} — moved to free head {hid}")
+        moved += 1
+    return moved
+
+
+def head_roster_choices(ros_path):
+    """[(row, "Last, First — TEAM")] for every named row, for an importer's "who gets this face?"
+    picker. Sorted by surname.
+
+    Rows with no letters in the name are dropped — the shipped roster carries ~180 empty
+    created-player slots whose names are a run of asterisks, and they sort straight to the top of an
+    alphabetical list where they are the first thing the user sees and the last thing they want.
+    Nobody can search for a name that has no letters, so they are unreachable in this dialog anyway.
+    """
+    t = PA.PlayerTable(Path(ros_path))
+    out = []
+    for r in range(t.nrec):
+        first, last = t.name(r)
+        if not any(c.isalpha() for c in first + last):
+            continue
+        code = t.team(r)[2]
+        out.append((r, f"{last or '?'}, {first or '?'}" + (f"  —  {code}" if code else "")))
+    out.sort(key=lambda p: p[1].lower())
+    return out
+
+
+def apply_heads(z, in_heads, decisions, game_dir, ros_path=None, log=print, targets=None):
+    """Install each taken head: geometry, then maps, then the roster binding. Returns how many.
+
+    Order matters. The geometry is written first because it is the write that can legitimately
+    fail (a reshaped mesh has to re-compress into the slot it came from), and a failure there must
+    leave the head untouched rather than half-Makar. The roster binding is written last, and only
+    after the asset is really in the file, so a roster can never point at a face that isn't there.
+
+    `targets` = {key: row} lets the importer say who gets the face on THEIR roster, and it beats
+    the pack's own binding outright — no portrait or name matching is attempted for a key that
+    appears here. That is the point: the pack's row/portrait/name chain is a good guess about a
+    roster the author has never seen, and a person looking at their own roster is not guessing.
+    A key mapped to None installs the art and leaves the roster alone.
+    """
+    C, FB, FS = _head_mods()
+    from PIL import Image
+    import io
+
+    t = None
+    if ros_path and Path(ros_path).is_file():
+        try:
+            t = PA.PlayerTable(Path(ros_path))
+        except Exception as e:
+            log(f"  heads: roster not readable ({e}) — installing the art, not the binding")
+
+    done, touched_roster = 0, False
+    for k in sorted(in_heads, key=lambda s: int(s)):
+        e = in_heads[k]
+        hid = int(e.get("head_id", k))
+        who = _head_who(e)
+        try:
+            geom = z.read(f"heads/{k}/geometry.bin") if e.get("geometry") else None
+            maps = {lab: Image.open(io.BytesIO(z.read(f"heads/{k}/{lab}.png"))).convert("RGB")
+                    for lab in (e.get("maps") or [])}
+        except KeyError as ke:
+            log(f"  heads: {who} skipped — the pack is missing {ke}")
+            continue
+
+        row, note = (None, "")
+        if t is not None and targets and k in targets:
+            row = targets[k]
+            if row is None:
+                log(f"  heads: {who} — you chose not to assign this face; installing the art into "
+                    f"head {hid} only")
+            else:
+                row = int(row)
+                who = (" ".join(t.name(row))).strip() or f"row {row}"
+        elif t is not None:
+            row, note = _resolve_head_row(t, e.get("row"), e.get("portrait"),
+                                          e.get("first"), e.get("last"))
+            if row is None:
+                log(f"  heads: {who} — {note}; installing the art into head {hid} anyway, "
+                    f"assign it in the Players tab")
+            elif note:
+                log(f"  heads: {who} — {note}")
+
+        try:
+            if geom is not None:
+                log(f"  {C.write(geom, Path(game_dir), log=log, asset=head_asset(hid))}")
+            if maps:
+                log(f"  {FB.install(hid, maps, Path(game_dir), log=log, only=tuple(maps))}")
+        except Exception as ex:
+            log(f"  heads: {who} FAILED — {ex}")
+            continue
+
+        if t is not None and row is not None:
+            _clear_head_slot(t, hid, row, game_dir, log)
+            try:
+                t.set_head(row, hid, validate=True, game_dir=game_dir)
+            except Exception as ex:                     # an added-asset id the validator rejects
+                log(f"  heads: {who} — head id not accepted by the roster ({ex})")
+            else:
+                if e.get("eye") is not None:
+                    t.set_eye_color(row, int(e["eye"]))
+                log(f"  heads: {who} (row {row}) now wears head {hid}"
+                    + (f", eyes {PA.EYE_COLORS[int(e['eye'])]}" if e.get("eye") is not None else ""))
+                touched_roster = True
+        done += 1
+
+    if touched_roster:
+        t.save()
+    return done
+
+
+def revert_heads(head_ids, game_dir, log=print):
+    """Put the artist's head back for each id — the whole asset, byte for byte.
+
+    One `ensure_clean` splice rather than "write the stock geometry back, then re-install the stock
+    maps": re-installing maps RE-ENCODES them, and DXT does not land on the same block endpoints
+    twice, so that route leaves a head that looks stock but no longer IS stock. That matters here
+    more than anywhere else, because "differs from pristine" is precisely how this section decides a
+    head was edited — a lossy restore would leave the head in the export picker forever, offering to
+    ship the artist's face back as if it were the user's work.
+
+    The roster binding is NOT undone: which face a player wears is a roster value, and the revert
+    pass has the same "restore your own ROS backup" rule for every roster section.
+    """
+    n = 0
+    for hid in sorted(int(i) for i in head_ids):
+        try:
+            if AT.ensure_clean(head_asset(hid), Path(game_dir), log):
+                n += 1
+            else:
+                log(f"  head {hid} was already the artist's — nothing to revert")
+        except Exception as e:
+            log(f"  ERROR reverting head {hid}: {e}")
+    return n
+
+
 # ── revert (undo what a pack applied, from the .orig backups) ─────────────────
 
 def read_pack_contents(pack_path):
     """Cheap inventory of a pack: {'tex_rels': [...], 'audio_keys': [...], 'roster': bool,
-    'scoreclock': dict|{}, 'portraits': bool} — what a revert (or a preview of one) needs to know."""
-    out = {"tex_rels": [], "audio_keys": [], "roster": False, "scoreclock": {}, "portraits": False}
+    'scoreclock': dict|{}, 'portraits': bool, 'heads': [ids]} — what a revert (or a preview of one)
+    needs to know."""
+    out = {"tex_rels": [], "audio_keys": [], "roster": False, "scoreclock": {}, "portraits": False,
+           "expansion": {}, "heads": []}
     with zipfile.ZipFile(pack_path, "r") as z:
         names = set(z.namelist())
         out["roster"] = "roster.json" in names
+        if "expansion.json" in names:
+            out["expansion"] = json.loads(z.read("expansion.json"))
+        if "heads.json" in names:
+            out["heads"] = sorted(int(e.get("head_id", k))
+                                  for k, e in json.loads(z.read("heads.json")).items())
         out["portraits"] = PORTRAITS_ARC in names
         if "scoreclock.json" in names:
             out["scoreclock"] = json.loads(z.read("scoreclock.json"))
@@ -837,8 +1692,15 @@ def revert_pack(root, game_dir, pack_path, log=print):
     Returns a counts dict. Slow when assets are large (each ensure_clean is an archive splice)."""
     root, game_dir = Path(root), Path(game_dir)
     inv = read_pack_contents(pack_path)
-    counts = {"tex_assets": 0, "audio": 0, "scoreclock": 0, "portraits": 0, "notes": []}
+    counts = {"tex_assets": 0, "audio": 0, "scoreclock": 0, "portraits": 0, "heads": 0,
+              "notes": []}
     sc = inv["scoreclock"]
+
+    if inv.get("heads"):
+        log(f"  restoring {len(inv['heads'])} stock head(s)…")
+        counts["heads"] = revert_heads(inv["heads"], game_dir, log)
+        counts["notes"].append("the players who wore those heads still point at those head ids — "
+                               "restore your Roster.ROS backup to undo the assignment")
 
     if inv["portraits"]:
         log("  reverting portraits (whole pack -> stock)…")
@@ -915,6 +1777,13 @@ def revert_pack(root, game_dir, pack_path, log=print):
                                "Roster.ROS backup if needed")
         log("  roster: not revertible (in-place field values) — restore your own ROS backup")
 
+    if inv.get("expansion"):
+        who = ", ".join(sorted(inv["expansion"]))
+        counts["notes"].append(f"expansion club(s) {who} are NOT removed by a revert — the record "
+                               f"and its TOC entries stay; restore your Roster.ROS backup to drop "
+                               f"the club")
+        log(f"  expansion: {who} left in place (not revertible) — restore your ROS backup to remove")
+
     if iffs:
         try:
             log(f"  {AT.compact_1b(game_dir, log)}")
@@ -961,6 +1830,13 @@ def annotate(items, root):
         elif it.get("section") == "portraits":
             it.setdefault("team", "")
             it["category"] = "Portraits"
+        elif it.get("section") == HEADS_KEY:
+            it.setdefault("team", "")
+            it["category"] = "Player head"
+        elif it.get("section") == EXPANSION_KEY:
+            inc = it.get("incoming") or {}
+            it["team"] = it.get("team") or inc.get("code") or str(it.get("key") or "")
+            it["category"] = "Expansion team"
         elif it.get("section") == "tex":
             team, cat = texmap.get(str(it["key"]).split("/")[0], ("", ""))
             it["team"], it["category"] = team, cat
@@ -987,10 +1863,13 @@ def local_items(root):
     return annotate(items, root)
 
 def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author="",
-                portraits=b""):
+                portraits=b"", expansion=None, heads=None):
+    """`heads`: {"<id>": (entry, {"geometry": bytes|None, "maps": {label: png_bytes}})}."""
+    expansion = expansion or {}
     roster = roster or {}
     scoreclock = scoreclock or {}
     portraits = portraits or b""
+    heads = heads or {}
     out_path = Path(out_path)
     out_path.parent.mkdir(parents=True, exist_ok=True)
     with zipfile.ZipFile(out_path, "w", zipfile.ZIP_DEFLATED, compresslevel=9) as z:
@@ -1005,7 +1884,9 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
                 "textures": len(texs),
                 "roster": len(roster),
                 "scoreclock": 1 if scoreclock else 0,
-                "portraits": AT.PORTRAIT_COUNT if portraits else 0
+                "portraits": AT.PORTRAIT_COUNT if portraits else 0,
+                "expansion": len(expansion),
+                "heads": len(heads)
             },
         }, indent=1))
         if meta:
@@ -1017,10 +1898,23 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
         for rel, p in texs.items():
             if Path(p).exists():
                 z.write(p, f"textures/{rel}")
+        if expansion:
+            z.writestr("expansion.json", json.dumps(expansion, indent=1))
         if roster:
             z.writestr("roster.json", json.dumps(roster, indent=1))
         if scoreclock:
             z.writestr("scoreclock.json", json.dumps(scoreclock, indent=1))
+        if heads:
+            z.writestr("heads.json", json.dumps({k: v[0] for k, v in heads.items()}, indent=1))
+            for k, (_entry, blobs) in heads.items():
+                if blobs.get("geometry") is not None:
+                    # The DECOMPRESSED blob 0 (~230 KB), deflated by the zip: it has to go in
+                    # decompressed because the recipient's copy is re-encoded on their side, into
+                    # their slot, by the same writer the editor uses.
+                    z.writestr(f"heads/{k}/geometry.bin", blobs["geometry"])
+                for label, png in (blobs.get("maps") or {}).items():
+                    z.writestr(zipfile.ZipInfo(f"heads/{k}/{label}.png"), png,
+                               compress_type=zipfile.ZIP_STORED)   # PNG is already deflated
         if portraits:
             # STORED, not deflated: the blobs inside are already 0E4837-compressed, so deflate
             # burns ~30s of CPU on both ends for well under 1% — and stored members import by
@@ -1029,7 +1923,8 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
                        compress_type=zipfile.ZIP_STORED)
     return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs),
             "roster": len(roster), "scoreclock": 1 if scoreclock else 0,
-            "portraits": AT.PORTRAIT_COUNT if portraits else 0}
+            "portraits": AT.PORTRAIT_COUNT if portraits else 0, "expansion": len(expansion),
+            "heads": len(heads)}
 
 def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
                 game_dir=None, author="", log=print):
@@ -1040,7 +1935,25 @@ def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
     roster = load_roster(ros_path) if ("roster" in include and ros_path) else {}
     sc = load_scoreclock(game_dir, log) if ("scoreclock" in include and game_dir) else {}
     por = load_portraits(game_dir, log) if ("portraits" in include and game_dir) else b""
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por)
+    exp = load_expansion(ros_path) if (EXPANSION_KEY in include and ros_path) else {}
+    heads = (_collect_heads(load_heads(game_dir, ros_path, log=log), game_dir, log)
+             if (HEADS_KEY in include and game_dir) else {})
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads)
+
+
+def _collect_heads(entries, game_dir, log=print):
+    """entries -> the {key: (entry, blobs)} shape `_write_pack` wants, reading the payload bytes."""
+    out = {}
+    for k, e in sorted(entries.items(), key=lambda kv: int(kv[0])):
+        blobs, shas = head_payload(int(k), game_dir)
+        if not shas:
+            log(f"  heads: head {k} had nothing left to ship (restored to stock?) — skipped")
+            continue
+        e = {**e, "sha": shas, "maps": sorted(shas.keys() - {"geometry"}),
+             "geometry": shas.get("geometry") is not None}
+        out[k] = (e, blobs)
+        log(f"  heads: packing {_head_label(e)}")
+    return out
 
 def export_selected(root, out_path, selected, ros_path=None, game_dir=None, author="", log=print):
     root = Path(root)
@@ -1085,7 +1998,32 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
     if ("portraits", PORTRAITS_KEY) in sel and game_dir:
         log("  capturing the portrait pack (~65 MB)…")
         por = load_portraits(game_dir, log)
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por)
+    exp = {}
+    if any(s == EXPANSION_KEY for s, _ in sel) and ros_path:
+        exp = {k: v for k, v in load_expansion(ros_path).items() if (EXPANSION_KEY, k) in sel}
+        if exp:
+            # Self-contained club: the recipe builds a club that looks like the DONOR. The art
+            # that makes it Seattle is its texture files, so force-include every staged file
+            # belonging to the club's asset family, the way goalie masks drag their paint along.
+            extra = {rel: p for rel, p in expansion_texture_files(root, exp).items()
+                     if rel not in texs}
+            if extra:
+                log(f"  expansion: auto-including {len(extra)} texture file(s) for "
+                    f"{len(exp)} club(s)")
+                texs.update(extra)
+            else:
+                log(f"  expansion: no extracted texture files found for {len(exp)} club(s) — "
+                    f"extract/edit them in the IFF tab if the art should ride along")
+    heads = {}
+    head_keys = {k for s, k in sel if s == HEADS_KEY}
+    if head_keys and game_dir:
+        # `ids=head_keys` so the 447-asset scan the picker already did is not repeated — the ticked
+        # rows ARE the answer to "which heads are edited", filtered by the user.
+        heads = _collect_heads(load_heads(game_dir, ros_path, ids=head_keys, log=log),
+                               game_dir, log)
+    elif head_keys:
+        log("  heads skipped: no game files folder set (Settings tab)")
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads)
 
 
 # ── diff (incoming vs local) ──────────────────────────────────────────────────
@@ -1129,8 +2067,12 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
         in_meta = json.loads(z.read("audio_meta.json")) if "audio_meta.json" in names else {}
         in_roster = json.loads(z.read("roster.json")) if "roster.json" in names else {}
         in_sc = json.loads(z.read("scoreclock.json")) if "scoreclock.json" in names else {}
+        in_exp = json.loads(z.read("expansion.json")) if "expansion.json" in names else {}
+        in_heads = json.loads(z.read("heads.json")) if "heads.json" in names else {}
 
         items += _meta_items(in_meta, local_meta, off2entry)
+        items += diff_expansion(in_exp, ros_path)
+        items += diff_heads(in_heads, game_dir, ros_path, z)
         items += diff_roster(in_roster, ros_path)
         if in_sc.get("snapshot"):
             items.append(diff_scoreclock_item(in_sc))
@@ -1225,17 +2167,22 @@ def _apply_tex(z, item, root, log):
         shutil.copyfileobj(src, out)
     log(f"  texture-> Textures/Extracted/{item['key']}")
 
-def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=None, log=print):
-    """game_dir enables the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
+def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=None, log=print,
+                head_targets=None):
+    """`head_targets` = {head key: row|None} — see `apply_heads`; it overrides the pack's binding.
+
+    game_dir enables the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
     in a worker thread when items may include it) and the PORTRAITS section (~65MB read + one
     archive relocate, a few seconds). game_dir=None skips both with a log line, so a GUI can strip
     scoreclock rows out and replay them itself on a background thread."""
     root = Path(root)
     _, off2entry = _catalog_index(root)
     counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "portraits": 0,
-              "skipped": 0}
+              "expansion": 0, "heads": 0, "skipped": 0}
     meta_writes = {}
     roster_groups = {}
+    expansion_teams = {}
+    heads = {}
 
     z = zipfile.ZipFile(zip_path, "r") if zip_path else None
     try:
@@ -1254,6 +2201,18 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
             elif it["section"] == "tex" and z is not None:
                 _apply_tex(z, it, root, log)
                 counts["tex"] += 1
+            elif it["section"] == EXPANSION_KEY:
+                if ros_path and Path(ros_path).is_file():
+                    expansion_teams[it["key"]] = it["incoming"]
+                else:
+                    log("  expansion team skipped: no Roster.ROS path set (Teams tab → Browse…)")
+                    counts["skipped"] += 1
+            elif it["section"] == HEADS_KEY:
+                if game_dir and Path(game_dir).is_dir():
+                    heads[it["key"]] = it["incoming"]
+                else:
+                    log("  head skipped: no game files folder (Settings tab)")
+                    counts["skipped"] += 1
             elif it["section"] == "roster":
                 if ros_path and Path(ros_path).is_file():
                     roster_groups[it["key"]] = it["incoming"]
@@ -1283,7 +2242,26 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
 
     if meta_writes:
         _write_meta(root, meta_writes)
+    # Expansion FIRST: the roster groups all address teams by CODE (and team_order physically
+    # permutes the records), and the pack's textures can only be applied to assets that exist,
+    # so the club has to be in the file before either runs.
+    if expansion_teams:
+        log(f"  building {len(expansion_teams)} expansion team(s)…")
+        res = apply_expansion(ros_path, game_dir, expansion_teams, log)
+        counts["expansion"] = res["teams"]
+        if res["teams"] and not res["assets"]:
+            counts.setdefault("notes", []).append(
+                "expansion clubs were added to the roster but own no art yet")
     if roster_groups:
         apply_roster(ros_path, roster_groups, log)
-
+    # Heads LAST, and on a freshly-opened zip. Last because everything above it can move a player
+    # record out from under a row number — `apply_expansion` adds clubs and their players — and the
+    # head section's identity chain has to resolve against the roster as it will finally be, not as
+    # it was when the pack was read. Freshly-opened because the members are read here, after the
+    # loop above has already closed its handle.
+    if heads:
+        log(f"  installing {len(heads)} custom head(s)…")
+        with zipfile.ZipFile(zip_path, "r") as zh:
+            counts["heads"] = apply_heads(zh, heads, decisions, game_dir, ros_path, log,
+                                          targets=head_targets)
     return counts

@@ -34,13 +34,18 @@ from launcher import archive_textures as archtex
 from launcher import bank_parser as bankparse
 from launcher import audio_names as audnames
 from launcher import team_tag
+from launcher import transcripts as audtext
+from launcher import transcript_refresh as tref
 from launcher import wave_banks as wbanks
+from launcher import speech_lines as splines
 from launcher import audio_store as astore
 from launcher import authored_sfx as asfx
 from launcher import modpack as mp
 from launcher import resources as lres
 from launcher import scorebug_anchors as sbanchor
 from launcher import default_matchup as dmatch
+from launcher import uniform_colors as ucol
+from launcher import arena_colors as acol
 
 try:
     from PIL import Image, ImageTk
@@ -51,6 +56,12 @@ except ImportError:
 # ═══════════════════════════════════════════════════════════════════════════════
 # Constants & Global Executor
 # ═══════════════════════════════════════════════════════════════════════════════
+# How a jersey wears a number on its CHEST — a 3-value enum in the uniform record's flags word,
+# not anything in the texture (see uniform_colors.FRONTNUM_BIG/SMALL).
+_FRONTNUM_LABEL = {"none": "None", "small": "Small — upper right chest",
+                   "big": "Big — centred below the crest"}
+_FRONTNUM_MODE = {v: k for k, v in _FRONTNUM_LABEL.items()}
+
 APP_TITLE   = "NHL 2k10 Mod Launcher"
 APP_VERSION = "1.0.0"
 
@@ -380,7 +391,17 @@ def category_audio_dir(root: Path, category: str) -> Path:
 #:   3 -> the remaining numbered placeholders transcribed to real names
 #:   4 -> the 100 on-ice penalty announcements re-filed PA -> Referee and renamed
 #:        Referee_Penalty_<Team>
-SEED_VERSION = 4
+#:   5 -> the 30 per-team goal songs identified (pamusic cue 43 + team id) and renamed
+#:        Arena_Music_NNN -> GoalSong_<City>; every shipped team tag folded onto the
+#:        exact TEAMS spelling the Team filter matches on (see team_tag.canon)
+#:   6 -> team tags rebuilt from the LINE TABLE instead of the name (AI Voice Pipeline/
+#:        team_link.py): a team line is a run of takes per club through all 30 in team-id
+#:        order, so 6,356 takes get their club from position -- including the Islanders/
+#:        Rangers/Blues whose nicknames the text rule could never trust. 860 stems whose
+#:        team word was an ASR mishear corrected against that position (PxP_TheirZone_
+#:        Boynton -> _Boston). Tagging from the NAME is gone, which is what produced
+#:        "PxP_StarsWereCertainlyAligned" = Dallas.
+SEED_VERSION = 6
 
 #: Leading tokens the voice-attribution pass added to lines.bin names. Two names that are equal
 #: after stripping these are the SAME line, reclassified by us -- not a user rename.
@@ -456,6 +477,13 @@ def _stale_seed_value(live: dict, seed: dict) -> dict | None:
 
     def _with_team(out: dict) -> dict:
         if st and st != lt:
+            out["team"] = st
+        elif "team" not in live and "team" in seed:
+            # An explicit blank is a decision too, and it has to travel. The Team column falls
+            # back to guessing from the NAME whenever the key is absent, which is where
+            # "PxP_StarsWereCertainlyAligned" -> Dallas came from; the seed now states outright
+            # that those streams belong to nobody. Only ever fills a key the user never had, so
+            # a hand-typed tag can't be blanked by this.
             out["team"] = st
         return out
 
@@ -674,6 +702,7 @@ def load_all_audio(root: Path) -> list:
         # ...and the authored SFX (0A/0B) are in no .bin at all -- they live inside their own
         # container, so that container's name is the honest answer for this column.
         bin_name = wbanks.bank_for(fid, off) or entry.get("source_bank", "")
+        line = audtext.text_for(key)
         rows.append({
             "key":         key,
             "stem":        stem,
@@ -697,10 +726,27 @@ def load_all_audio(root: Path) -> list:
             # including a deliberately blank one, which is why this tests for the key rather
             # than for truthiness. Otherwise: a single-arena bank reference is proof, and
             # failing that it comes from the name, which is where the team actually is for the
-            # ~93% of the catalogue no arena bank references. Blank when unknown -- see
-            # launcher/team_tag.py for why a wrong team is worse than none.
-            "team":        (entry["team"] if "team" in entry
-                            else team_tag.team_for(friendly, bank_disp)),
+            # ~93% of the catalogue no arena bank references, and failing THAT from what the
+            # stream actually says (keyed on the manifest key, hence passing it through).
+            # Blank when unknown -- see launcher/team_tag.py for why a wrong team is worse
+            # than none.
+            # canon() only fixes the SPELLING of a stored tag ("ANA", "Anaheim" ->
+            # "Anaheim Ducks"); the filter matches by equality against TEAMS, so a tag in
+            # any other spelling is correct and invisible at the same time.
+            "team":        (team_tag.canon(entry["team"]) if "team" in entry
+                            else team_tag.team_for(friendly, bank_disp, key)),
+            # What the stream says, from the offline sweep. Blank for non-speech banks.
+            "text":        line,
+            # Pre-lowered for the search box. The filter runs on every keystroke over all
+            # ~81k rows; lowering a 48-char string per row per keystroke is the one part of
+            # that loop big enough to feel, and it never changes, so it is done once here.
+            "text_hay":    line.lower(),
+            # Which line ID the engine asks for to play this stream, and which take of that
+            # line it is -- decoded from the speech DB's key arrays, see launcher/speech_lines.
+            # Blank means "bank not decoded yet", NOT "no line": ten of the nineteen banks
+            # still use a block layout we cannot read.
+            "line_id":     splines.label(fid, off),
+            "line_rec":    splines.line_for(fid, off),
         })
     return rows
 
@@ -1499,27 +1545,35 @@ class App(tk.Tk):
         self._tab_speech   = ttk.Frame(self._nb)
         self._tab_iff      = ttk.Frame(self._nb)
         self._tab_banks    = ttk.Frame(self._nb)
-        self._tab_arena    = ttk.Frame(self._nb)
+        self._tab_arena    = ttk.Frame(self._nb)     # "Arena Music" (WIP, hidden)
+        self._tab_arenaed  = ttk.Frame(self._nb)     # Arena — models/textures/lighting
+        self._tab_players  = ttk.Frame(self._nb)     # Players — character models (global.iff)
+        self._tab_jersey   = ttk.Frame(self._nb)     # Jersey Conversion — NHL 23 kit -> 2K10
         self._tab_teams    = ttk.Frame(self._nb)
         self._tab_goalie   = ttk.Frame(self._nb)
         self._tab_portrait = ttk.Frame(self._nb)
         self._tab_scorebug = ttk.Frame(self._nb)
         self._tab_gameplay = ttk.Frame(self._nb)
+        self._tab_anim     = ttk.Frame(self._nb)
         self._tab_settings = ttk.Frame(self._nb)
 
+        self._nb.add(self._tab_teams,    text="  Roster Editor  ")
+        self._nb.add(self._tab_iff,      text="  Textures  ")
         self._nb.add(self._tab_audio,    text="  Audio  ")
         self._nb.add(self._tab_speech,   text="  Speech  ")
-        self._nb.add(self._tab_iff,      text="  IFF Textures  ")
+        self._nb.add(self._tab_goalie,   text="  Goalie Masks  ")
+        self._nb.add(self._tab_portrait, text="  Portraits  ")
+        self._nb.add(self._tab_scorebug, text="  Scoreclock  ")
         # WIP — Audio Banks & Arena Music tabs are HIDDEN for the 1.0 release (not yet finished).
         # The frames are still created and built below so nothing else breaks; re-add these two
         # lines to bring the tabs back once they're ready. TODO: finish Audio Banks + Arena Music.
         # self._nb.add(self._tab_banks,    text="  Audio Banks  ")
         # self._nb.add(self._tab_arena,    text="  Arena Music  ")
-        self._nb.add(self._tab_teams,    text="  Teams  ")
-        self._nb.add(self._tab_goalie,   text="  Goalie Equipment  ")
-        self._nb.add(self._tab_portrait, text="  Portraits  ")
-        self._nb.add(self._tab_scorebug, text="  Scoreclock  ")
-        self._nb.add(self._tab_gameplay, text="  Gameplay  ")
+        self._nb.add(self._tab_arenaed,  text="  Arena Models / Lighting  ")
+        self._nb.add(self._tab_players,  text="  Models  ")
+        self._nb.add(self._tab_jersey,   text="  Jersey Conversion  ")
+        self._nb.add(self._tab_anim,     text="  Animations  ")
+        self._nb.add(self._tab_gameplay, text="  Gameplay Tuners  ")
         self._nb.add(self._tab_settings, text="  Settings  ")
 
         self._build_audio_tab()
@@ -1527,11 +1581,15 @@ class App(tk.Tk):
         self._build_iff_tab()
         self._build_banks_tab()
         self._build_arena_tab()
+        self._build_arena_editor_tab()
+        self._build_players_tab()
+        self._build_jersey_convert_tab()
         self._build_teams_tab()
         self._build_goalie_tab()
         self._build_portrait_tab()
         self._build_scorebug_tab()
         self._build_gameplay_tab()
+        self._build_anim_tab()
         self._build_settings_tab()
 
         log_frame = ttk.LabelFrame(pane, text="Operation Log", padding=4)
@@ -1602,6 +1660,8 @@ class App(tk.Tk):
         ttk.Button(bar, text="Check All",    command=self._run_check).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Rescan Edits", command=self._run_rescan_edits).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Reload Names", command=self._run_reload_names).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Sweep Lines",
+                   command=self._run_transcript_refresh).pack(side=LEFT, padx=2)
         btn = ttk.Button(bar, text="Apply Changes",
                          command=self._apply_pending_changes, state=DISABLED)
         btn.pack(side=LEFT, padx=2)
@@ -1647,18 +1707,27 @@ class App(tk.Tk):
         lf = ttk.Frame(parent)
         lf.pack(fill=BOTH, expand=True, padx=4, pady=(0, 4))
 
-        cols = ("name", "category", "bin", "team", "duration", "rate", "source", "ch", "modified")
+        # "line" sits next to the name on purpose: the name IS the line, truncated to ~25
+        # chars, so the two belong side by side -- the eye finishes the sentence the stem
+        # started instead of hunting for it at the far right past six narrow columns.
+        # "lineid" goes right after the bank because it is only meaningful together with it:
+        # line 9081 in paplyrs and line 9081 in players are unrelated things.
+        cols = ("name", "line", "category", "bin", "lineid", "team", "duration", "rate",
+                "source", "ch", "modified")
         tree = ttk.Treeview(lf, columns=cols, show="headings", selectmode="extended")
         pane["tree"] = tree
-        for col, txt in (("name", "Name"), ("category", "Category"), ("bin", "Wave Bank"),
+        for col, txt in (("name", "Name"), ("line", "Line"), ("category", "Category"),
+                         ("bin", "Wave Bank"), ("lineid", "Line ID · Take"),
                          ("team", "Team"), ("duration", "Duration"),
                          ("rate", "Sample Rate"), ("source", "Source"),
                          ("ch", "Ch"), ("modified", "Mod")):
             tree.heading(col, text=txt,
                          command=lambda c=col, p=pane: self._sort_audio(p, c))
         tree.column("name",     width=320, minwidth=180)
+        tree.column("line",     width=420, minwidth=120)
         tree.column("category", width=130, minwidth=80)
         tree.column("bin",      width=130, minwidth=80)
+        tree.column("lineid",   width=110, minwidth=80,  anchor=CENTER)
         tree.column("team",     width=140, minwidth=80)
         tree.column("duration", width=75,  minwidth=55,  anchor=E)
         tree.column("rate",     width=80,  minwidth=60,  anchor=CENTER)
@@ -4753,6 +4822,48 @@ class App(tk.Tk):
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
 
+    # ── Arena tab ─────────────────────────────────────────────────────────────
+
+    def _build_arena_editor_tab(self):
+        """Arena models + textures + baked lighting in one place. All of the work is in
+        launcher/arena_gui.py (and arena_model / arena_preview under it); a failure here must
+        not take the rest of the launcher down, so it degrades to a message in the tab."""
+        try:
+            from launcher import arena_gui
+            arena_gui.build_tab(self, self._tab_arenaed)
+        except Exception as e:
+            self._log_q.put(f"[arena] tab unavailable: {e}")
+            ttk.Label(self._tab_arenaed, padding=20, foreground="#c66",
+                      text=f"The Arena tab could not be built:\n\n{e}").pack()
+
+    # ── Players tab ───────────────────────────────────────────────────────────
+
+    def _build_players_tab(self):
+        """The skater and goalie meshes (and the other 48 characters), all out of global.iff.
+        Same deal as the Arena tab: everything lives in launcher/char_gui.py, and a failure
+        degrades to a message instead of taking the launcher down."""
+        try:
+            from launcher import char_gui
+            char_gui.build_tab(self, self._tab_players)
+        except Exception as e:
+            self._log_q.put(f"[players] tab unavailable: {e}")
+            ttk.Label(self._tab_players, padding=20, foreground="#c66",
+                      text=f"The Players tab could not be built:\n\n{e}").pack()
+
+    # ── Jersey Conversion tab ─────────────────────────────────────────────────
+
+    def _build_jersey_convert_tab(self):
+        """NHL 23 jersey textures -> the four 2K10 sheets (base/stamps/letters/helmet).
+        Engine in launcher/jersey_convert.py, tab in launcher/jersey_convert_gui.py; same
+        degrade-to-a-message contract as the Arena and Players tabs."""
+        try:
+            from launcher import jersey_convert_gui
+            jersey_convert_gui.build_tab(self, self._tab_jersey)
+        except Exception as e:
+            self._log_q.put(f"[jersey] tab unavailable: {e}")
+            ttk.Label(self._tab_jersey, padding=20, foreground="#c66",
+                      text=f"The Jersey Conversion tab could not be built:\n\n{e}").pack()
+
     # ── Gameplay tab ──────────────────────────────────────────────────────────
 
     def _build_gameplay_tab(self):
@@ -4955,6 +5066,818 @@ class App(tk.Tk):
                 self._gpt_load()
             self.after(0, done)
         threading.Thread(target=work, daemon=True).start()
+
+    # ── Animations tab ────────────────────────────────────────────────────────
+
+    def _build_anim_tab(self):
+        """Browse / name / retime / reassign the game's 3,280 animation clips.
+
+        The animation library is not an asset — it was compiled straight into default.xex's
+        .rdata (doc 29). Clips are reached only by pointer from tables, and the shipped names
+        were stripped at build time, so this tab identifies clips by what points at them and
+        lets you attach your own names."""
+        t = self._tab_anim
+        from launcher import animations as anim
+        self._anim = anim
+        self._anim_clips = []          # [descriptor dict] sorted by VA
+        self._anim_by_va = {}
+        self._anim_tables = {}         # {table key: [(slot, label, clip_va)]}
+        self._anim_names = anim.load_names()
+        self._anim_refs = {}           # {clip_va: [human label, ...]}
+        self._anim_ptrs = {}           # {clip_va: [pointer VA, ...]} — every reference in the XEX
+
+        head = ttk.Frame(t, padding=(12, 10, 12, 4)); head.pack(fill=X)
+        ttk.Label(head, text="Animations", font=("Segoe UI", 13, "bold")).pack(side=LEFT)
+        self._anim_xexlbl = StringVar(value="")
+        ttk.Label(head, textvariable=self._anim_xexlbl, foreground="#999").pack(side=RIGHT)
+        ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
+                  text="All 3,280 animation clips live inside default.xex, not in any .iff — which "
+                       "is why they never showed up in the asset inventory. Their original names "
+                       "were stripped by the build, so name them yourself (names are stored "
+                       "separately and can be shared). You can retime a clip, retime the gameplay "
+                       "events inside it, and repoint any selection-table slot at a different clip. "
+                       "Editing the motion itself is not possible yet — the keyframe format is "
+                       "still undecoded. Writes go to default.xex (v1.0) and take effect on the "
+                       "next launch."
+                  ).pack(fill=X, padx=12)
+
+        filt = ttk.Frame(t, padding=(12, 6, 12, 0)); filt.pack(fill=X)
+        ttk.Label(filt, text="Filter").pack(side=LEFT)
+        self._anim_filter = StringVar()
+        e = ttk.Entry(filt, textvariable=self._anim_filter, width=28)
+        e.pack(side=LEFT, padx=4)
+        e.bind("<KeyRelease>", lambda ev: self._anim_refresh())
+        self._anim_only_named = BooleanVar(value=False)
+        self._anim_only_used = BooleanVar(value=False)
+        ttk.Checkbutton(filt, text="named only", variable=self._anim_only_named,
+                        command=self._anim_refresh).pack(side=LEFT, padx=(8, 0))
+        ttk.Checkbutton(filt, text="identified (hide orphans)", variable=self._anim_only_used,
+                        command=self._anim_refresh).pack(side=LEFT, padx=(8, 0))
+        ttk.Label(filt, text="(matches name, address or “used by”)",
+                  foreground="#888", font=("Segoe UI", 7)).pack(side=LEFT, padx=8)
+
+        body = ttk.Frame(t); body.pack(fill=BOTH, expand=True, padx=12, pady=6)
+
+        cols = ("name", "va", "dur", "ev", "bones", "used")
+        tv = ttk.Treeview(body, columns=cols, show="headings", height=16, selectmode="browse")
+        for c, w, a, h in (("name", 200, W, "Your name"), ("va", 90, W, "Address"),
+                           ("dur", 70, E, "Length s"), ("ev", 45, E, "Ev"),
+                           ("bones", 90, W, "Bone mask"), ("used", 260, W, "Used by")):
+            tv.heading(c, text=h); tv.column(c, width=w, anchor=a)
+        sb = ttk.Scrollbar(body, command=tv.yview); tv.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y); tv.pack(side=LEFT, fill=BOTH, expand=True)
+        tv.bind("<<TreeviewSelect>>", lambda ev: self._anim_show())
+        tv.bind("<Double-1>", lambda ev: self._anim_rename())
+        self._anim_tv = tv
+
+        ctl = ttk.Frame(body, padding=(12, 0, 0, 0)); ctl.pack(side=LEFT, fill=Y)
+
+        nm = ttk.LabelFrame(ctl, text="Name this clip", padding=8); nm.pack(fill=X)
+        self._anim_name = StringVar()
+        ttk.Entry(nm, textvariable=self._anim_name, width=26).pack(fill=X)
+        ttk.Button(nm, text="Save name", command=self._anim_rename_apply).pack(fill=X, pady=(4, 0))
+        ttk.Label(nm, text="The shipped names are unrecoverable, so this is your own label. "
+                           "Kept outside the game files — it survives reinstalls and can be "
+                           "exported to share.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=200,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        rt = ttk.LabelFrame(ctl, text="Retime", padding=8); rt.pack(fill=X, pady=(8, 0))
+        row = ttk.Frame(rt); row.pack(fill=X)
+        ttk.Label(row, text="Length").pack(side=LEFT)
+        self._anim_dur = StringVar()
+        ttk.Entry(row, textvariable=self._anim_dur, width=8).pack(side=LEFT, padx=4)
+        ttk.Label(row, text="s").pack(side=LEFT)
+        ttk.Button(rt, text="Write length to XEX",
+                   command=self._anim_set_duration).pack(fill=X, pady=(4, 0))
+        ttk.Label(rt, text="Behaviours poll the animation rather than a timer, so a clip's length "
+                           "IS its reaction time — shortening the goalie dive makes goalies "
+                           "quicker.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=200,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        ttk.Button(ctl, text="Repoint a table slot…", command=self._anim_repoint_dialog
+                   ).pack(fill=X, pady=(8, 0))
+        ttk.Label(ctl, text="Reassignment = pick which clip a slot plays. It is exact: clips are "
+                            "reached only by pointer.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=200,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        ev = ttk.LabelFrame(ctl, text="Events inside this clip", padding=6)
+        ev.pack(fill=BOTH, expand=True, pady=(8, 0))
+        etv = ttk.Treeview(ev, columns=("k", "t"), show="headings", height=6, selectmode="browse")
+        etv.heading("k", text="Key"); etv.column("k", width=60, anchor=W)
+        etv.heading("t", text="Time s"); etv.column("t", width=70, anchor=E)
+        etv.pack(fill=BOTH, expand=True)
+        etv.bind("<Double-1>", lambda e: self._anim_edit_event())
+        self._anim_etv = etv
+        ttk.Label(ev, text="Double-click to move one. These mark the gameplay moments — blade "
+                           "contact, puck release.",
+                  foreground="#888", font=("Segoe UI", 7), wraplength=195,
+                  justify=LEFT).pack(anchor=W, pady=(3, 0))
+
+        act = ttk.Frame(t, padding=(12, 4, 12, 10)); act.pack(fill=X)
+        ttk.Button(act, text="Export inventory (CSV)", style="Accent.TButton",
+                   command=self._anim_export_csv).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Back up clip", command=self._anim_export_region
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Restore clip…", command=self._anim_restore_region
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Export names", command=self._anim_export_names
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Import names…", command=self._anim_import_names
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(act, text="Reload", command=self._anim_load).pack(side=LEFT)
+        self._anim_status = StringVar(value="")
+        ttk.Label(act, textvariable=self._anim_status, foreground="#999").pack(side=RIGHT)
+
+        sk = ttk.Frame(t, padding=(12, 0, 12, 10)); sk.pack(fill=X)
+        ttk.Label(sk, text="Rig  ", foreground=self._COL["muted"]).pack(side=LEFT)
+        self._skel_which = StringVar(value="goalie")
+        ttk.Combobox(sk, textvariable=self._skel_which, state="readonly", width=10,
+                     values=["goalie", "skater"]).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(sk, text="Show skeleton", command=self._skel_show
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(sk, text="Export skeleton (OBJ + JSON)…", command=self._skel_export
+                   ).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(sk, text="▶ Play clip on rig…", style="Accent.TButton",
+                   command=self._anim_preview).pack(side=LEFT, padx=(0, 6))
+        ttk.Button(sk, text="Export posed clip…", command=self._anim_export_pose
+                   ).pack(side=LEFT)
+        ttk.Label(sk, text="The rig the clips drive — 73 bones (skater) / 78 (goalie), read "
+                           "from global.iff. Playback can skin the rig's own mesh onto it, so "
+                           "you watch the player move, not just the joints.",
+                  foreground="#888", font=("Segoe UI", 7)).pack(side=LEFT, padx=(10, 0))
+
+        self.after(1200, self._anim_load)
+
+    # ── skeleton (launcher/skeleton.py) ──
+    def _skel_load(self):
+        from launcher import skeleton as SKEL
+        return SKEL, SKEL.load(self._skel_which.get())
+
+    def _skel_show(self):
+        try:
+            SKEL, sk = self._skel_load()
+        except Exception as e:
+            messagebox.showerror("Skeleton", str(e)); return
+        w = Toplevel(self); w.title("%s rig — %d bones" % (sk["name"], len(sk["bones"])))
+        w.configure(bg=self._COL["bg1"])
+        txt = Text(w, width=86, height=34, bg=self._COL["bg0"], fg=self._COL["fg"],
+                   insertbackground=self._COL["fg"], relief="flat",
+                   font=("Consolas", 9), wrap="none")
+        txt.pack(fill=BOTH, expand=True, padx=10, pady=10)
+        txt.insert("1.0",
+                   "%s — %d bones, %d link errors, bind-pose error %.6f\n\n%s"
+                   % (sk["name"], len(sk["bones"]), sk["errors"],
+                      SKEL.check_world(sk["bones"]), SKEL.tree_text(sk)))
+        txt.configure(state="disabled")
+
+    def _skel_export(self):
+        try:
+            SKEL, sk = self._skel_load()
+        except Exception as e:
+            messagebox.showerror("Skeleton", str(e)); return
+        d = filedialog.askdirectory(title="Export %s skeleton to…" % sk["name"])
+        if not d:
+            return
+        obj = SKEL.export_obj(sk, Path(d) / ("%s_skeleton.obj" % sk["name"]))
+        js = SKEL.export_json(sk, Path(d) / ("%s_skeleton.json" % sk["name"]))
+        self._log_q.put("Skeleton: %d bones -> %s, %s" % (len(sk["bones"]), obj.name, js.name))
+        messagebox.showinfo("Skeleton", "%d bones written:\n\n%s\n%s" % (len(sk["bones"]), obj, js))
+
+    # ── clip playback on the rig (launcher/animpose.py) ──
+    def _anim_pose_load(self):
+        """(animpose, skeleton dict, decoded clip, clip) for the current selection."""
+        va = self._anim_sel_va()
+        if not va:
+            messagebox.showerror("Animations", "Select a clip first."); return None
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Animations", "Set the game files folder in Settings."); return None
+        from launcher import animpose as AP
+        SKEL, sk = self._skel_load()
+        clip = self._anim_by_va[va]
+        dec = AP.decode(str(xex), clip)
+        if not dec["samples"]:
+            messagebox.showerror("Animations",
+                                 "This clip has no decodable rotation stream.") ; return None
+        return AP, sk, dec, clip
+
+    def _skin_load(self, rig: str):
+        """(char_model, blob, model, skinning) for the mesh a rig deforms — cached, it is 50k
+        vertices and a full model scan, far too slow to redo on every frame."""
+        cache = getattr(self, "_skin_cache", None)
+        if cache is None:
+            cache = self._skin_cache = {}
+        if rig not in cache:
+            from launcher import char_model as CM
+            b = CM.blob()
+            m = CM.rig_model(CM.scan_models(b), rig)
+            if m is None:
+                raise ValueError("global.iff holds no %s mesh" % rig)
+            sn = CM.skin(b, m)
+            if sn is None:
+                raise ValueError("the %s mesh carries no usable bone palette" % rig)
+            cache[rig] = (CM, b, m, sn)
+        return cache[rig]
+
+    def _anim_preview(self):
+        """Play the selected clip on the rig — the decoded keyframe stream, posed and drawn,
+        either as the bare joint tree or with the rig's own mesh skinned onto it."""
+        try:
+            loaded = self._anim_pose_load()
+        except Exception as e:
+            messagebox.showerror("Animations", "Could not decode:\n%s" % e); return
+        if not loaded:
+            return
+        AP, sk, dec, clip = loaded
+        import numpy as np
+        from PIL import ImageTk
+        from launcher import arena_preview as PV
+        rig = sk["name"]
+        name = self._anim_names.get(clip["va"], "") or ("0x%08X" % clip["va"])
+
+        w = Toplevel(self)
+        w.title("%s on the %s rig — %d samples, %d channels, %.3f s"
+                % (name, rig, dec["samples"], len(dec["channels"]),
+                   clip.get("duration") or 0.0))
+        w.configure(bg=self._COL["bg1"])
+
+        top = ttk.Frame(w, padding=(10, 8, 10, 0)); top.pack(fill=X)
+        view = StringVar(value="three-quarter")
+        ttk.Label(top, text="View  ", foreground=self._COL["muted"]).pack(side=LEFT)
+        cb = ttk.Combobox(top, textvariable=view, state="readonly", width=13,
+                          values=["front", "three-quarter", "side", "top"])
+        cb.pack(side=LEFT, padx=(0, 10))
+        cb.bind("<<ComboboxSelected>>", lambda ev: set_view())
+        show = StringVar(value="mesh")
+        ttk.Label(top, text="Show  ", foreground=self._COL["muted"]).pack(side=LEFT)
+        cb2 = ttk.Combobox(top, textvariable=show, state="readonly", width=15,
+                           values=["mesh", "mesh + skeleton", "skeleton"])
+        cb2.pack(side=LEFT, padx=(0, 10))
+        cb2.bind("<<ComboboxSelected>>", lambda ev: draw())
+        all_parts = BooleanVar(value=False)
+        ttk.Checkbutton(top, text="every equipment variant", variable=all_parts,
+                        command=lambda: reset()).pack(side=LEFT, padx=(0, 10))
+        with_head = BooleanVar(value=True)
+        ttk.Checkbutton(top, text="head", variable=with_head,
+                        command=lambda: reset()).pack(side=LEFT, padx=(0, 10))
+        with_stick = BooleanVar(value=True)
+        ttk.Checkbutton(top, text="stick", variable=with_stick,
+                        command=lambda: reset()).pack(side=LEFT, padx=(0, 10))
+        show_names = BooleanVar(value=False)
+        ttk.Checkbutton(top, text="bone names", variable=show_names,
+                        command=lambda: draw()).pack(side=LEFT, padx=(0, 10))
+        info = StringVar(value="")
+        ttk.Label(top, textvariable=info, foreground="#999").pack(side=RIGHT)
+
+        cv = Canvas(w, width=560, height=520, bg=self._COL["bg0"],
+                    highlightthickness=0)
+        cv.pack(fill=BOTH, expand=True, padx=10, pady=8)
+
+        bar = ttk.Frame(w, padding=(10, 0, 10, 10)); bar.pack(fill=X)
+        playing = {"on": False}
+        btn = ttk.Button(bar, text="▶ Play", width=9)
+        btn.pack(side=LEFT, padx=(0, 8))
+        pos = DoubleVar(value=0.0)
+        ttk.Scale(bar, from_=0.0, to=1.0, variable=pos, orient=HORIZONTAL,
+                  command=lambda _v: draw()).pack(side=LEFT, fill=X, expand=True)
+
+        # The named views are now just starting points — `cam` is the live camera, and dragging
+        # moves it freely. Both the mesh render and the joint overlay read it, which is what keeps
+        # the two registered however far it is spun.
+        VIEWS = {"front": (0.0, 0.06), "three-quarter": (0.72, 0.10),
+                 "side": (1.5708, 0.06), "top": (0.0, 1.35)}
+        # Framing is pinned to the BIND pose: the mesh changes shape every frame and a camera
+        # that refits to it would make the figure swim inside the window.
+        bind = np.array([b["world"] for b in sk["bones"]], np.float32)
+        cam = {"yaw": 0.72, "pitch": 0.10, "zoom": 1.0, "pan": [0.0, 0.0]}
+        st = {"mesh": None, "err": None, "scene": None, "head": None, "stick": None,
+              "img": None, "cache": {}, "drag": None}
+
+        def set_view():
+            cam["yaw"], cam["pitch"] = VIEWS[view.get()]
+            draw()
+
+        def grab(ev, kind):
+            st["drag"] = (kind, ev.x, ev.y)
+
+        def drop(_ev):
+            st["drag"] = None
+            draw()                                  # redraw once at full resolution
+
+        def orbit(ev):
+            """Left-drag spins, right-drag slides. Pitch stops just short of the poles, where the
+            up vector degenerates and the figure would flip over."""
+            if not st["drag"]:
+                return
+            kind, x0, y0 = st["drag"]
+            dx, dy = ev.x - x0, ev.y - y0
+            st["drag"] = (kind, ev.x, ev.y)
+            if kind == "orbit":
+                cam["yaw"] += dx * 0.01
+                cam["pitch"] = max(-1.5, min(1.5, cam["pitch"] + dy * 0.01))
+            else:
+                cam["pan"][0] += dx / max(cv.winfo_width(), 1)
+                cam["pan"][1] += dy / max(cv.winfo_height(), 1)
+            draw()
+
+        def wheel(ev):
+            d = ev.delta or (120 if getattr(ev, "num", 0) == 4 else -120)
+            cam["zoom"] = max(0.25, min(8.0, cam["zoom"] * (1.1 ** (d / 120.0))))
+            draw()
+
+        def recentre(_ev=None):
+            cam.update(zoom=1.0, pan=[0.0, 0.0])
+            set_view()
+
+        def mesh_data():
+            """Load the skinned mesh on first use — a couple of seconds, once per rig."""
+            if st["mesh"] is None and st["err"] is None:
+                info.set("loading the %s mesh…" % rig); w.update_idletasks()
+                try:
+                    st["mesh"] = self._skin_load(rig)
+                except Exception as e:
+                    st["err"] = str(e)
+            return st["mesh"]
+
+        def scene():
+            """The bind-pose draw list: the body, plus the head asset if it is wanted. Bodies
+            ship headless — the head is its own asset, so it is skinned separately and merged."""
+            if st["scene"] is None:
+                CM, b, m, _ = st["mesh"]
+                sc = CM.build_scene(b, m, only=None if all_parts.get() else CM.drawn_set(m))
+                sc["_bp"], sc["_bn"] = sc["pos"].copy(), sc["nrm"].copy()
+                head = None
+                if with_head.get():
+                    try:
+                        ids = CM.head_ids()
+                        head = CM.head_scene(sk, CM.HEAD_FMT.format(ids[0]),
+                                             first_part_id=900) if ids else None
+                    except Exception:
+                        head = None                      # a missing face asset is not fatal
+                    if head:
+                        h = head["scene"]
+                        h["_bp"], h["_bn"] = h["pos"].copy(), h["nrm"].copy()
+                stick = None
+                if with_stick.get():
+                    try:
+                        stick = CM.stick_scene(sk, b, CM.scan_models(b), rig, first_part_id=800)
+                    except Exception:
+                        stick = None                 # no stick is not a reason to lose the mesh
+                    if stick:
+                        s = stick["scene"]
+                        s["_bp"], s["_bn"] = s["pos"].copy(), s["nrm"].copy()
+                st["scene"], st["head"], st["stick"] = sc, head, stick
+            return st["scene"]
+
+        def extras():
+            """The parts that are their own asset rather than part of the body mesh."""
+            return [x for x in (st["head"], st["stick"]) if x is not None]
+
+        def framing():
+            """(centre, span) — the mesh's bounds when it is loaded, else the joints'."""
+            pts = bind
+            if st["scene"] is not None:
+                pts = np.concatenate([st["scene"]["_bp"]]
+                                     + [x["scene"]["_bp"] for x in extras()])
+            ctr = (pts.min(0) + pts.max(0)) / 2.0
+            return ctr, float(np.abs(pts - ctr).max()) * 2.6 or 100.0
+
+        def reset():
+            st["scene"] = st["head"] = st["stick"] = None
+            st["cache"].clear()
+            draw()
+
+        def draw():
+            cv.delete("all")
+            W = cv.winfo_width() or 560
+            H = cv.winfo_height() or 520
+            yaw, pitch, zoom = cam["yaw"], cam["pitch"], cam["zoom"]
+            pan = tuple(cam["pan"])
+            n = dec["samples"]
+            fr = min(int(round(pos.get() * (n - 1))), n - 1) if n > 1 else 0
+            P = AP.pose(sk, dec, pos.get())
+            g = None
+            # Dragging re-rasterizes on every motion event, so halve the resolution while the
+            # mouse is down and let Tk scale it up; drop() redraws once sharp.
+            q = 2 if st["drag"] else 1
+            if show.get() != "skeleton" and mesh_data() is not None:
+                CM, _b, _m, sn = st["mesh"]
+                sc = scene()
+                ctr, span = framing()
+                key = (round(yaw, 3), round(pitch, 3), round(zoom, 3),
+                       round(pan[0], 3), round(pan[1], 3),
+                       all_parts.get(), with_head.get(), with_stick.get(), fr, W, H, q)
+                im = st["cache"].get(key)
+                if im is None:
+                    sc["pos"], nr = AP.skin_pose(sc["_bp"], sc["_bn"], sk, sn, P)
+                    sc["vcol"] = CM.lambert(nr, len(nr))
+                    full = sc
+                    for x in extras():
+                        xs = x["scene"]
+                        xs["pos"], xn = AP.skin_pose(xs["_bp"], xs["_bn"], sk, x["skin"], P,
+                                                     **({"bind": x["bind"]} if "bind" in x else {}))
+                        xs["vcol"] = CM.lambert(xn, len(xn))
+                        full = CM.merge_scenes(full, xs)
+                    g = PV.raster(full, W // q, H // q, yaw, pitch, zoom, pan, ctr=ctr, span=span)
+                    im = PV.shade(full, g, exposure=2.1)
+                    if q > 1:
+                        im = im.resize((W, H))
+                    if len(st["cache"]) > 150:          # a long clip would eat the whole heap
+                        st["cache"].clear()
+                    st["cache"][key] = im
+                st["img"] = ImageTk.PhotoImage(im)      # a dropped reference draws nothing
+                cv.create_image(0, 0, image=st["img"], anchor="nw")
+            if g is None:
+                ctr, span = framing()
+                g = dict(W=W, H=H, ss=1, yaw=yaw, pitch=pitch, pan=pan,
+                         ctr=ctr, span=span / max(zoom, 1e-3))
+            elif q > 1:
+                g = dict(g, W=W, H=H, ss=1)             # project into the upscaled image
+            if show.get() != "mesh":
+                S = PV.project(g, [p["pos"] for p in P])
+                for p in P:
+                    if p["parent"] < 0:
+                        continue
+                    x0, y0 = S[p["parent"]]; x1, y1 = S[p["index"]]
+                    cv.create_line(x0, y0, x1, y1,
+                                   fill="#4da3ff" if p["animated"] else "#4a4a4a",
+                                   width=2 if p["animated"] else 1)
+                for p in P:
+                    x, y = S[p["index"]]
+                    r = 2.5 if p["animated"] else 1.5
+                    cv.create_oval(x - r, y - r, x + r, y + r,
+                                   fill="#ffd35c" if p["animated"] else "#555", outline="")
+                    if show_names.get() and p["animated"]:
+                        cv.create_text(x + 5, y, text=p["name"], anchor="w",
+                                       fill="#999", font=("Consolas", 7))
+            # On the canvas rather than in a toolbar row — the controls up there are already
+            # tight at this window's width, and a hint that shifts the layout is worse than none.
+            cv.create_text(8, H - 8, anchor="sw", fill="#5a5a5a", font=("Segoe UI", 7),
+                           text="drag to spin · right-drag to slide · wheel to zoom · "
+                                "double-click to reset")
+            msg = st["err"] or ""
+            if st["scene"] is not None and show.get() != "skeleton":
+                nt = len(st["scene"]["tri"]) + sum(len(x["scene"]["tri"]) for x in extras())
+                msg = "%s tris" % format(nt, ",")
+            info.set("frame %d/%d   t=%.3f s   %d/%d bones animated   %s"
+                     % (fr + 1, n, (clip.get("duration") or 0.0) * pos.get(),
+                        sum(p["animated"] for p in P), len(P), msg))
+
+        def tick():
+            if not playing["on"] or not w.winfo_exists():
+                return
+            n = max(dec["samples"] - 1, 1)
+            pos.set(0.0 if pos.get() >= 1.0 else min(1.0, pos.get() + 1.0 / n))
+            draw()
+            dur = clip.get("duration") or 1.0
+            w.after(max(16, int(1000.0 * dur / n)), tick)
+
+        def toggle():
+            playing["on"] = not playing["on"]
+            btn.configure(text="❚❚ Pause" if playing["on"] else "▶ Play")
+            if playing["on"]:
+                tick()
+
+        btn.configure(command=toggle)
+        cv.bind("<Configure>", lambda e: draw())
+        cv.bind("<ButtonPress-1>", lambda e: grab(e, "orbit"))
+        cv.bind("<B1-Motion>", orbit)
+        cv.bind("<ButtonRelease-1>", drop)
+        cv.bind("<ButtonPress-3>", lambda e: grab(e, "pan"))
+        cv.bind("<B3-Motion>", orbit)
+        cv.bind("<ButtonRelease-3>", drop)
+        cv.bind("<Double-Button-1>", recentre)
+        cv.bind("<MouseWheel>", wheel)                  # Windows/macOS
+        cv.bind("<Button-4>", wheel)                    # X11 scroll up
+        cv.bind("<Button-5>", wheel)                    # X11 scroll down
+        w.after(60, draw)
+
+    def _anim_export_pose(self):
+        """Write the decoded clip out — an OBJ per sample plus the quaternions as JSON."""
+        try:
+            loaded = self._anim_pose_load()
+        except Exception as e:
+            messagebox.showerror("Animations", "Could not decode:\n%s" % e); return
+        if not loaded:
+            return
+        AP, sk, dec, clip = loaded
+        d = filedialog.askdirectory(title="Export posed clip to…")
+        if not d:
+            return
+        name = (self._anim_names.get(clip["va"], "") or ("clip_%08X" % clip["va"]))
+        name = re.sub(r"[^A-Za-z0-9_.-]+", "_", name)
+        out = Path(d) / name
+        try:
+            objs = AP.export_frames_obj(sk, dec, clip, out)
+            js = AP.export_json(sk, dec, clip, out.with_suffix(".json"))
+        except Exception as e:
+            messagebox.showerror("Animations", "Could not export:\n%s" % e); return
+        self._log_q.put("[anim] posed %s: %d OBJ frames + %s" % (name, len(objs), js.name))
+        self._anim_status.set("exported %d posed frames" % len(objs))
+        messagebox.showinfo("Animations",
+                            "%d frames written to:\n\n%s\n\nand the raw quaternions to:\n%s"
+                            % (len(objs), out, js))
+
+    def _anim_load(self):
+        xex = self._sb_xex()
+        if not xex:
+            self._anim_status.set("Set the game files folder in Settings.")
+            return
+        self._anim_xexlbl.set(str(xex))
+        self._anim_status.set("scanning default.xex…")
+        anim = self._anim
+        def work():
+            try:
+                clips = anim.scan_clips(str(xex))
+                tables = {t["key"]: anim.read_table(str(xex), t["key"])
+                          for t in anim.KNOWN_TABLES}
+                refs = anim.scan_references(str(xex), clips)
+                err = None
+            except Exception as e:
+                clips, tables, refs, err = [], {}, {}, str(e)
+            def done():
+                if err:
+                    self._anim_status.set(err)
+                    self._log_q.put(f"[anim] {err}")
+                    return
+                self._anim_clips = clips
+                self._anim_by_va = {c["va"]: c for c in clips}
+                self._anim_tables = tables
+                self._anim_ptrs = refs
+                self._anim_refs = {}
+                for c in clips:
+                    lbl = anim.ref_label(c["va"], tables, refs)
+                    if lbl:
+                        self._anim_refs[c["va"]] = lbl
+                self._anim_refresh()
+                total = sum(c["duration"] for c in clips) / 60.0
+                orphans = len(clips) - len(self._anim_refs)
+                self._anim_status.set(
+                    f"{len(clips)} clips · {total:.1f} min · {len(self._anim_refs)} identified by "
+                    f"a reference ({orphans} orphans) · {len(self._anim_names)} named by you")
+                self._log_q.put(f"[anim] {len(clips)} clips read from {xex.name}")
+            self.after(0, done)
+        threading.Thread(target=work, daemon=True).start()
+
+    def _anim_refresh(self):
+        tv = self._anim_tv
+        want = self._anim_filter.get().strip().lower()
+        named_only = self._anim_only_named.get()
+        used_only = self._anim_only_used.get()
+        keep = self._anim_sel_va()
+        tv.delete(*tv.get_children())
+        n = 0
+        for c in self._anim_clips:
+            va = c["va"]
+            name = self._anim_names.get(va, "")
+            used = " | ".join(self._anim_refs.get(va, ()))
+            if named_only and not name:
+                continue
+            if used_only and not used:
+                continue
+            if want and want not in f"{name} {va:08x} {used}".lower():
+                continue
+            tv.insert("", END, iid=f"{va:08X}", values=(
+                name, f"0x{va:08X}", f"{c['duration']:.4f}", c.get("n_events", ""),
+                f"{c['bones']:08X}", used))
+            n += 1
+        if keep and tv.exists(f"{keep:08X}"):
+            tv.selection_set(f"{keep:08X}"); tv.see(f"{keep:08X}")
+        if n != len(self._anim_clips):
+            self._anim_status.set(f"showing {n} of {len(self._anim_clips)} clips")
+
+    def _anim_sel_va(self):
+        sel = self._anim_tv.selection()
+        return int(sel[0], 16) if sel else None
+
+    def _anim_show(self):
+        va = self._anim_sel_va()
+        if va is None:
+            return
+        c = self._anim_by_va[va]
+        self._anim_name.set(self._anim_names.get(va, ""))
+        self._anim_dur.set(f"{c['duration']:.4f}")
+        etv = self._anim_etv
+        etv.delete(*etv.get_children())
+        xex = self._sb_xex()
+        if not xex:
+            return
+        try:
+            evs = self._anim.read_events(str(xex), va)
+        except Exception as e:
+            self._log_q.put(f"[anim] events for 0x{va:08X}: {e}")
+            return
+        for i, ev in enumerate(evs):
+            etv.insert("", END, iid=str(i), values=(f"0x{ev['key']:02X}", f"{ev['time']:.4f}"))
+
+    def _anim_rename(self):
+        va = self._anim_sel_va()
+        if va is None:
+            return
+        cur = self._anim_names.get(va, "")
+        v = simpledialog.askstring(
+            "Animations", f"Clip 0x{va:08X}\n"
+            + ("\n".join(self._anim_refs.get(va, ())) or "(not referenced by a known table)")
+            + "\n\nName:", initialvalue=cur, parent=self)
+        if v is None:
+            return
+        self._anim_name.set(v)
+        self._anim_rename_apply()
+
+    def _anim_rename_apply(self):
+        va = self._anim_sel_va()
+        if va is None:
+            messagebox.showerror("Animations", "Select a clip first."); return
+        name = self._anim_name.get().strip()
+        if name:
+            self._anim_names[va] = name
+        else:
+            self._anim_names.pop(va, None)
+        p = self._anim.save_names(self._anim_names)
+        self._anim_refresh()
+        self._anim_status.set(f"named 0x{va:08X} — {len(self._anim_names)} names in {p.name}")
+
+    def _anim_set_duration(self):
+        va = self._anim_sel_va()
+        if va is None:
+            messagebox.showerror("Animations", "Select a clip first."); return
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Animations", "Set the game files folder in Settings."); return
+        try:
+            secs = float(self._anim_dur.get())
+        except ValueError:
+            messagebox.showerror("Animations", "Length must be a number of seconds."); return
+        try:
+            old = self._anim.set_duration(str(xex), va, secs, log=self._log_q.put)
+        except Exception as e:
+            messagebox.showerror("Animations", f"Could not write:\n{e}"); return
+        self._anim_by_va[va]["duration"] = secs
+        self._anim_refresh()
+        self._anim_status.set(f"0x{va:08X}: {old:g} → {secs:g} s — restart the game")
+
+    def _anim_edit_event(self):
+        va = self._anim_sel_va()
+        sel = self._anim_etv.selection()
+        if va is None or not sel:
+            return
+        xex = self._sb_xex()
+        if not xex:
+            return
+        idx = int(sel[0])
+        cur = self._anim_etv.item(sel[0], "values")[1]
+        v = simpledialog.askstring("Animations",
+                                   f"Clip 0x{va:08X}, event #{idx}\n\nTime (seconds):",
+                                   initialvalue=cur, parent=self)
+        if v is None:
+            return
+        try:
+            old = self._anim.set_event_time(str(xex), va, idx, float(v), log=self._log_q.put)
+        except Exception as e:
+            messagebox.showerror("Animations", f"Could not write:\n{e}"); return
+        self._anim_show()
+        self._anim_status.set(f"event #{idx}: {old:g} → {float(v):g} s — restart the game")
+
+    def _anim_repoint_dialog(self):
+        """Point one selection-table slot at the clip selected in the browser."""
+        va = self._anim_sel_va()
+        if va is None:
+            messagebox.showerror("Animations", "Select the clip you want to play first."); return
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Animations", "Set the game files folder in Settings."); return
+        anim = self._anim
+
+        dlg = Toplevel(self); dlg.title("Repoint a table slot"); dlg.transient(self)
+        dlg.configure(bg=self._COL["bg1"]); dlg.resizable(False, False)
+        name = self._anim_names.get(va, "") or f"0x{va:08X}"
+        ttk.Label(dlg, text=f"Play “{name}” instead of whatever this slot currently uses:",
+                  padding=(10, 10, 10, 4)).pack(anchor=W)
+
+        tblf = ttk.Frame(dlg, padding=(10, 0)); tblf.pack(fill=X)
+        ttk.Label(tblf, text="Table").pack(side=LEFT)
+        tkeys = [t["key"] for t in anim.KNOWN_TABLES]
+        tvar = StringVar(value=tkeys[0])
+        cb = ttk.Combobox(tblf, textvariable=tvar, state="readonly", width=44,
+                          values=[f"{t['name']}  ({t['count']} slots)" for t in anim.KNOWN_TABLES])
+        cb.current(0); cb.pack(side=LEFT, padx=6)
+
+        note = StringVar()
+        ttk.Label(dlg, textvariable=note, foreground="#999", font=("Segoe UI", 8),
+                  wraplength=520, justify=LEFT, padding=(10, 4)).pack(anchor=W)
+
+        lst = ttk.Treeview(dlg, columns=("slot", "cur"), show="headings", height=12,
+                           selectmode="browse")
+        lst.heading("slot", text="Slot"); lst.column("slot", width=220, anchor=W)
+        lst.heading("cur", text="Currently plays"); lst.column("cur", width=300, anchor=W)
+        lst.pack(fill=BOTH, expand=True, padx=10, pady=4)
+
+        def fill(*_):
+            key = tkeys[cb.current()]
+            note.set(anim.TABLES_BY_KEY[key]["note"])
+            lst.delete(*lst.get_children())
+            for slot, label, cur in self._anim_tables[key]:
+                cname = (self._anim_names.get(cur) or (f"0x{cur:08X}" if cur else "— empty —"))
+                lst.insert("", END, iid=str(slot), values=(f"{slot}: {label}", cname))
+        cb.bind("<<ComboboxSelected>>", fill); fill()
+
+        def apply():
+            sel = lst.selection()
+            if not sel:
+                messagebox.showerror("Animations", "Pick a slot.", parent=dlg); return
+            key, slot = tkeys[cb.current()], int(sel[0])
+            try:
+                old = anim.set_table_slot(str(xex), key, slot, va, log=self._log_q.put)
+            except Exception as e:
+                messagebox.showerror("Animations", f"Could not write:\n{e}", parent=dlg); return
+            self._anim_tables[key] = anim.read_table(str(xex), key)
+            fill()
+            self._anim_status.set(f"{key}[{slot}]: 0x{old:08X} → 0x{va:08X} — restart the game")
+            self._anim_load()
+
+        btn = ttk.Frame(dlg, padding=10); btn.pack(fill=X)
+        ttk.Button(btn, text="Point slot at this clip", style="Accent.TButton",
+                   command=apply).pack(side=LEFT)
+        ttk.Button(btn, text="Close", command=dlg.destroy).pack(side=RIGHT)
+
+    def _anim_export_csv(self):
+        if not self._anim_clips:
+            messagebox.showerror("Animations", "Nothing loaded yet."); return
+        p = filedialog.asksaveasfilename(
+            title="Export animation inventory", defaultextension=".csv",
+            initialfile="nhl2k10_animations.csv",
+            filetypes=[("CSV", "*.csv"), ("All files", "*.*")])
+        if not p:
+            return
+        n = self._anim.export_csv(self._anim_clips, self._anim_names, self._anim_tables, p,
+                                  refs=self._anim_ptrs)
+        self._log_q.put(f"[anim] exported {n} clips to {p}")
+        self._anim_status.set(f"exported {n} clips")
+
+    def _anim_export_region(self):
+        va = self._anim_sel_va()
+        if va is None:
+            messagebox.showerror("Animations", "Select a clip first."); return
+        xex = self._sb_xex()
+        if not xex:
+            return
+        p = filedialog.asksaveasfilename(
+            title="Back up clip", defaultextension=".n2kanim",
+            initialfile=f"{(self._anim_names.get(va) or f'clip_{va:08X}')}.n2kanim",
+            filetypes=[("NHL 2k10 animation backup", "*.n2kanim"), ("All files", "*.*")])
+        if not p:
+            return
+        try:
+            n = self._anim.export_region(str(xex), self._anim_clips, va, p,
+                                         name=self._anim_names.get(va, ""))
+        except Exception as e:
+            messagebox.showerror("Animations", f"Could not export:\n{e}"); return
+        self._log_q.put(f"[anim] backed up 0x{va:08X} ({n} bytes) to {p}")
+        self._anim_status.set(f"backed up 0x{va:08X} ({n} bytes) — restorable to this XEX only")
+
+    def _anim_restore_region(self):
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Animations", "Set the game files folder in Settings."); return
+        p = filedialog.askopenfilename(
+            title="Restore clip backup",
+            filetypes=[("NHL 2k10 animation backup", "*.n2kanim"), ("All files", "*.*")])
+        if not p:
+            return
+        try:
+            meta = self._anim.restore_region(str(xex), p, log=self._log_q.put)
+        except Exception as e:
+            messagebox.showerror("Animations", f"Could not restore:\n{e}"); return
+        self._anim_status.set(f"restored 0x{meta['clip_va']:08X} — restart the game")
+        self._anim_load()
+
+    def _anim_export_names(self):
+        p = filedialog.asksaveasfilename(
+            title="Export animation names", defaultextension=".json",
+            initialfile="animation_names.json",
+            filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not p:
+            return
+        src = self._anim.save_names(self._anim_names)     # flush first, then copy
+        Path(p).write_text(Path(src).read_text(encoding="utf-8"), encoding="utf-8")
+        self._log_q.put(f"[anim] exported {len(self._anim_names)} names to {p}")
+        self._anim_status.set(f"exported {len(self._anim_names)} names")
+
+    def _anim_import_names(self):
+        p = filedialog.askopenfilename(title="Import animation names",
+                                       filetypes=[("JSON", "*.json"), ("All files", "*.*")])
+        if not p:
+            return
+        try:
+            added, updated = self._anim.merge_names(p, self._anim_names)
+        except Exception as e:
+            messagebox.showerror("Animations", f"Could not import:\n{e}"); return
+        self._anim.save_names(self._anim_names)
+        self._anim_refresh()
+        self._anim_status.set(f"imported names: {added} new, {updated} changed")
 
     # ── Settings tab ──────────────────────────────────────────────────────────
 
@@ -5176,6 +6099,123 @@ class App(tk.Tk):
 
     _PICK_SECT = {"meta": "name", "audio": "audio", "tex": "texture"}
 
+    def _head_targets_dialog(self, head_items, ros_path):
+        """Ask WHO gets each incoming face. Returns {key: row|None}, or None if cancelled.
+
+        A pack carries the author's row number, portrait key and the player's name, and the import
+        can usually resolve that onto the recipient's roster — but "usually" is doing real work
+        there: community rosters reorder rows, rename players and re-key portraits, and a face on
+        the wrong man is not a small error. So the recipient gets to look at their own roster and
+        say. Keys the user leaves alone are simply absent from the returned dict, which is what
+        makes the pack's own binding the default rather than a thing to be re-confirmed.
+        """
+        try:
+            choices = mp.head_roster_choices(ros_path)
+        except Exception as e:
+            self._log(f"[modpack] player list unavailable ({e}) — heads will use the pack's binding")
+            return {}
+        if not choices:
+            return {}
+
+        dlg = Toplevel(self); dlg.title("Who gets these faces?")
+        dlg.geometry("980x560"); dlg.transient(self); dlg.grab_set()
+        result = {"ok": False}
+        # absent key == "use the pack's binding"; present-and-None == "install the art, touch nothing"
+        picks = {}
+
+        top = ttk.Frame(dlg, padding=(12, 10)); top.pack(fill=X)
+        ttk.Label(top, text="Assign the imported heads",
+                  font=("Segoe UI", 11, "bold")).pack(anchor=W)
+        ttk.Label(top, text="Each face is written into the game as its own head asset. By default it "
+                            "goes to whoever the pack author put it on — pick a player here to send "
+                            "it somewhere else on YOUR roster.",
+                  foreground="#999", wraplength=940, justify=LEFT).pack(anchor=W)
+
+        body = ttk.Frame(dlg, padding=(12, 4)); body.pack(fill=BOTH, expand=True)
+        left = ttk.Frame(body); left.pack(side=LEFT, fill=BOTH, expand=True)
+        ttk.Label(left, text="Incoming heads").pack(anchor=W)
+        tv = ttk.Treeview(left, columns=("goes",), show="tree headings", height=14)
+        tv.heading("#0", text="Head"); tv.heading("goes", text="Goes to")
+        tv.column("#0", width=300); tv.column("goes", width=260)
+        tv.pack(fill=BOTH, expand=True, pady=(2, 0))
+
+        def _goes(it):
+            k = it["key"]
+            if k not in picks:
+                who = mp._head_who(it["incoming"])
+                return f"(as the pack says: {who})"
+            if picks[k] is None:
+                return "— do not assign —"
+            return dict(choices).get(picks[k], f"row {picks[k]}")
+
+        def _refresh_tree():
+            for it in head_items:
+                tv.item(it["key"], values=(_goes(it),))
+        for it in head_items:
+            tv.insert("", "end", iid=it["key"],
+                      text=f"Head {it['key']} — {(it['incoming'].get('first','') + ' ' + it['incoming'].get('last','')).strip() or 'unnamed'}",
+                      values=(_goes(it),))
+        tv.selection_set(head_items[0]["key"])
+
+        right = ttk.Frame(body, padding=(12, 0, 0, 0)); right.pack(side=LEFT, fill=BOTH, expand=True)
+        ttk.Label(right, text="Your roster — type to search").pack(anchor=W)
+        v_q = StringVar()
+        ttk.Entry(right, textvariable=v_q).pack(fill=X, pady=(2, 4))
+        lb_frame = ttk.Frame(right); lb_frame.pack(fill=BOTH, expand=True)
+        lb = Listbox(lb_frame, activestyle="none", exportselection=False)
+        sb = ttk.Scrollbar(lb_frame, orient="vertical", command=lb.yview)
+        lb.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y); lb.pack(side=LEFT, fill=BOTH, expand=True)
+        shown = []
+
+        def _fill(*_a):
+            q = v_q.get().strip().lower()
+            shown.clear()
+            lb.delete(0, "end")
+            for row, lbl in choices:
+                if q and q not in lbl.lower():
+                    continue
+                shown.append(row)
+                lb.insert("end", lbl)
+                if len(shown) >= 500:            # a search that wide is not a search
+                    lb.insert("end", "…narrow the search to see more")
+                    break
+        v_q.trace_add("write", _fill); _fill()
+
+        def _assign(*_a):
+            sel, i = tv.selection(), lb.curselection()
+            if not sel or not i or i[0] >= len(shown):
+                return
+            picks[sel[0]] = shown[i[0]]
+            _refresh_tree()
+            nxt = [it["key"] for it in head_items if it["key"] not in picks]
+            if nxt:                              # walk the user down the list on its own
+                tv.selection_set(nxt[0])
+        lb.bind("<Double-1>", _assign)
+
+        btns = ttk.Frame(right, padding=(0, 6, 0, 0)); btns.pack(fill=X)
+        ttk.Button(btns, text="Assign to selected head", command=_assign).pack(side=LEFT)
+
+        def _set(v):
+            for k in tv.selection():
+                if v == "pack":
+                    picks.pop(k, None)
+                else:
+                    picks[k] = None
+            _refresh_tree()
+        ttk.Button(btns, text="Use pack's player",
+                   command=lambda: _set("pack")).pack(side=LEFT, padx=6)
+        ttk.Button(btns, text="Don't assign", command=lambda: _set(None)).pack(side=LEFT)
+
+        bar = ttk.Frame(dlg, padding=(12, 8)); bar.pack(fill=X)
+        def _ok():
+            result["ok"] = True; dlg.destroy()
+        ttk.Button(bar, text="Import", command=_ok).pack(side=RIGHT)
+        ttk.Button(bar, text="Cancel", command=dlg.destroy).pack(side=RIGHT, padx=6)
+        dlg.bind("<Escape>", lambda e: dlg.destroy())
+        dlg.wait_window()
+        return picks if result["ok"] else None
+
     def _pick_items_dialog(self, title, subtitle, items, show_status=False):
         """Unity-style checkbox picker with Type / Team / Category filters. Returns the SELECTED
         items (default: all checked), or None if cancelled. `items` = [{section,key,label,team,
@@ -5374,7 +6414,17 @@ class App(tk.Tk):
                 items += mp.local_roster_items(ros_path)     # Team Colours / Arena / Team Names
             except Exception as e:
                 self._log(f"[modpack] roster scan skipped: {e}")
+            try:                                             # expansion clubs (record + art family)
+                items += mp.local_expansion_items(ros_path)
+            except Exception as e:
+                self._log(f"[modpack] expansion scan skipped: {e}")
         game_dir = self._get_game_root()                     # Scoreclock (captured at export time)
+        try:                                                 # Custom heads (model + maps + slot)
+            head_items = mp.local_head_items(game_dir, ros_path, log=self._log)
+        except Exception as e:
+            head_items = []
+            self._log(f"[modpack] head scan skipped: {e}")
+        items += head_items                                  # all checked = "every head I edited"
         try:                                                 # the iff lives INSIDE the archives -> TOC lookup
             sc_ok = bool(game_dir) and bool(archtex.resolve("overlay_static.iff", game_dir))
         except Exception:
@@ -5394,7 +6444,7 @@ class App(tk.Tk):
             por_item["label"] += ("   [whole pack, ~65 MB — recipients should take your "
                                   "Roster.ROS too]")
             items.append(por_item)
-        if not sc_ok and not por_item:
+        if not sc_ok and not por_item and not head_items:
             game_dir = None
         if not items:
             messagebox.showinfo("Export Mod Pack",
@@ -5414,21 +6464,26 @@ class App(tk.Tk):
         keys = {(it["section"], it["key"]) for it in sel}
         with_sc = any(s == "scoreclock" for s, _ in keys)
         with_por = any(s == "portraits" for s, _ in keys)
+        with_heads = any(s == mp.HEADS_KEY for s, _ in keys)
         self._log(f"─── Export Mod Pack ({len(sel)} item(s)) ───")
         def work():
             try:
-                res = mp.export_selected(root, p, keys, ros_path=ros_path,
-                                         game_dir=game_dir if (with_sc or with_por) else None,
-                                         log=self._log_q.put)
+                res = mp.export_selected(
+                    root, p, keys, ros_path=ros_path,
+                    game_dir=game_dir if (with_sc or with_por or with_heads) else None,
+                    log=self._log_q.put)
                 self._log_q.put(f"Mod Pack: {res['audio_meta']} names, {res['audio_wav']} "
                                 f"audio, {res['textures']} texture(s), {res['roster']} roster "
                                 f"group(s), scoreclock: {'yes' if res['scoreclock'] else 'no'}, "
-                                f"portraits: {res['portraits'] or 'no'} "
+                                f"portraits: {res['portraits'] or 'no'}, "
+                                f"expansion team(s): {res.get('expansion') or 'no'}, "
+                                f"custom head(s): {res.get('heads') or 'no'} "
                                 f"→ {Path(p).name}")
             except Exception as e:
                 self._log_q.put(f"Export failed: {e}")
         extra = ((" (capturing scoreclock, ~2 min)" if with_sc else "") +
-                 (" (+65 MB portrait pack)" if with_por else ""))
+                 (" (+65 MB portrait pack)" if with_por else "") +
+                 (" (+custom heads)" if with_heads else ""))
         self._run_in_thread(work, op_label="Building Mod Pack…" + extra)
 
     def _import_modpack(self):
@@ -5473,9 +6528,11 @@ class App(tk.Tk):
             iffs, skipped = mp.revert_iffs_for_pack(inv["tex_rels"], scoreclock=bool(inv["scoreclock"]))
         except Exception as e:
             messagebox.showerror("Revert Mod Pack", f"Could not read pack:\n{e}"); return
-        if not iffs and not inv["audio_keys"] and not inv["scoreclock"] and not inv["portraits"]:
+        if (not iffs and not inv["audio_keys"] and not inv["scoreclock"] and not inv["portraits"]
+                and not inv.get("heads")):
             messagebox.showinfo("Revert Mod Pack",
-                "This pack contains nothing revertible (no textures/audio/scoreclock/portraits)."); return
+                "This pack contains nothing revertible "
+                "(no textures/audio/scoreclock/portraits/heads)."); return
         lines = []
         if iffs:
             lines.append(f"• {len(iffs)} asset(s) reset to pristine (archives + staged files):\n   "
@@ -5488,8 +6545,18 @@ class App(tk.Tk):
             lines.append("• Scoreclock: layout back to stock, SOG + screen-anchor XEX patches undone")
         if inv["portraits"]:
             lines.append("• Portraits: ALL 1478 faces back to stock (your own portrait work goes too)")
+        if inv.get("heads"):
+            lines.append(f"• {len(inv['heads'])} custom head(s) back to the artist's face "
+                         f"(model + textures): "
+                         + ", ".join(str(h) for h in inv["heads"][:10])
+                         + ("…" if len(inv["heads"]) > 10 else "")
+                         + "\n   (the players still POINT at those head ids — restore your own ROS "
+                           "backup to undo that)")
         if inv["roster"]:
             lines.append("• Roster values are NOT revertible — restore your own ROS backup")
+        if inv.get("expansion"):
+            lines.append(f"• Expansion club(s) {', '.join(sorted(inv['expansion']))} STAY — a "
+                         f"revert doesn't remove a team; restore your own ROS backup for that")
         if not messagebox.askyesno("Revert Mod Pack",
                 "Revert everything this pack touched?\n\n" + "\n".join(lines) +
                 "\n\n⚠ Per-ASSET granularity: your OWN edits to these same assets are reverted "
@@ -5513,11 +6580,13 @@ class App(tk.Tk):
             notes = ("\n\n" + "\n".join(counts["notes"])) if counts.get("notes") else ""
             self._log(f"Reverted: {counts['tex_assets']} asset(s), {counts['audio']} audio, "
                       f"scoreclock: {'yes' if counts['scoreclock'] else 'no'}, "
-                      f"portraits: {'yes' if counts.get('portraits') else 'no'}")
+                      f"portraits: {'yes' if counts.get('portraits') else 'no'}, "
+                      f"heads: {counts.get('heads') or 'no'}")
             messagebox.showinfo("Revert complete",
                 f"Assets reverted: {counts['tex_assets']}   Audio: {counts['audio']}   "
                 f"Scoreclock: {'yes' if counts['scoreclock'] else 'no'}   "
-                f"Portraits: {'yes' if counts.get('portraits') else 'no'}{notes}\n\n"
+                f"Portraits: {'yes' if counts.get('portraits') else 'no'}   "
+                f"Heads: {counts.get('heads', 0)}{notes}\n\n"
                 "Relaunch the game to see the original look.")
         self._run_in_thread(work, op_label="Reverting mod pack…", on_done=done)
 
@@ -5547,17 +6616,47 @@ class App(tk.Tk):
         por_rows = [it for it in sel if it["section"] == "portraits" and it["status"] != "same"]
         rest = [it for it in sel if it["section"] not in ("scoreclock", "portraits")]
         decisions = {f'{it["section"]}|{it["key"]}': "theirs" for it in sel if it["status"] == "conflict"}
+        # Faces get a second dialog: the pack's row/portrait/name binding is a guess about a roster
+        # its author never saw, so the person who owns the roster gets to point at the player.
+        head_targets = {}
+        head_rows = [it for it in rest if it["section"] == mp.HEADS_KEY and it["status"] != "same"]
+        ros = self._current_roster_path()
+        if head_rows and ros and Path(ros).is_file():
+            head_targets = self._head_targets_dialog(head_rows, ros)
+            if head_targets is None:
+                self._log("Import cancelled."); return
         try:
+            # game_dir is passed for the EXPANSION section (it clones the club's asset family into
+            # the archives). Scoreclock/portraits, the other two game_dir consumers, were stripped
+            # out of `rest` above and run on the background finalize instead.
             counts = mp.apply_items(root, rest, decisions, zip_path=zip_path,
-                                    ros_path=self._current_roster_path(), log=self._log)
+                                    ros_path=ros, game_dir=self._get_game_root(),
+                                    log=self._log, head_targets=head_targets)
         except Exception as e:
             messagebox.showerror("Import failed", str(e)); return
+        if counts.get("expansion"):
+            # the club's assets exist only as of a second ago — the catalog has to be rebuilt
+            # before the texture finalize below can map its staged files onto them
+            try:
+                self._iff_load_catalog()
+            except Exception as e:
+                self._log(f"[modpack] asset list refresh skipped: {e}")
         self._reload_audio()
         if getattr(self, "_bank_records", None): self._bank_populate()
         self._log(f"Imported {what}: +{counts['meta']} names, +{counts['audio']} audio, "
-                  f"+{counts['tex']} textures, +{counts['roster']} roster group(s)")
+                  f"+{counts['tex']} textures, +{counts['roster']} roster group(s), "
+                  f"+{counts.get('expansion', 0)} expansion team(s), "
+                  f"+{counts.get('heads', 0)} custom head(s)")
         roster_note = ("\n\nRoster edits were written straight to your Roster.ROS (backups made) — "
                        "restart the game to see them." if counts["roster"] else "")
+        exp_note = (f"\n\n{counts['expansion']} expansion club(s) were built into your Roster.ROS "
+                    f"and their art assets cloned into the game archives."
+                    if counts.get("expansion") else "")
+        head_note = (f"\n\n{counts['heads']} custom head(s) were written into the game archives "
+                     f"(model + textures) and assigned in your Roster.ROS to the players you chose. "
+                     f"Anyone else who was wearing one of those head slots was moved onto a spare "
+                     f"one — the log names them."
+                     if counts.get("heads") else "")
         tex_folders = sorted({Path(it["key"]).parent.as_posix() for it in rest
                               if it["section"] == "tex" and it["status"] != "same"})
         sc = sc_rows[0]["incoming"] if sc_rows else None
@@ -5575,11 +6674,13 @@ class App(tk.Tk):
                     "or faces will land on the wrong players." if por else "")
         messagebox.showinfo("Import complete",
             f"Names: {counts['meta']}   Audio: {counts['audio']}   Textures: {counts['tex']}   "
-            f"Roster: {counts['roster']}"
+            f"Roster: {counts['roster']}   Expansion teams: {counts.get('expansion', 0)}   "
+            f"Heads: {counts.get('heads', 0)}"
             + ("\n\nAudio replacements are staged — use Apply All Mods to patch them."
                if counts["audio"] else "")
-            + roster_note + por_note + bg_note)
-        if counts["roster"] and Path(self._v_roster.get().strip() or "x").is_file():
+            + exp_note + head_note + roster_note + por_note + bg_note)
+        if (counts["roster"] or counts.get("expansion") or counts.get("heads")) and \
+                Path(self._v_roster.get().strip() or "x").is_file():
             try: self._teams_load()          # refresh the Teams grid from the patched save
             except Exception: pass
         if tex_folders or sc or por:
@@ -6309,6 +7410,10 @@ class App(tk.Tk):
         team      = pane["v_team"].get()
         search    = pane["v_search"].get().lower().strip()
         cat_key   = None
+        line_want = None
+        m = re.match(r"^(?:line|id)\s*#?\s*(\d+)$", search)
+        if m:
+            line_want, search = int(m.group(1)), ""
         if cat_label != "All":
             for k, v in CATEGORY_LABELS.items():
                 if v == cat_label: cat_key = k; break
@@ -6319,10 +7424,17 @@ class App(tk.Tk):
             # exact match on the resolved team, not a substring sweep of the name --
             # the old form matched "Boston" inside any line that merely said Boston
             and (team == "Any" or r.get("team", "") == team)
+            # text_hay last: it is the broadest field and the only one that can match a
+            # phrase the filename never contained ("empty net", "Hotlanta"), so it is what
+            # makes the box a content search rather than a filename search.
+            # "line 9081" / "id 9081" narrows to one line's takes; the bare number would
+            # also match durations and names, so it takes a prefix to mean the line ID
+            and (not line_want or (r.get("line_rec") or {}).get("line") == line_want)
             and (not search or search in r["name"].lower()
                  or search in r.get("banks_hay", "")
                  or search in r.get("team", "").lower()
-                 or search in r.get("bin", "").lower())
+                 or search in r.get("bin", "").lower()
+                 or search in r.get("text_hay", ""))
         ]
         self._populate_audio_tree(pane)
 
@@ -6365,7 +7477,8 @@ class App(tk.Tk):
             else:
                 tags = ()
             tree.insert("", END,
-                values=(row["name"], label, row.get("bin", ""), row.get("team", ""),
+                values=(row["name"], row.get("text", ""), label, row.get("bin", ""),
+                        row.get("line_id", ""), row.get("team", ""),
                         dur, rate, row["source"], ch, mod),
                 tags=tags)
         if end < len(rows):
@@ -6382,8 +7495,17 @@ class App(tk.Tk):
         rev = pane["sort"].get(col, False)
         keys = {
             "name":     lambda r: r["name"].lower(),
+            # same rule as Team: an un-swept row means "unknown", not "sorts before A", so
+            # blanks go last in both directions instead of crowding the top
+            "line":     lambda r: (r.get("text", "") == "", r.get("text_hay", "")),
             "category": lambda r: r["folder"].lower(),
             "bin":      lambda r: (r.get("bin", "") == "", r.get("bin", "").lower()),
+            # numeric, and grouped by bank first -- sorting the printed "9081 · 2/4" as text
+            # would put line 10 next to line 1000 and scatter a line's takes
+            "lineid":   lambda r: (r.get("line_rec") is None, r.get("bin", ""),
+                                   (r.get("line_rec") or {}).get("line", 0),
+                                   (r.get("line_rec") or {}).get("variation") or 0,
+                                   (r.get("line_rec") or {}).get("take", 0)),
             # untagged rows sort last in both directions -- a blank Team means "unknown",
             # not "before Anaheim", so it should never crowd the top of the list
             "team":     lambda r: (r.get("team", "") == "", r.get("team", "").lower()),
@@ -7004,6 +8126,57 @@ class App(tk.Tk):
                             op_label="Hashing extracted audio…",
                             on_done=self._reload_audio)
 
+    def _run_transcript_refresh(self):
+        """Re-transcribe the Line column for WAVs the user has replaced.
+
+        Scoped to modified files on purpose. The full sweep was ~13 GPU-hours; re-running it on
+        every patch is out of the question, and re-running it when nothing changed is worse than
+        useless. The modified flag narrows ~81k streams to the handful actually touched, and the
+        stored per-line hash then throws away the ones whose bytes are identical anyway (a mod
+        pack re-applied over itself moves every mtime and changes no audio)."""
+        if self._op_busy(): return
+        root = self._get_root()
+        if not root: return
+        why = tref.available()
+        if why:
+            messagebox.showerror("Sweep Lines", why)
+            return
+        keys = [r["key"] for r in getattr(self, "audio_rows", []) if r.get("edited")]
+        if not keys:
+            messagebox.showinfo("Sweep Lines",
+                "No modified audio — every Line is still describing the file on disk.")
+            return
+        if not messagebox.askyesno("Sweep Lines",
+                f"Re-read the {len(keys):,} modified WAV(s) and update the Line column for any "
+                "whose audio has actually changed.\n\n"
+                "Files are hashed first, so identical bytes cost nothing. Only the ones that "
+                "differ are transcribed, at roughly a second each on the CPU.\n\n"
+                "Nothing is written to the game."):
+            return
+        self._log("─── Sweep Lines ───")
+        cancel = self._cancel_event; cancel.clear()
+
+        def work():
+            entries = astore.load_manifest(root)
+            items = tref.plan(root, entries, keys,
+                              progress=lambda n, tot, hits: self._emit_progress(
+                                  n, tot, f"hashing {n}/{tot} · {hits} changed"))
+            self._log_q.put(f"{len(items)} of {len(keys)} modified file(s) differ from their line")
+            if not items:
+                self._log_q.put("─── Nothing to re-transcribe ───")
+                return
+            done = tref.run(
+                items,
+                progress=lambda n, tot, name, line: (
+                    self._emit_progress(n, tot, f"{n}/{tot} · {name}"),
+                    self._log_q.put(f"  {name}: {line[:80]}")),
+                cancel=cancel.is_set)
+            self._log_q.put(f"─── Updated {len(done)} line(s)"
+                            f"{' (cancelled)' if cancel.is_set() else ''} ───")
+
+        self._run_in_thread(work, op_label="Sweeping changed audio…",
+                            on_done=self._reload_audio)
+
     def _run_reload_names(self):
         if self._op_busy(): return
         root = self._get_root()
@@ -7172,8 +8345,8 @@ class App(tk.Tk):
         ttk.Button(bar, text="Extract Original Files", command=self._iff_revert_extract).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Revert IFF to Original", command=self._iff_revert).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Open Extracted Files", command=lambda: self._iff_open("Extracted")).pack(side=LEFT, padx=2)
-        ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
-        ttk.Button(bar, text="Jersey Normal Stitcher…", command=self._open_normal_stitcher).pack(side=LEFT, padx=2)
+        # The Jersey Normal Stitcher used to have a button here. It moved to the Jersey Editor's
+        # Normals page, where the kit is already chosen and the model preview lights the result.
         # Quality is AUTOMATIC now (no toggles): replacements store as lossless 8888 when the pack can
         # grow, a larger-than-native source auto-upscales the slot (hi-res), and the archives
         # auto-compact after any relocating apply. Capture-from-Game logic is retained
@@ -7232,9 +8405,88 @@ class App(tk.Tk):
         self._iff_subtex = []
         self._iff_load_catalog()
 
+    def _iff_discover_extra_teams(self):
+        """List EXPANSION teams' assets alongside the 30 shipped ones.
+
+        `team_iff_catalog.csv` is frozen 30-team shipping data, so a team added to Roster.ROS after
+        it was built (Seattle, Vegas) owns a full family of .iff assets the IFF tab would otherwise
+        never show. `extra_teams` derives them from the roster's own league-0 records, keyed on the
+        ASSET key — which is why relocated teams (WPG still keys on ATL, UTA on PHO) correctly add
+        nothing. Never raises — a failure here must not block the tab — but it is no longer
+        SILENT: every way out now says why in the log. A quiet no-op is indistinguishable from
+        "this install has no expansion teams", which is exactly the ambiguity that made a missing
+        asset list impossible to diagnose from the user's side.
+        """
+        try:
+            from launcher import extra_teams
+        except Exception as e:
+            self._log(f"[iff] expansion-team scan unavailable: {e}")
+            return
+        ros = self._current_roster_path()
+        root = self._get_game_root()
+        if not ros or not root:
+            self._log("[iff] expansion-team scan skipped: "
+                      + ("no Roster.ROS set" if not ros else "")
+                      + (" and " if not ros and not root else "")
+                      + ("no game files folder set (Settings tab)" if not root else ""))
+            return
+        try:
+            rows = extra_teams.catalog_rows(root, ros)
+            archtex.set_extra_team_rows(rows)
+        except Exception as e:
+            self._log(f"[iff] expansion-team scan failed: {e}")
+            return
+        # One jersey = one row, for the teams the shipped jersey_map.json cannot know about:
+        #   * an EXPANSION team's, paired by name (uniform_<key>_<slot> <-> uniform_frontend_...);
+        #   * a RELOCATED team's, paired by TOC identity — Winnipeg plays as WPG while its uniform
+        #     is still keyed ATL, so the two names share one blob and editing the WPG row already
+        #     changed the in-game jersey, but the front-end SHEET is a separate asset mapped only
+        #     to the ATL name, so it kept the Thrashers crest. That is the wrong-logo-on-team-
+        #     select bug; giving the alias the real name's sheets makes the edit fan out.
+        # Ahead of the no-expansion-teams return below on purpose: a relocation needs this whether
+        # or not the roster also has an expansion team.
+        try:
+            from launcher import jerseys as _jerseys
+            pairs = extra_teams.frontend_pairs(rows)
+            for _alias, _real in extra_teams.relocated_aliases(root, ros):
+                e = _jerseys.entry(_real)
+                if e:
+                    pairs += [(_alias, m) for m in e.get("members", []) if m != _real]
+            n = _jerseys.set_extra_jerseys(pairs)
+            if n:
+                self._log(f"[iff] {n} jersey(s) paired with their front-end sheet")
+        except Exception as e:
+            self._log(f"[iff] jersey pairing failed: {e}")
+        if not rows:
+            try:
+                found = [t["code"] or t["akey"] for t in extra_teams.extra_teams(ros)]
+            except Exception:
+                found = []
+            self._log(f"[iff] no expansion-team assets listed "
+                      + (f"— {', '.join(found)} is/are in the roster but none of their .iff "
+                         f"assets resolved in {root}" if found else
+                         f"— no team in {Path(ros).name} has an asset key outside the shipped 30"))
+            return
+        teams = sorted({r["team"].upper() for r in rows})
+        self._log(f"[iff] expansion teams: {', '.join(teams)} — {len(rows)} assets listed")
+        # A new asset key is made loadable with TOC entries that may point at the DONOR team's
+        # bytes, so a same-size edit would write into the team it was cloned from. Warn once with
+        # the exact fix rather than de-aliasing behind the user's back (it appends tens of MB).
+        try:
+            shared = extra_teams.aliased_members(root, ros)
+        except Exception:
+            shared = []
+        if shared:
+            self._log(f"[iff] ⚠ {len(shared)} expansion asset(s) still share bytes with the team "
+                      f"they were cloned from — editing them would edit that team too. "
+                      f"Use “Separate expansion assets” on the Teams tab first.")
+
     def _iff_load_catalog(self):
         try:
             hidden = set(getattr(archtex, "HIDDEN_ASSETS", set()))
+            # Expansion teams FIRST: the scan registers their jerseys, and the twin-hiding
+            # below has to see them or their team-select sheet shows up as its own row.
+            self._iff_discover_extra_teams()
             # One jersey = one row. Each jersey exists twice (in-game uniform + front-end
             # team-select sheet, whose `decals` is a byte-identical copy of the uniform's
             # `stamps`), so hide the twins and let Apply fan the edit out to them instead.
@@ -7250,11 +8502,23 @@ class App(tk.Tk):
             import re as _re
             hidden |= {r["iff"] for r in all_rows
                        if r.get("iff") and _re.match(r"zamboni_[a-z]+\.iff$", r["iff"])}
-            rows = [r for r in all_rows
-                    if r.get("category") != "arena_audio" and r.get("iff") not in hidden]
+            # (arena_<code>.iff used to be catalogued as "arena_audio" and filtered out here —
+            # it is the arena BOWL: 86 editable textures + the bowl geometry. Now category
+            # "arena" and listed like any other asset.)
+            rows = [r for r in all_rows if r.get("iff") not in hidden]
         except Exception as e:
             self._log(f"[iff] catalog load failed: {e}"); rows = []
         self._iff_catalog = rows
+        # Report what an expansion team actually contributed to the LIST, not just to the
+        # catalog: "30 assets listed" upstream but 0 rows here means the hide-filter ate them,
+        # which is the difference between a discovery bug and a display bug.
+        try:
+            for _t in sorted({r["team"] for r in archtex.EXTRA_TEAM_ROWS}):
+                _n = sum(1 for r in rows if r.get("team") == _t)
+                self._log(f"[iff] {_t.upper()}: {_n} row(s) in the asset list"
+                          + ("" if _n else " — every discovered asset was filtered out as hidden"))
+        except Exception:
+            pass
         teams = ["All"] + sorted(set(r["team"] for r in rows))
         cats = ["All"] + sorted(set(r["category"] for r in rows))
         self._iff_team_cb["values"] = teams
@@ -7434,32 +8698,6 @@ class App(tk.Tk):
         head = f"{iff}  ·  texture #{rec['index']}" if rec else iff
         fmt = f"  {rec['fmt']}" if rec else ""
         self._iff_info.config(text=f"{head}\n{img.width}×{img.height}{fmt}  ({tag})")
-
-    def _open_normal_stitcher(self):
-        """Open the standalone Jersey Normal Stitcher — regenerates the sewn-stripe relief in a
-        uniform_base base_normal so it follows a re-striped base colour. Passes the configured
-        game folder so 'Load stock from game' / 'Apply to game' work with no extra setup."""
-        try:
-            from launcher import normal_stitcher
-            gd = None
-            try:
-                gd = self._get_game_root()
-            except Exception:
-                pass
-            # Extract root (…/NHL2k10_Extracted_Files) so the tool can auto-load YOUR edited base
-            # colour for the selected team+kit. Compute quietly (no warning dialogs).
-            er = None
-            try:
-                r = self._v_root.get().strip() or self.cfg.get("root_path", "")
-                if r:
-                    ex = Path(r) / "NHL2k10_Extracted_Files"
-                    if ex.is_dir():
-                        er = str(ex)
-            except Exception:
-                pass
-            normal_stitcher.open_stitcher(self, game_dir=gd, extract_root=er)
-        except Exception as e:
-            messagebox.showerror("Jersey Normal Stitcher", f"Could not open the tool:\n{e}")
 
     def _build_iff_ctx(self):
         """Main asset list — whole-asset actions."""
@@ -8109,28 +9347,48 @@ class App(tk.Tk):
         os.startfile(str(base))
 
     # ── Teams tab (Roster.ROS display-name editor) ────────────────────────────
-    # Team + Name = the full team name ("New Jersey" + "Devils"); City/State are where the team
-    # physically plays (Newark, New Jersey) and are NOT the same thing. Only what the save actually
-    # stores is shown — no synthesised "display name" (that's what produced "Glendale Coyotes").
-    _ROSTER_COLS = ("code", "city", "state", "team", "name", "arena", "primary", "secondary")
-    _ROSTER_EDITABLE = {"city", "state", "team", "name", "arena"}
-    _ROSTER_COLOR_COLS = {"primary", "secondary"}   # double-click -> colour picker
-    _ROSTER_SLOT = {"city": "city", "state": "state", "team": "team",
+    # City/State are where the team physically plays (Newark, New Jersey); Name is the nickname.
+    # Only what the save actually stores is shown — no synthesised "display name" (that's what
+    # produced "Glendale Coyotes").
+    # The team-record "Team" prefix slot is deliberately NOT a column: only Carolina, Phoenix and
+    # Tampa Bay store anything there, and what they store just repeats the City, so the column was
+    # 30 rows of "—" plus one duplicate. `roster_editor.Team.team` is still parsed, still exported
+    # to CSV and still carried by the mod pack's team_names group — this only drops the grid column.
+    _ROSTER_COLS = ("code", "city", "state", "name", "arena", "primary", "secondary",
+                    "dasher", "capacity")
+    _ROSTER_EDITABLE = {"city", "state", "name", "arena"}
+    _ROSTER_COLOR_COLS = {"primary", "secondary", "dasher"}   # double-click -> colour picker
+    _ROSTER_ARENA_COLS = {"dasher", "capacity"}     # written straight to the arena record
+    _ROSTER_SLOT = {"city": "city", "state": "state",
                     "name": "nickname", "arena": "arena"}          # column -> Team attribute
 
     def _build_teams_tab(self):
-        t = self._tab_teams
-        bar = ttk.Frame(t, padding=(4, 4, 4, 2)); bar.pack(fill=X)
-        ttk.Label(bar, text="Roster.ROS:").pack(side=LEFT)
+        outer = self._tab_teams
+        # The Roster.ROS path is the one thing BOTH sub-tabs need, so it stays above them and Load
+        # refreshes whichever is built. Everything below the path row is per-sub-tab.
+        pathbar = ttk.Frame(outer, padding=(4, 4, 4, 2)); pathbar.pack(fill=X)
+        ttk.Label(pathbar, text="Roster.ROS:").pack(side=LEFT)
         # No baked-in default: it only ever pointed at one machine. Found under the Xenia folder as
         # content\<profile>\54540853\00000001\Roster.ROS\Roster.ROS — auto-discovered when the Xenia
         # path is configured, else the user browses to it once and it's remembered.
         default_ros = self.cfg.get("roster_path") or self._discover_roster() or ""
         self._v_roster = StringVar(value=default_ros)
-        ttk.Entry(bar, textvariable=self._v_roster, width=58).pack(side=LEFT, padx=(4, 2))
-        ttk.Button(bar, text="Browse…", command=self._teams_browse).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Load",    command=self._teams_load).pack(side=LEFT, padx=2)
-        ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
+        ttk.Entry(pathbar, textvariable=self._v_roster, width=58).pack(side=LEFT, padx=(4, 2))
+        ttk.Button(pathbar, text="Browse…", command=self._teams_browse).pack(side=LEFT, padx=2)
+        ttk.Button(pathbar, text="Load",    command=self._teams_load).pack(side=LEFT, padx=2)
+
+        # Teams / Players. The Players grid used to be the "Live Roster Editor (running game)"
+        # button, which needed Xenia attached and a roster loaded in memory; it doesn't any more,
+        # because the on-disk record is the same struct as the in-memory one, so it belongs here as
+        # an ordinary sub-tab rather than behind a modal that demands a running game.
+        sub = ttk.Notebook(outer); sub.pack(fill=BOTH, expand=True)
+        self._roster_sub = sub
+        t = ttk.Frame(sub); sub.add(t, text="  Teams  ")
+        self._tab_players = ttk.Frame(sub); sub.add(self._tab_players, text="  Players  ")
+        self._players_frame = None            # built on first view, not at launcher startup
+        sub.bind("<<NotebookTabChanged>>", self._roster_sub_changed)
+
+        bar = ttk.Frame(t, padding=(4, 4, 4, 2)); bar.pack(fill=X)
         ttk.Button(bar, text="Save to Roster.ROS", style="Accent.TButton",
                    command=self._teams_save).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Export CSV…", command=self._teams_export).pack(side=LEFT, padx=2)
@@ -8142,31 +9400,301 @@ class App(tk.Tk):
                    command=self._teams_fields_editor).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Advanced Editor (all tables & fields)…",
                    command=self._teams_advanced_editor).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Live Roster Editor (running game)…",
-                   command=self._teams_live_editor).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Team Rosters (running game)…",
                    command=self._teams_roster_editor).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Prepare expansion team assets…",
+                   command=self._teams_prepare_expansion).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Update AHL affiliates…",
+                   command=self._teams_update_affiliates).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Team history / records…",
+                   command=self._teams_history).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Uniforms…",
+                   command=self._teams_uniforms).pack(side=LEFT, padx=2)
 
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT,
-                  text="Team + Name is the full team name (\"New Jersey\" + \"Devils\"); City/State is where "
-                       "it plays (Newark, New Jersey) — not the same thing.  \"—\" means the save stores "
-                       "nothing for that field (Dallas has no city; only Carolina/Phoenix/Tampa Bay store a "
-                       "Team prefix — the game composes the rest itself).\n"
-                       "Double-click City / State / Team / Name / Arena to rename — a name must fit its "
+                  text="Name is the nickname (\"Devils\"); City/State is where the team plays (Newark, "
+                       "New Jersey) — not the same thing.  \"—\" means the save stores nothing for that "
+                       "field (Dallas has no city — the game composes the rest itself).\n"
+                       "Double-click City / State / Name / Arena to rename — a name must fit its "
                        "existing slot; longer is rejected (growing needs the string pool repointed).  "
                        "Double-click Primary / Secondary for a colour picker — those save straight to the "
-                       "Roster.ROS (a .colorbak is made) and show after a game restart.").pack(fill=X, padx=6)
+                       "Roster.ROS (a .colorbak is made) and show after a game restart.\n"
+                       "Dashers is the arena's board colour (most of the league is red; Edmonton blue, "
+                       "San Jose yellow, Boston grey) and Seats its capacity — both live on the ARENA "
+                       "record, save immediately (a .arenabak is made), and are shared by every team that "
+                       "plays in that building.  \"Uniforms…\" opens the jersey list for the selected team: "
+                       "add one, rename it, repoint its .iff keys and edit its palette.").pack(fill=X, padx=6)
 
         tv = ttk.Treeview(t, columns=self._ROSTER_COLS, show="headings", height=20)
-        for c, w in (("code", 52), ("city", 118), ("state", 128), ("team", 100), ("name", 118),
-                     ("arena", 190), ("primary", 88), ("secondary", 88)):
-            tv.heading(c, text={"name": "Name", "team": "Team"}.get(c, c.title()))
+        for c, w in (("code", 52), ("city", 118), ("state", 128), ("name", 128),
+                     ("arena", 200), ("primary", 88), ("secondary", 88),
+                     ("dasher", 88), ("capacity", 72)):
+            tv.heading(c, text={"name": "Name", "dasher": "Dasher Colour",
+                                "capacity": "Arena Capacity"}.get(c, c.title()))
             tv.column(c, width=w, anchor=W)
         sb = ttk.Scrollbar(t, command=tv.yview); tv.configure(yscrollcommand=sb.set)
         sb.pack(side=RIGHT, fill=Y)
         tv.pack(fill=BOTH, expand=True, padx=6, pady=4)
         tv.bind("<Double-1>", self._teams_edit_cell)
         self._teams_tv = tv
+
+    def _teams_prepare_expansion(self):
+        """Make an expansion team's assets behave like a shipping team's — all idempotent.
+
+        1. MISSING ASSETS. Every lookup the game makes for a team is keyed by its ASSET KEY —
+           `logo_<key>.iff`, the uniforms, the rink, the arena, the ice, the LED ribbon, the
+           zambonis, and the team-select sheet `uniform_frontend_<key>_<slot>.iff`
+           (Function_83C94298) — so a novel key with no TOC entry draws nothing at all. One entry
+           per family member, aliasing the donor's blob, fills the whole set in
+           (`extra_teams.ensure_team_assets`). Only members the donor itself has are added.
+        2. MISSING LOGO TILE. The menus read a TILE out of the 0xF0985030 branding atlases keyed by
+           crc32(key), which is a different lookup from `logo_<key>.iff` — no tile, blank box.
+        3. SHARED BYTES. New TOC entries are allowed to point straight at the donor team's blob —
+           free, until an edit lands. A grow-replace escapes that on its own (it appends), but a
+           same-size replace writes at the shared offset and would silently repaint the donor.
+           Copying up front makes the assets ordinary, so every existing edit path is already right.
+        """
+        try:
+            from launcher import extra_teams
+        except Exception as e:
+            messagebox.showerror("Expansion assets", f"extra_teams module unavailable:\n{e}"); return
+        root = self._get_game_root()
+        ros = self._current_roster_path()
+        if not root:
+            messagebox.showerror("Expansion assets", "Set the game files folder in Settings first."); return
+        if not ros:
+            messagebox.showerror("Expansion assets", "Set a valid Roster.ROS path first."); return
+        try:
+            teams = extra_teams.extra_teams(ros)
+            missing = extra_teams.plan_team_assets(root, ros)
+            shared = extra_teams.aliased_members(root, ros)
+            tiles = extra_teams.missing_logo_tiles(root, ros)
+        except Exception as e:
+            messagebox.showerror("Expansion assets", f"Scan failed:\n{e}"); return
+        if not teams:
+            messagebox.showinfo("Expansion assets",
+                                "No expansion teams in this roster — every league team's asset key "
+                                "is already in the shipped catalog.")
+            return
+        who = ", ".join(f"{t['code']} ({t['city']} {t['nick']})".strip() for t in teams)
+        if not missing and not shared and not tiles:
+            messagebox.showinfo("Expansion assets",
+                                f"{who}\n\nAlready prepared — every asset exists, has a logo tile, "
+                                f"and owns its own bytes.")
+            return
+        parts = [f"Expansion teams: {who}\n"]
+        if missing:
+            donors = ", ".join(sorted({s["donor"].upper() for s in missing}))
+            parts.append(f"• {len(missing)} missing asset(s) will be added, cloned from {donors} — "
+                         f"logo, uniforms, rink, arena, ice, LED, zambonis and the team-select "
+                         f"jersey, so nothing renders blank.")
+        if tiles:
+            parts.append(f"• {len(tiles)} team(s) have no front-end logo tile; one will be spliced "
+                         f"into each branding atlas.")
+        if shared:
+            parts.append(f"• {len(shared)} asset(s) still share their bytes with the team they were "
+                         f"cloned from; each gets its own copy appended to 1B (this can add tens of "
+                         f"MB). The donor teams are not modified.")
+        parts.append("\nRun with the game closed. Continue?")
+        if not messagebox.askyesno("Prepare expansion team assets", "\n".join(parts)):
+            return
+        try:
+            # one call: add the missing family members, the logo tiles, then de-alias everything
+            # (including the entries it just added, which start out pointing at the donor's blob)
+            self._log(extra_teams.ensure_team_assets(root, ros, log=self._log))
+        except Exception as e:
+            messagebox.showerror("Expansion assets", f"Failed:\n{e}"); return
+        self._iff_load_catalog()
+        messagebox.showinfo("Expansion assets",
+                            f"{who}\n\nDone — every asset is present, has a logo tile, and is "
+                            f"independently editable. Restart the game to see the change.")
+
+    def _teams_update_affiliates(self):
+        """Bring the AHL block up to the modern affiliation map — see launcher/affiliates.py.
+
+        Also builds an affiliate for any league team that hasn't got one of its own (an
+        expansion team cloned from a donor inherits the DONOR's farm club), and gives a
+        cloned team its own lowercase nickname instead of the donor's.
+        """
+        path = self._v_roster.get().strip()
+        if not path or not Path(path).is_file():
+            messagebox.showerror("AHL affiliates", "Set a valid Roster.ROS path first (Browse…).")
+            return
+        try:
+            from launcher import affiliates as AF
+            rows = AF.plan(path)
+        except Exception as e:
+            messagebox.showerror("AHL affiliates", f"Scan failed:\n{e}"); return
+        creates = [r for r in rows if r[7] == "create"]
+        renames = [r for r in rows if r[7] == "rename" and (r[3] != r[4] or r[5] != r[6])]
+        lower = AF.shared_nicknames(path)
+        if not creates and not renames and not lower:
+            messagebox.showinfo("AHL affiliates", "Every affiliate is already up to date.")
+            return
+        parts = []
+        if renames:
+            parts.append(f"{len(renames)} affiliate(s) renamed, e.g.\n  " +
+                         "\n  ".join(f"{r[1]}: {r[3]} → {r[4]}" for r in renames[:6]) +
+                         ("\n  …" if len(renames) > 6 else ""))
+        if creates:
+            parts.append(f"{len(creates)} new affiliate(s) built out of a spare team record, "
+                         f"stocked from the free-agent pool:\n  " +
+                         "\n  ".join(f"{r[1]}: {r[4]}" for r in creates))
+        if lower:
+            parts.append("These teams share another team's stored nickname (a clone inherits the "
+                         "donor's) and will get their own:\n  " +
+                         "\n  ".join(f"{k} → \"{v}\"" for k, v in sorted(lower.items())))
+        parts.append("\nA .ahlbak backup is made. Run with the game closed. Continue?")
+        if not messagebox.askyesno("Update AHL affiliates", "\n\n".join(parts)):
+            return
+        try:
+            AF.update_ahl(path, lower=lower or None, log=self._log)
+        except Exception as e:
+            messagebox.showerror("AHL affiliates", f"Failed:\n{e}"); return
+        self._teams_load()
+        messagebox.showinfo("AHL affiliates",
+                            "Done — affiliations updated. Restart the game to see the change.")
+
+    _HIST_COLS = [("code", "Team", 56), ("founded", "Founded", 62), ("winning", "Win sea.", 62),
+                  ("playoffs", "Playoffs", 62), ("division", "Div titles", 68),
+                  ("cups", "Cups", 46), ("best", "Best season", 96), ("bestrec", "Record", 82),
+                  ("run", "Best playoff run", 110), ("result", "Result", 100),
+                  ("runrec", "Record", 82)]
+
+    def _teams_history(self):
+        """The franchise record book each team carries at team-record +0x160.
+
+        Founded / winning seasons / playoff appearances / division titles / Stanley Cups, plus
+        two seasons: the best regular season (stored by winning percentage) and the furthest
+        playoff run with how far it went.  This is the only "records" data in Roster.ROS —
+        there is no current- or last-season standings field (see launcher/team_history.py).
+        """
+        path = self._v_roster.get().strip()
+        if not path or not Path(path).is_file():
+            messagebox.showerror("Team history", "Set a valid Roster.ROS path first (Browse…).")
+            return
+        try:
+            from launcher import team_history as TH
+        except Exception as e:
+            messagebox.showerror("Team history", f"team_history module unavailable:\n{e}"); return
+
+        win = Toplevel(self); win.title("Team history / record book"); win.geometry("880x560")
+        ttk.Label(win, foreground="#999", font=("Segoe UI", 8), justify=LEFT,
+                  text="Double-click any cell to edit. Years are the season's START year (2022 = "
+                       "2022-23). Result is how far that season went: won the Cup / lost the Final "
+                       "/ conf. final / round 2 / round 1.\n"
+                       "\"Update through 2026\" fills in every Stanley Cup and deeper playoff run "
+                       "since the game shipped, and gives Seattle and Vegas their own history "
+                       "(both still read as a 1993 expansion team with Anaheim's 2007 Cup).\n"
+                       "Saving writes straight to the Roster.ROS — a .histbak backup is made. Run "
+                       "with the game closed.").pack(fill=X, padx=8, pady=(6, 2))
+
+        tv = ttk.Treeview(win, columns=[c for c, _, _ in self._HIST_COLS], show="headings")
+        for c, label, w in self._HIST_COLS:
+            tv.heading(c, text=label); tv.column(c, width=w, anchor=W)
+        sb = ttk.Scrollbar(win, command=tv.yview); tv.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y)
+        tv.pack(fill=BOTH, expand=True, padx=8, pady=4)
+
+        rows = {}                       # iid -> the working history dict
+
+        def refresh():
+            tv.delete(*tv.get_children())
+            for r in sorted(rows.values(), key=lambda x: x["code"]):
+                tv.insert("", END, iid=r["code"], values=(
+                    r["code"], r["founded"], r["winning"], r["playoffs"], r["division"], r["cups"],
+                    TH._season(r["best_year"]), f"{r['best_w']}-{r['best_l']}-{r['best_t']}",
+                    TH._season(r["deep_year"]), TH.ROUNDS.get(r["deep_round"], r["deep_round"]),
+                    f"{r['deep_w']}-{r['deep_l']}-{r['deep_t']}"))
+
+        def load():
+            rows.clear()
+            for r in TH.read(path):
+                rows[r["code"]] = r
+            refresh()
+
+        # column -> the history key(s) it edits
+        cell_map = {"founded": ("founded",), "winning": ("winning",), "playoffs": ("playoffs",),
+                    "division": ("division",), "cups": ("cups",), "best": ("best_year",),
+                    "bestrec": ("best_w", "best_l", "best_t"), "run": ("deep_year",),
+                    "result": ("deep_round",), "runrec": ("deep_w", "deep_l", "deep_t")}
+
+        def edit(ev):
+            iid = tv.identify_row(ev.y); col = tv.identify_column(ev.x)
+            if not iid or not col:
+                return
+            key = self._HIST_COLS[int(col[1:]) - 1][0]
+            fields = cell_map.get(key)
+            if not fields:
+                return
+            r = rows[iid]
+            if len(fields) == 3:                       # a W-L-T triple
+                cur = "-".join(str(r[f]) for f in fields)
+                val = simpledialog.askstring("Edit record", f"{iid} — W-L-T/OTL:",
+                                             initialvalue=cur, parent=win)
+                if not val:
+                    return
+                try:
+                    parts = [int(x) for x in val.replace(" ", "").split("-")]
+                    if len(parts) != 3 or any(not 0 <= p <= 255 for p in parts):
+                        raise ValueError
+                except ValueError:
+                    messagebox.showerror("Edit record", "Enter three numbers, e.g. 51-22-9",
+                                         parent=win); return
+                for f, p in zip(fields, parts):
+                    r[f] = p
+            elif key == "result":
+                val = simpledialog.askstring(
+                    "Edit result", f"{iid} — how far that season went:\n"
+                    "  5 won the Cup · 4 lost the Final · 3 conf. final · 2 round 2 · "
+                    "1 round 1 · 0 missed", initialvalue=str(r["deep_round"]), parent=win)
+                if val is None:
+                    return
+                if not val.strip().isdigit() or not 0 <= int(val) <= 5:
+                    messagebox.showerror("Edit result", "Enter 0..5", parent=win); return
+                r["deep_round"] = int(val)
+            else:
+                f = fields[0]
+                limit = 0xFFF if f.endswith("year") or f == "founded" else 0xFF
+                val = simpledialog.askstring("Edit", f"{iid} — {key}:",
+                                             initialvalue=str(r[f]), parent=win)
+                if val is None:
+                    return
+                if not val.strip().isdigit() or not 0 <= int(val) <= limit:
+                    messagebox.showerror("Edit", f"Enter a number 0..{limit}", parent=win); return
+                r[f] = int(val)
+            refresh(); tv.selection_set(iid); tv.see(iid)
+
+        tv.bind("<Double-1>", edit)
+
+        def modernize():
+            todo = TH.plan(path)
+            if not todo:
+                messagebox.showinfo("Team history", "Already up to date through 2026.", parent=win)
+                return
+            for code, field, _old, new in todo:
+                if code in rows:
+                    rows[code][field] = new
+            refresh()
+            messagebox.showinfo("Team history",
+                                f"{len({c for c, *_ in todo})} team(s) updated in the grid — "
+                                "review, then Save to write them.", parent=win)
+
+        def save():
+            updates = {r["code"]: {k: r[k] for k, _, _ in TH.FIELDS} for r in rows.values()}
+            try:
+                n = TH.apply(path, updates, log=self._log)
+            except Exception as e:
+                messagebox.showerror("Team history", f"Save failed:\n{e}", parent=win); return
+            load()
+            messagebox.showinfo("Team history",
+                                f"{n} team(s) written." if n else "Nothing to write.", parent=win)
+
+        bar = ttk.Frame(win); bar.pack(fill=X, padx=8, pady=6)
+        ttk.Button(bar, text="Update through 2026", command=modernize).pack(side=LEFT)
+        ttk.Button(bar, text="Reload", command=load).pack(side=LEFT, padx=4)
+        ttk.Button(bar, text="Save to Roster.ROS", command=save).pack(side=RIGHT)
+        load()
 
     def _teams_live_editor(self):
         """Open the live roster editor — edits the RUNNING game's player records with labeled fields."""
@@ -8215,7 +9743,8 @@ class App(tk.Tk):
             messagebox.showerror("ROS Editor", "Set a valid Roster.ROS path first (Browse…)."); return
         try:
             from launcher import ros_editor_gui
-            ros_editor_gui.open_editor(self, path)
+            # game root lets the announcer-name picker audition extracted takes
+            ros_editor_gui.open_editor(self, path, self._get_root())
         except Exception as e:
             messagebox.showerror("ROS Editor", f"Could not open the editor:\n{e}")
 
@@ -8259,18 +9788,71 @@ class App(tk.Tk):
             colors = tcol.load(p)
         except Exception as e:
             colors = {}; self._log(f"[teams] team colours unavailable: {e}")
+        try:
+            arenas = acol.load(p)
+        except Exception as e:
+            arenas = {}; self._log(f"[teams] arena records unavailable: {e}")
         tv = self._teams_tv; tv.delete(*tv.get_children())
         for tm in ed.teams:
             tc = colors.get(tm.code.upper(), {})
+            ar = arenas.get(tm.code.upper(), {})
             pri, sec = tc.get("primary"), tc.get("secondary")
             txt = lambda s: s.text if s else "—"          # "—" = not stored in the save at all
-            tv.insert("", END, values=(tm.code, txt(tm.city), txt(tm.state), txt(tm.team),
+            tv.insert("", END, values=(tm.code, txt(tm.city), txt(tm.state),
                                        txt(tm.nickname), txt(tm.arena),
                                        ("#%02X%02X%02X" % pri) if pri else "—",
-                                       ("#%02X%02X%02X" % sec) if sec else "—"))
+                                       ("#%02X%02X%02X" % sec) if sec else "—",
+                                       ar.get("dasher", "—"),
+                                       ar.get("capacity", "—")))
         self.cfg["roster_path"] = p; save_config(self.cfg)
         self._log(f"[teams] loaded {len(ed.teams)} teams from {Path(p).name}"
                   + (f" (+colours for {len(colors)})" if colors else " (no colour map)"))
+        # The path row is shared with the Players sub-tab; if it's already built, point it at the
+        # roster the user just loaded rather than leaving it on the previous one.
+        if getattr(self, "_players_frame", None):      # None = not built, False = failed to build
+            self._players_frame.open(p)
+
+    def _roster_sub_changed(self, _=None):
+        """Build the Players grid the first time that sub-tab is shown.
+
+        Lazily, because it parses the whole Roster.ROS and the launcher opens on a different tab —
+        a user who never touches Players should not pay for it at startup."""
+        try:
+            if self._roster_sub.index(self._roster_sub.select()) != 1:
+                return
+        except Exception:
+            return
+        if self._players_frame is not None:
+            return
+        p = self._v_roster.get().strip()
+        try:
+            from launcher.player_editor_gui import PlayerEditorFrame
+        except Exception as e:
+            ttk.Label(self._tab_players, foreground="#e06060",
+                      text=f"Players editor unavailable:\n{e}").pack(padx=12, pady=12)
+            self._players_frame = False
+            return
+        self._players_frame = PlayerEditorFrame(
+            self._tab_players, p if p and Path(p).is_file() else None,
+            game_root=self._get_game_root(), on_edit_head=self._player_edit_head)
+        self._players_frame.pack(fill=BOTH, expand=True)
+
+    def _player_edit_head(self, table, row, on_change=None):
+        """Open the head editor for one player — wired from the Players grid's 'Edit head…'.
+
+        The editor is handed the SAME PlayerTable the grid is showing, not a fresh parse, so the
+        head id and eye colour it writes land in the roster the grid will save; `on_change` is how
+        it tells the grid to re-read the row it just changed."""
+        if not self._get_game_root():
+            return messagebox.showwarning("Edit head", "Set the game files folder in Settings "
+                                                       "first — the head lives in the archives.")
+        try:
+            from launcher.face_editor_gui import HeadEditor
+        except Exception as e:
+            return messagebox.showerror(
+                "Edit head", f"Head editor unavailable:\n{e}\n\nIt needs mediapipe, opencv and "
+                             f"scipy for the photo fit.")
+        HeadEditor(self, table, row, self._get_game_root(), on_change)
 
     def _teams_edit_cell(self, event):
         tv = self._teams_tv
@@ -8282,6 +9864,8 @@ class App(tk.Tk):
         cname = self._ROSTER_COLS[int(col[1:]) - 1]
         if cname in self._ROSTER_COLOR_COLS:
             self._teams_pick_color(row, cname); return
+        if cname == "capacity":
+            self._teams_edit_capacity(row); return
         if cname not in self._ROSTER_EDITABLE:
             return
         if tv.set(row, cname) == "—":
@@ -8314,6 +9898,8 @@ class App(tk.Tk):
         hx = colorpick.ask_color(self, init, f"{code} — {cname} colour")
         if not hx:
             return
+        if cname == "dasher":
+            self._teams_set_arena(row, dasher=hx); return
         rgb3 = colorpick.to_rgb(hx)
         path = self._v_roster.get().strip()
         if not path or not Path(path).is_file():
@@ -8329,6 +9915,439 @@ class App(tk.Tk):
         tv.set(row, cname, hx.upper())
         self._log(f"[teams] {code} {cname} → {hx.upper()} (record {rec}). Restart the game to see it.")
         self._prompt_restart_if_running()
+
+    # ── the arena record: dasher boards + seating capacity ────────────────────
+    # Both belong to the BUILDING, not the club, so a change follows the arena a team points at
+    # rather than the team itself. Written straight through (a .arenabak is taken once) instead of
+    # waiting for "Save to Roster.ROS", which only ever handled the name strings.
+
+    def _teams_set_arena(self, row, **kw):
+        tv = self._teams_tv
+        code = tv.set(row, "code")
+        path = self._v_roster.get().strip()
+        if not path or not Path(path).is_file():
+            messagebox.showerror("Arena", "Set a valid Roster.ROS path first (Browse…)."); return
+        try:
+            ar = acol.set_arena(path, code, log=self._log, **kw)
+        except KeyError:
+            messagebox.showerror("Arena",
+                f"'{code}' has no arena record in this roster."); return
+        except Exception as e:
+            messagebox.showerror("Arena", f"Could not write the arena record:\n{e}"); return
+        if "dasher" in kw:
+            tv.set(row, "dasher", str(kw["dasher"]).upper())
+        if "capacity" in kw:
+            tv.set(row, "capacity", kw["capacity"])
+        shared = [tv.set(r, "code") for r in tv.get_children()
+                  if r != row and tv.set(r, "arena") == tv.set(row, "arena")]
+        self._log(f"[teams] {code} arena record {ar} updated"
+                  + (f" — shared with {', '.join(shared)}" if shared else "")
+                  + ". Restart the game to see it.")
+        self._prompt_restart_if_running()
+
+    def _teams_edit_capacity(self, row):
+        tv = self._teams_tv
+        cur = tv.set(row, "capacity")
+        v = simpledialog.askinteger("Seating capacity",
+                                    f"{tv.set(row, 'code')} — {tv.set(row, 'arena')}\n\n"
+                                    "Seats (0-65535; the field is a u16, and Wrigley Field's 41118 "
+                                    "is the largest the game ships):",
+                                    parent=self, minvalue=0, maxvalue=65535,
+                                    initialvalue=int(cur) if str(cur).isdigit() else 18000)
+        if v is None:
+            return
+        self._teams_set_arena(row, capacity=v)
+
+    # ── Uniforms ──────────────────────────────────────────────────────────────
+    # The jersey list for one team, out of the uniform table (`uniform_colors`). Everything a
+    # uniform record holds is here: its carousel name, the two .iff keys the game composes filenames
+    # from, and the 60-entry palette that paints the kit and the equipment.
+    #
+    # Editing works on a RosFile held in memory: Cancel simply drops it, so a half-finished jersey
+    # never reaches the save. Only OK calls `save()`, and every write is size-invariant.
+
+    def _teams_uniforms(self):
+        sel = self._teams_tv.selection()
+        if not sel:
+            messagebox.showinfo("Uniforms", "Select a team in the list first."); return
+        p = self._v_roster.get().strip()
+        if not p or not Path(p).is_file():
+            messagebox.showerror("Uniforms", "Set a valid Roster.ROS path first (Browse…)."); return
+        self._uni_code = self._teams_tv.set(sel[0], "code")
+        self._uni_path = p
+        win = Toplevel(self)
+        win.title(f"{self._uni_code} — Uniforms")
+        win.transient(self); win.geometry("880x420")
+        self._uni_win = win
+
+        ttk.Label(win, padding=(8, 6, 8, 2), justify=LEFT, foreground="#999",
+                  font=("Segoe UI", 8),
+                  text="A team's jerseys, in the order the game enumerates them — which is also the "
+                       "order the team-select carousel shows.  \"Home\"/\"Away\" are the two the "
+                       "record picks by position, so an added jersey always goes on the END.\n"
+                       "Base / Asset are the keys the filenames are built from: "
+                       "uniform_base_<Base>_<slot>.iff is the shape and normals, uniform_<Asset>_<slot>.iff "
+                       "the stamps, and uniform_frontend_<Asset>_<slot>.iff is the carousel's own art — "
+                       "miss that last one and the jersey is listed but draws nothing."
+                  ).pack(fill=X)
+
+        cols = ("row", "slot", "name", "front", "base", "asset", "assets")
+        tv = ttk.Treeview(win, columns=cols, show="headings", height=12)
+        for c, w, h in (("row", 52, "Row"), ("slot", 90, "Slot"), ("name", 170, "Name"),
+                        ("front", 70, "Chest #"),
+                        ("base", 110, "Base key"), ("asset", 110, "Asset key"),
+                        ("assets", 300, "Game assets")):
+            tv.heading(c, text=h); tv.column(c, width=w, anchor=W)
+        tv.pack(fill=BOTH, expand=True, padx=8, pady=4)
+        tv.bind("<Double-1>", lambda _e: self._uni_edit())
+        self._uni_tv = tv
+
+        bar = ttk.Frame(win, padding=(8, 2, 8, 8)); bar.pack(fill=X)
+        ttk.Button(bar, text="Add Uniform…", style="Accent.TButton",
+                   command=self._uni_add).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Edit…", command=self._uni_edit).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Remove", command=self._uni_remove).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Create missing .iff assets…",
+                   command=self._uni_make_assets).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Close", command=win.destroy).pack(side=RIGHT, padx=2)
+        self._uni_refresh()
+
+    def _uni_rows(self):
+        """(RosFile, team dict, [row index]) for the manager's team — reloaded from disk each time."""
+        from launcher import ros_file as RF
+        ros = RF.RosFile(self._uni_path)
+        team = next((t for t in ucol.team_index(ros) if t["code"] == self._uni_code.upper()), None)
+        if team is None:
+            raise KeyError(f"'{self._uni_code}' is not a league team in this roster")
+        return ros, team, ucol.rows_for_team(ros, team["team_id"])
+
+    def _uni_refresh(self):
+        try:
+            ros, team, rows = self._uni_rows()
+        except Exception as e:
+            messagebox.showerror("Uniforms", str(e)); return
+        home, away = ucol.selected_indices(ros, team["rec"])
+        root = self._get_game_root()
+        tv = self._uni_tv; tv.delete(*tv.get_children())
+        for pos, i in enumerate(rows):
+            r = ucol.read_row(ros, i)
+            if r["blank"]:                  # a released row still owned by nobody — not a jersey
+                continue
+            mark = " ← Home" if pos == home else (" ← Away" if pos == away else "")
+            if r["suffix"] == "mii":
+                # No team ships a `_mii` uniform asset — the Mii kit is drawn some other way — so
+                # listing the three names as "missing" would be noise on every team in the league.
+                assets = "—"
+            elif root:
+                miss = [n for n in ucol.required_assets(ros, i) if not archtex.resolve(n, root)]
+                assets = "all present" if not miss else f"MISSING: {', '.join(miss)}"
+            else:
+                assets = "(set the game folder in Settings to check)"
+            tv.insert("", END, iid=str(i),
+                      values=(i, r["slot_name"] + mark, r["label"],
+                              ucol.front_number(ros, i), r["base_key"], r["asset_key"], assets))
+        self._log(f"[uniforms] {self._uni_code}: {len(rows)} jersey(s), "
+                  f"{len(ucol.spare_rows(ros))} spare row(s) left in the table")
+
+    def _uni_selected(self):
+        sel = self._uni_tv.selection()
+        return int(sel[0]) if sel else None
+
+    def _uni_add(self):
+        try:
+            ros, team, rows = self._uni_rows()
+        except Exception as e:
+            messagebox.showerror("Uniforms", str(e)); return
+        try:
+            row = ucol.add_uniform(ros, team["team_id"], "Alternate", uniform_slot=2,
+                                   log=self._log)
+        except ucol.UniformError as e:
+            messagebox.showerror("Add Uniform", str(e)); return
+        except Exception as e:
+            messagebox.showerror("Add Uniform", f"Could not claim a row:\n{e}"); return
+        if not self._uni_dialog(ros, row, f"{self._uni_code} — Add Uniform", "Add"):
+            self._log("[uniforms] cancelled — nothing written")
+            return                      # the RosFile is dropped unsaved; the roster never changed
+        try:
+            ros.save()
+        except Exception as e:
+            messagebox.showerror("Add Uniform", f"Write failed:\n{e}"); return
+        r = ucol.read_row(ros, row)
+        self._log(f"[uniforms] {self._uni_code}: added \"{r['label']}\" as row {row}")
+        self._uni_refresh()
+        self._uni_offer_assets(row)
+
+    def _uni_edit(self):
+        row = self._uni_selected()
+        if row is None:
+            messagebox.showinfo("Uniforms", "Select a jersey first."); return
+        try:
+            ros, _team, _rows = self._uni_rows()
+        except Exception as e:
+            messagebox.showerror("Uniforms", str(e)); return
+        if not self._uni_dialog(ros, row, f"{self._uni_code} — Edit Uniform", "Save"):
+            return
+        try:
+            ros.save()
+        except Exception as e:
+            messagebox.showerror("Uniforms", f"Write failed:\n{e}"); return
+        self._log(f"[uniforms] {self._uni_code}: row {row} saved")
+        self._uni_refresh()
+        self._prompt_restart_if_running()
+
+    def _uni_remove(self):
+        """Hand a row back to the spare pool — only ever the team's LAST one.
+
+        Removing anything earlier would renumber the list the team record's home/away picks index
+        into, so the two jerseys the team actually wears would silently change.
+        """
+        row = self._uni_selected()
+        if row is None:
+            messagebox.showinfo("Uniforms", "Select a jersey first."); return
+        try:
+            ros, team, rows = self._uni_rows()
+        except Exception as e:
+            messagebox.showerror("Uniforms", str(e)); return
+        if row != rows[-1]:
+            messagebox.showerror("Remove Uniform",
+                "Only the LAST jersey in the list can be removed. The team record points at its "
+                "Home and Away kits by POSITION in this list, so taking one out of the middle would "
+                "shift every jersey after it onto the wrong slot."); return
+        pos = len(rows) - 1
+        if pos in ucol.selected_indices(ros, team["rec"]):
+            messagebox.showerror("Remove Uniform",
+                "This is the jersey the team wears as its Home or Away kit — removing it would "
+                "leave the team record pointing past the end of its own list."); return
+        r = ucol.read_row(ros, row)
+        if not messagebox.askyesno("Remove Uniform",
+                f"Remove \"{r['label']}\" ({r['slot_name']}, row {row}) from {self._uni_code}?\n\n"
+                "The row goes back to the spare pool. The .iff assets it used are left in the "
+                "archives — nothing is deleted from the game files."):
+            return
+        ucol.release_uniform(ros, row, log=self._log)
+        try:
+            ros.save()
+        except Exception as e:
+            messagebox.showerror("Remove Uniform", f"Write failed:\n{e}"); return
+        self._uni_refresh()
+        self._prompt_restart_if_running()
+
+    def _uni_offer_assets(self, row):
+        """After adding a jersey, offer to create the three .iff files it now asks for."""
+        root = self._get_game_root()
+        if not root:
+            messagebox.showinfo("Add Uniform",
+                "Jersey added to the roster.\n\nSet the game files folder in Settings and use "
+                "\"Create missing .iff assets…\" so the game has art to draw for it — without those "
+                "files the jersey is listed but renders nothing."); return
+        try:
+            ros, _t, _r = self._uni_rows()
+            miss = [n for n in ucol.required_assets(ros, row) if not archtex.resolve(n, root)]
+        except Exception:
+            miss = []
+        if not miss:
+            return
+        if messagebox.askyesno("Add Uniform",
+                "Jersey added.\n\nThe game has no art for it yet:\n  " + "\n  ".join(miss) +
+                "\n\nCreate them now by cloning this team's Home kit? Each one gets its own copy of "
+                "the bytes, so repainting the new jersey can never touch the Home kit."):
+            self._uni_make_assets(row)
+
+    def _uni_make_assets(self, row=None):
+        if row is None:
+            row = self._uni_selected()
+        if row is None:
+            messagebox.showinfo("Uniforms", "Select a jersey first."); return
+        root = self._get_game_root()
+        if not root:
+            messagebox.showerror("Uniforms", "Set the game files folder in Settings first."); return
+        try:
+            from launcher import extra_teams
+            ros, _t, rows = self._uni_rows()
+        except Exception as e:
+            messagebox.showerror("Uniforms", str(e)); return
+        r = ucol.read_row(ros, row)
+        donor = next((i for i in rows if ucol.slot(ros, i) == 0 and i != row), None)
+        if donor is None:
+            messagebox.showerror("Uniforms",
+                "This team has no Home kit to clone the art from."); return
+        d = ucol.read_row(ros, donor)
+        if self._xenia_game_pids() and not messagebox.askyesno(
+                "Uniforms",
+                "NHL 2K10 is running in Xenia. This splices new entries into the archive TOC and "
+                "appends to 1B, which the game has open.\n\nClose it first — continue anyway?"):
+            return
+        try:
+            msg = extra_teams.ensure_uniform_slot(
+                root, r["asset_key"], r["base_key"], r["suffix"],
+                donor_asset_key=d["asset_key"], donor_base_key=d["base_key"],
+                donor_slot=d["suffix"], log=self._log)
+        except Exception as e:
+            messagebox.showerror("Uniforms", f"Could not create the assets:\n{e}"); return
+        self._log(f"[uniforms] {msg}")
+        messagebox.showinfo("Uniforms", msg + "\n\nRepaint them from the IFF / Uniforms tabs.")
+        self._uni_refresh()
+
+    # ── the per-uniform editor ────────────────────────────────────────────────
+
+    _UNI_GROUPS = (("accent", "Accents", "Three extra ARGB slots, stored apart from the other 57. "
+                                         "The glove zone map continues into them, so they are "
+                                         "named for the cuff — that reading is extrapolated from "
+                                         "the team block, not measured. 48 of the table's rows "
+                                         "leave them at zero — an unset one shows as “unset”."),
+                   ("team", "Team colours", "Shared by every one of this team's jerseys — the same "
+                                            "44 values sit on its Home and Away rows. The gloves "
+                                            "are here, which is why a club wears one pair with "
+                                            "every kit."),
+                   ("uniform", "This jersey", "Only this kit: the helmet shell, then the name, "
+                                              "number, sleeve number and helmet number, each as "
+                                              "outline / mid / fill. Front and back numbers share "
+                                              "one set. The jersey body, pants and socks are NOT "
+                                              "here — those are texture. #FF00FF means “unused, "
+                                              "fall back to the default”."))
+
+    def _uni_dialog(self, ros, row, title, ok_text) -> bool:
+        """Modal editor for one uniform record. Mutates `ros` in memory; True if OK was pressed.
+
+        Nothing is saved here — the caller decides. On Cancel every change goes away with the
+        RosFile, including a row `add_uniform` had already claimed.
+        """
+        from launcher import colorpick
+        before = bytes(ros.record(ucol.chunk(ros), row))
+        win = Toplevel(self); win.title(title); win.transient(self); win.grab_set()
+        win.geometry("900x640")
+        result = {"ok": False}
+
+        top = ttk.Frame(win, padding=8); top.pack(fill=X)
+        cat = sorted(ucol.label_catalog(ros))
+        v_name = StringVar(value=ucol.label(ros, row))
+        v_slot = StringVar(value=ucol.slot_name(ucol.slot(ros, row)))
+        v_base = StringVar(value=ucol.base_key(ros, row))
+        v_asset = StringVar(value=ucol.asset_key(ros, row))
+
+        ttk.Label(top, text="Name").grid(row=0, column=0, sticky=W, pady=2)
+        ttk.Combobox(top, textvariable=v_name, values=cat, width=30).grid(
+            row=0, column=1, sticky=W, padx=6)
+        ttk.Label(top, text="Slot").grid(row=0, column=2, sticky=W, padx=(16, 0))
+        ttk.Combobox(top, textvariable=v_slot, width=12, state="readonly",
+                     values=[ucol.SLOT_NAMES[k] for k in sorted(ucol.SLOT_NAMES)]).grid(
+            row=0, column=3, sticky=W, padx=6)
+        ttk.Label(top, text="Base key").grid(row=1, column=0, sticky=W, pady=2)
+        ttk.Entry(top, textvariable=v_base, width=30).grid(row=1, column=1, sticky=W, padx=6)
+        ttk.Label(top, text="Asset key").grid(row=1, column=2, sticky=W, padx=(16, 0))
+        ttk.Entry(top, textvariable=v_asset, width=16).grid(row=1, column=3, sticky=W, padx=6)
+
+        # Chest number. Nothing in the ART decides this — the stamps sheet carries one digit set
+        # either way — so it is a flag on this record, and flipping it is the whole job. See
+        # uniform_colors.FRONTNUM_*; shipped examples are San Jose (small) and Dallas home (big).
+        v_front = StringVar(value=_FRONTNUM_LABEL[ucol.front_number(ros, row)])
+        ttk.Label(top, text="Chest number").grid(row=2, column=0, sticky=W, pady=2)
+        ttk.Combobox(top, textvariable=v_front, width=30, state="readonly",
+                     values=list(_FRONTNUM_LABEL.values())).grid(row=2, column=1, sticky=W, padx=6)
+        v_classic = BooleanVar(value=ucol.is_classic(ros, row))
+        ttk.Checkbutton(top, text="Throwback kit", variable=v_classic).grid(
+            row=2, column=2, columnspan=2, sticky=W, padx=(16, 0))
+
+        files = ttk.Label(top, foreground="#999", font=("Consolas", 8), justify=LEFT)
+        files.grid(row=3, column=0, columnspan=4, sticky=W, pady=(6, 0))
+
+        def refresh_files(*_a):
+            s = ucol.SLOT_SUFFIX.get(
+                next((k for k, v in ucol.SLOT_NAMES.items() if v == v_slot.get()), 2), "mii")
+            files.config(text=f"uniform_{v_asset.get()}_{s}.iff   "
+                              f"uniform_base_{v_base.get()}_{s}.iff   "
+                              f"uniform_frontend_{v_asset.get()}_{s}.iff")
+        for var in (v_slot, v_base, v_asset):
+            var.trace_add("write", refresh_files)
+        refresh_files()
+
+        hint = ttk.Label(win, padding=(8, 0), foreground="#999", font=("Segoe UI", 8), justify=LEFT,
+                         text="A name the game already ships brings its own localisation id; a new "
+                              "one keeps this row's id and just changes the text (the id isn't "
+                              "derivable from the string). Click a swatch to change that colour.")
+        hint.pack(fill=X)
+
+        # scrollable palette
+        wrap = ttk.Frame(win); wrap.pack(fill=BOTH, expand=True, padx=8, pady=4)
+        cv = Canvas(wrap, highlightthickness=0)
+        sb = ttk.Scrollbar(wrap, orient=VERTICAL, command=cv.yview)
+        inner = ttk.Frame(cv)
+        inner.bind("<Configure>", lambda _e: cv.configure(scrollregion=cv.bbox("all")))
+        cv.create_window((0, 0), window=inner, anchor="nw")
+        cv.configure(yscrollcommand=sb.set)
+        cv.pack(side=LEFT, fill=BOTH, expand=True); sb.pack(side=RIGHT, fill=Y)
+        cv.bind_all("<MouseWheel>", lambda e: cv.yview_scroll(int(-e.delta / 120), "units"))
+
+        buttons = {}
+
+        def swatch_text(i):
+            if ucol.is_unset(ros, row, i):
+                return "unset"
+            c = ucol.get_colors(ros, row)[i]
+            return "unused" if ucol.is_sentinel(c) else c[1:]
+
+        def paint(i):
+            b = buttons[i]
+            c = ucol.get_colors(ros, row)[i]
+            bg = "#f0f0f0" if ucol.is_unset(ros, row, i) else c
+            r_, g_, b_ = colorpick.to_rgb(bg)
+            b.config(bg=bg, activebackground=bg,
+                     fg="#000" if (r_ * 299 + g_ * 587 + b_ * 114) / 1000 > 140 else "#FFF",
+                     text=f"{ucol.color_label(i)}\n{swatch_text(i)}")
+
+        def pick(i):
+            cur = ucol.get_colors(ros, row)[i]
+            hx = colorpick.ask_color(win, cur, f"{ucol.color_label(i)}")
+            if not hx:
+                return
+            ucol.set_color(ros, row, i, hx)
+            paint(i)
+
+        for key, heading, blurb in self._UNI_GROUPS:
+            idx = [i for i in range(ucol.NSLOTS) if ucol.group_of(i) == key]
+            lf = ttk.LabelFrame(inner, text=f"{heading}  ({len(idx)})", padding=6)
+            lf.pack(fill=X, expand=True, pady=4)
+            ttk.Label(lf, text=blurb, foreground="#999", font=("Segoe UI", 8),
+                      wraplength=820, justify=LEFT).grid(row=0, column=0, columnspan=11,
+                                                         sticky=W, pady=(0, 4))
+            for n, i in enumerate(idx):
+                b = Button(lf, width=10, height=2, relief="ridge", font=("Consolas", 7),
+                           command=lambda i=i: pick(i))
+                b.grid(row=1 + n // 11, column=n % 11, padx=1, pady=1)
+                buttons[i] = b
+                paint(i)
+
+        bar = ttk.Frame(win, padding=8); bar.pack(fill=X)
+
+        def commit():
+            name = v_name.get().strip()
+            if not name:
+                messagebox.showerror(title, "A jersey needs a name.", parent=win); return
+            s = next((k for k, v in ucol.SLOT_NAMES.items() if v == v_slot.get()), None)
+            if s is None:
+                messagebox.showerror(title, "Pick a slot.", parent=win); return
+            try:
+                ucol.set_slot(ros, row, s)
+                ucol.set_front_number(ros, row, _FRONTNUM_MODE[v_front.get()])
+                ucol.set_classic(ros, row, bool(v_classic.get()))
+                ucol.set_base_key(ros, row, v_base.get())
+                ucol.set_asset_key(ros, row, v_asset.get())
+                ucol.set_label(ros, row, name)
+            except ucol.UniformError as e:
+                messagebox.showerror(title, str(e), parent=win); return
+            result["ok"] = True
+            win.destroy()
+
+        def cancel():
+            ros.set_bytes(ucol.chunk(ros), row, 0, before)   # undo the palette edits too
+            win.destroy()
+
+        ttk.Button(bar, text=ok_text, style="Accent.TButton", command=commit).pack(side=RIGHT, padx=2)
+        ttk.Button(bar, text="Cancel", command=cancel).pack(side=RIGHT, padx=2)
+        win.protocol("WM_DELETE_WINDOW", cancel)
+        win.wait_window()
+        cv.unbind_all("<MouseWheel>")
+        return result["ok"]
 
     def _teams_save(self):
         p = self._v_roster.get().strip()
@@ -8346,7 +10365,7 @@ class App(tk.Tk):
             tm = by.get(self._teams_tv.set(row, "code"))
             if not tm:
                 continue
-            for field in ("city", "state", "team", "arena"):
+            for field in ("city", "state", "arena"):
                 slot = getattr(tm, self._ROSTER_SLOT[field])
                 nv = self._teams_tv.set(row, field).strip()
                 if slot and nv and nv != "—" and nv != slot.text:

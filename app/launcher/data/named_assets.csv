@@ -1446,3 +1446,14 @@ crc32,name,archive,local_off,size,exposed,newly
 0xFFEC8A41,player_head_id_8559.iff,0B,0x3681D800,875470,True,False
 0xFFF872D5,zamboni_team_det.iff,0A,0x3787F800,213588,True,False
 0xFFFA6C3F,catcher_g03.iff,0B,0x1B0CB000,639165,True,False
+0x9136299C,arena_mini.iff,0A,0xCC5C000,5884788,False,True
+0xF3ADC5C7,arena_sea.iff,1B,0x617EE000,6282554,False,True
+0xA6ED53CA,arena_vgk.iff,1B,0x57009800,6282554,False,True
+0xDBB9875C,arena_wpg.iff,0A,0x5E36000,6709691,False,True
+0xEE3F3E29,led_sea.iff,1B,0x616FC800,212060,False,True
+0xBB7FA824,led_vgk.iff,1B,0x5DB86800,212060,False,True
+0xC62B7CB2,led_wpg.iff,0A,0x4AA0800,245805,False,True
+0x8167DD16,rink_mini.iff,0A,0x2510B000,9982183,False,True
+0x7823155D,rink_sea.iff,1B,0x53DC7800,13861244,False,True
+0x2D638350,rink_vgk.iff,1B,0x4ED7B000,13861244,False,True
+0x503757C6,rink_wpg.iff,0A,0x15F48800,13865891,False,True

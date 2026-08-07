@@ -85,8 +85,28 @@ LIVE_CATALOG = _PROJ / "live_capture" / "live_offsets.json"
 # local catalog by _live_catalog(); offsets are install-independent so this "just works" for anyone.
 LIVE_CATALOG_BUNDLED = R.data_path("live_offsets.json")
 MAGIC = bytes([0x0e, 0x48, 0x37, 0xc3])
-ARCS = ("0A", "0B", "1A", "1B")
+ARCS = ("0A", "0B", "1A", "1B")            # the shipped four; the header is authoritative
 _BE = lambda b, o: struct.unpack_from(">I", b, o)[0]
+
+
+def arc_table(d0a):
+    """The 0A header's archive table -> [(name, size_bytes), ...] in concat order.
+
+    Count is at 0x08 and each 16-byte row is [sectors u32][0][name UTF-16BE, NUL-terminated, 8 B],
+    so the file names are DATA, not a hardcoded list — which is what makes a 5th archive possible.
+    The entry table starts right after this table, at `entry_base()`."""
+    n = _BE(d0a, 0x08)
+    align = _BE(d0a, 0x04)
+    out = []
+    for i in range(n):
+        o = 0x18 + i * 16
+        nm = d0a[o + 8:o + 16].decode("utf-16-be").split("\0")[0]
+        out.append((nm, _BE(d0a, o) * align))
+    return out
+
+
+def entry_base(d0a):
+    return 0x18 + _BE(d0a, 0x08) * 16
 
 # Scene/front-end assets whose textures live at a FIXED offset inside a multi-texture
 # VRAM blob (no standard fetch constant — located via a title-screen GPU trace + byte
@@ -156,6 +176,23 @@ def _premult_pil(img):
     a = np.frombuffer(img.convert("RGBA").tobytes(), np.uint8).reshape(img.height, img.width, 4).astype(np.float32)
     a[..., :3] *= a[..., 3:4] / 255.0
     return Image.fromarray(a.astype(np.uint8), "RGBA")
+
+
+def _box_lvl(img, size):
+    """BOX-downscale a mip level with RGB and alpha filtered INDEPENDENTLY.
+
+    PIL's RGBA resize weights the colour channels by alpha (an implicit premultiply), which drags
+    transparent texels' RGB toward black. Measured against the shipped 4444 uniform mips: resizing
+    as RGBA scores MSE 13,635 vs the real stored level, resizing RGB and alpha separately scores
+    43.7 (ANA/BOS rec0, ANA rec2 all agree). That alpha-weighting is also why regenerated mips came
+    out far more zero-filled than the originals. Callers that genuinely want premultiplied mips
+    premultiply the SOURCE first (_premult_pil) — going through PIL's RGBA path as well would
+    premultiply twice."""
+    r = img.convert("RGB").resize(size, Image.BOX)
+    a = img.convert("RGBA").getchannel("A").resize(size, Image.BOX)
+    out = r.convert("RGBA")
+    out.putalpha(a)
+    return out
 
 
 def _posterize(img, levels):
@@ -321,6 +358,11 @@ def _find_edit_in_dir(folder_dir, name, rec=None):
                 return g[0]
     if rec is not None and rec.get("index") == 0 and rec.get("label"):  # decal sheet = old primary
         stem = name[:-4] if name.lower().endswith(".iff") else name
+        hid = _player_head_id(name)                    # …and the flat Player_Heads/<id>.dds layout
+        for nm2 in ((hid + ".png", hid + ".dds") if hid else ()):
+            c = folder_dir / nm2
+            if c.exists():
+                return c
         for nm2 in (stem + ".png", stem + ".dds"):
             c = folder_dir / nm2
             if c.exists():
@@ -339,8 +381,11 @@ def edit_dirs(root, name):
     legacy per-iff folders under Extracted/ // Modified/ // Original/ (so old edits keep applying)."""
     tex = Path(root) / "Textures"
     seen, out = set(), []
+    # "Player_Heads" (flat, one file per head) was the layout before the 3-map split; keep it in the
+    # search so a colour-only edit dropped there still applies.
+    extra = ("Player_Heads",) if _player_head_id(name) else ()
     for b in ("Extracted", "Modified", "Original"):
-        for fol in (asset_iff(name), _legacy_asset_iff(name)):
+        for fol in (asset_iff(name), _legacy_asset_iff(name), *extra):
             d = tex / b / fol
             if d not in seen:
                 seen.add(d); out.append(d)
@@ -393,6 +438,21 @@ def _goalie_label(iff: str) -> str:
     return lbl
 
 
+# Catalog rows for teams that exist in Roster.ROS but not in the shipped 30-team CSV (expansion
+# teams — Seattle, Vegas). Derived from the roster at runtime by `extra_teams.catalog_rows` and
+# installed here by the app, because the CSV is frozen shipping data and load_catalog has no idea
+# where the user's roster lives. Empty on a stock install, so nothing changes for anyone else.
+EXTRA_TEAM_ROWS: list = []
+
+
+def set_extra_team_rows(rows):
+    """Install (or clear, with []) the expansion-team catalog rows. Safe to call repeatedly — the
+    list is replaced wholesale, so re-running discovery after a roster change can't duplicate rows."""
+    global EXTRA_TEAM_ROWS
+    EXTRA_TEAM_ROWS = list(rows or [])
+    return len(EXTRA_TEAM_ROWS)
+
+
 def load_catalog():
     """Return resolved catalog rows: [{team, category, iff, archive, offset, size, label}].
     A friendly `label` and curated `category` are added so UI/logo art (titlepage brand
@@ -406,6 +466,7 @@ def load_catalog():
         for r in csv.DictReader(open(DISCOVERED_CSV, encoding="utf-8")):
             if r.get("resolved") == "1" and r.get("iff"):
                 rows.append(r)                              # keeps its own `label` (see below)
+    rows.extend(EXTRA_TEAM_ROWS)                              # expansion teams (see set_extra_team_rows)
     for key, (iff, vo, w, h, fmt) in SCENE_ASSETS.items():    # front-end scene textures (separate rows)
         rows.append({"team": "frontend", "category": "titlepage", "iff": key,
                      "archive": "", "offset": "", "size": ""})
@@ -431,6 +492,14 @@ def load_catalog():
             r["category"] = "zamboni"                        # zamboni_<code> (untextured model) is hidden
         elif r.get("category") == "arena_presentation":      # arena_presentation_<code>.iff
             r["label"] = f"{(r.get('team') or '').upper()} arena presentation"
+        elif r.get("category") == "arena":                   # arena_<code>.iff — the BOWL
+            # Was catalogued as "arena_audio" and filtered out of the IFF tab entirely; it is
+            # actually the arena bowl: 86 textures (seats, signage, banners, lights) in blob 1
+            # plus the bowl geometry in blob 0. See doc 24 §6.
+            r["label"] = f"{(r.get('team') or '').upper()} arena (bowl, seats, signage)"
+        elif iff.startswith("uniform_frontend_"):             # the team-select jersey sheet
+            slot = iff.rsplit("_", 1)[-1][:-4]                # …_home.iff -> home
+            r["label"] = f"{(r.get('team') or '').upper()} front-end jersey — {slot.title()}"
         elif iff.startswith(("helmet_", "pad_", "blocker_", "catcher_")):
             r["label"] = _goalie_label(iff)                   # goalie masks + gear
         else:
@@ -444,7 +513,15 @@ def decode_preview(name: str, clean_dir: Path = None, clean: bool = True):
     the LIVE archives, so applied mods/repaints show (see decode_preview_current)."""
     if name in SCENE_ASSETS:
         return decode_preview_at(*SCENE_ASSETS[name][:5], clean_dir)
-    loc = resolve(name, clean_dir, clean=clean)
+    # Pristine reads go through resolve_clean so an expansion team's assets — whose TOC entries
+    # were spliced into the LIVE archives and so are absent from the `.orig` backups — preview at
+    # all instead of silently returning None. `clean` is REASSIGNED from the fallback: the flag
+    # decides which file is opened below, and reading a live offset out of a `.orig` yields
+    # garbage rather than an error. clean=False callers (decode_preview_current) are untouched.
+    if clean:
+        loc, clean = resolve_clean(name, clean_dir)
+    else:
+        loc = resolve(name, clean_dir, clean=False)
     if not loc:
         return None
     arc, off, size, idx, f3 = loc
@@ -504,11 +581,11 @@ def primary_fetch(name: str, clean_dir: Path = None):
     if name in SCENE_ASSETS:
         iff, vo, w, h, fmt = SCENE_ASSETS[name]
         return fmt, w, h
-    loc = resolve(name, clean_dir, clean=True)
+    loc, _cl = resolve_clean(name, clean_dir)
     if not loc:
         return None, None, None
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=_cl), "rb") as f:
         f.seek(off); data = f.read(size + 0x200000)
     vram, fetch = _find_primary(_walk_blobs(data, size))
     if not fetch:
@@ -525,16 +602,16 @@ def load_toc(arc_dir: Path, clean=False):
     # entry count is stored at 0x10 (NOT hardcoded 2407) so custom-added assets resolve
     d0a = open(f0a, "rb").read(0x9800)
     count = _BE(d0a, 0x10)
-    need = 0x58 + count * 16
+    ebase = entry_base(d0a)
+    need = ebase + count * 16
     if need > len(d0a):
         d0a = open(f0a, "rb").read(need)
     bounds = []; cum = 0
-    for i, arc in enumerate(ARCS):
-        sz = _BE(d0a, 0x18 + i * 16) * 0x800
+    for arc, sz in arc_table(d0a):                 # names + sizes come from the header, not ARCS
         bounds.append((cum, cum + sz, arc)); cum += sz
     toc = {}
     for i in range(count):
-        _fl, s, f2, f3 = struct.unpack_from(">4I", d0a, 0x58 + i * 16)
+        _fl, s, f2, f3 = struct.unpack_from(">4I", d0a, ebase + i * 16)
         toc[f2] = (i, s, f3)
     return toc, bounds
 
@@ -576,6 +653,26 @@ def resolve(name: str, arc_dir: Path, clean=False):
         if lo <= co < hi:
             return (arc, co - lo, sz, idx, f3)
     return None
+
+
+def resolve_clean(name: str, arc_dir: Path):
+    """`(loc, clean)` for a PRISTINE read — resolve against `<arc>.orig`, falling back to the LIVE
+    archive for assets the shipped game never had.
+
+    An expansion team's assets (Seattle, Vegas — see `extra_teams`) exist only because their TOC
+    entries were spliced into the live archives; the `.orig` backups predate them, so a plain
+    `resolve(..., clean=True)` returns None and every pristine reader — extract, preview, the
+    sub-texture list — fails with "not found in TOC". For an asset with no shipped version the
+    live bytes ARE its pristine bytes, so falling back is not a compromise, it's the definition.
+
+    The returned `clean` flag MUST be passed straight back to `_arc_file`: a location is only
+    meaningful against the archive it was resolved in, and reading a live offset out of a `.orig`
+    file would silently yield garbage rather than an error.
+    """
+    loc = resolve(name, arc_dir, clean=True)
+    if loc:
+        return loc, True
+    return resolve(name, arc_dir, clean=False), False
 
 
 # ── blob / fetch parsing ─────────────────────────────────────────────────────
@@ -660,12 +757,18 @@ def _find_primary(blobs):
 
 
 # ── multi-texture resource tree (count@0x20, texArray@0x24, 0xE0 records) ─────
-def _read_asset(name, clean_dir):
-    loc = resolve(name, clean_dir, clean=True)
+def _read_asset(name, clean_dir, live=False):
+    """Raw asset bytes. Pristine (`.orig`) by default; `live=True` reads the CURRENT archives so an
+    already-applied repaint reads back as what the game will load — the Jersey Editor needs that,
+    because loading a kit is supposed to show the kit as it is now, not as it shipped."""
+    if live:
+        loc, _cl = resolve(name, clean_dir, clean=False), False
+    else:
+        loc, _cl = resolve_clean(name, clean_dir)
     if not loc:
         return None, None, None
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=_cl), "rb") as f:
         f.seek(off); data = f.read(size + 0x400000)
     return loc, data, size
 
@@ -674,17 +777,26 @@ _TREE_CACHE = OrderedDict()              # (name, clean_dir) -> (vram, recs); ti
 _TREE_CACHE_MAX = 3
 
 
-def _load_tree(name, clean_dir):
+def _load_tree(name, clean_dir, live=False):
     """Cached _texture_tree(read_asset(name)) -> (vram, recs). Decompressing a big VRAM blob is
     slow (global.iff = 67 MB, ~16 s), so previewing/extracting an asset's many sub-textures must
-    NOT re-read+re-decompress per texture. CLEAN is read-only, so the cache never goes stale."""
-    key = (name, str(_dir(clean_dir)))
+    NOT re-read+re-decompress per texture. CLEAN is read-only, so the cache never goes stale — a
+    LIVE read can, so its key carries asset_stamp (archive mtime + offset + size) and an Apply
+    therefore misses the cache instead of serving pre-Apply pixels."""
+    key = (name, str(_dir(clean_dir)), asset_stamp(name, clean_dir) if live else None)
     hit = _TREE_CACHE.get(key)
     if hit is not None:
         _TREE_CACHE.move_to_end(key)
         return hit
-    loc, data, size = _read_asset(name, clean_dir)
+    loc, data, size = _read_asset(name, clean_dir, live)
     res = _texture_tree(data, size) if loc is not None else (None, [])
+    if live and res[0] is not None and not res[1]:
+        # An edited contiguous pack no longer fills its blob exactly (see _relink_contiguous_live).
+        clean_recs = _load_tree(name, clean_dir)[1]
+        if clean_recs and all("rec_off" in r for r in clean_recs):
+            blobs = [b["dec"] for b in _walk_blobs(data, size) if b["dec"]]
+            if blobs:
+                res = (res[0], _relink_contiguous_live(clean_recs, blobs[0], res[0]))
     _TREE_CACHE[key] = res
     while len(_TREE_CACHE) > _TREE_CACHE_MAX:
         _TREE_CACHE.popitem(last=False)
@@ -712,6 +824,14 @@ _MULTI_LAYOUTS = {
     # in the iff, but there is in the game" stitching: it was here all along, just never enumerated
     # (the pack showed as primary-only = the base color). Replaced IN-PLACE only (see replace_many).
     ((1024, 1024, "565", True), (512, 512, "565", True), (1024, 1024, "DXN", True)):
+        ([0, 1, 2], ["base", "detail", "base_normal"]),
+    # Same pack with the base colour stored as DXT4_5 instead of 565. 565 is uncompressed 2 B/px,
+    # so a DETAILED base layer (stock ones are near-flat — ANA ships 23 distinct 565 values in a
+    # megabyte) blows the pack past the size every shipped uniform_base stays under and the game
+    # hangs on load. DXT4_5 is 1 B/px and block-compressed: same 1024x1024 footprint as the DXN
+    # record beside it (mip0 1,048,576 + tail 393,216), so the contiguous cumulative-fill order is
+    # still fully determined. Order and labels are unchanged — only rec0's storage format differs.
+    ((1024, 1024, "DXT4_5", True), (512, 512, "565", True), (1024, 1024, "DXN", True)):
         ([0, 1, 2], ["base", "detail", "base_normal"]),
 }
 
@@ -785,10 +905,38 @@ def _contiguous_records(dram, vram):
         order, labels = layout
         out = []; off = 0
         for slot, ri in enumerate(order):
-            r = dict(recs[ri], index=slot, vram_off=off, label=labels[slot])
+            r = dict(recs[ri], index=slot, vram_off=off, label=labels[slot],
+                     rec_off=start + ri * 0xE0)
             off += r["foot"]; out.append(r)
         return out
     return []
+
+
+def _relink_contiguous_live(clean_recs, dram, vram):
+    """Re-point a contiguous pack's PRISTINE records at the LIVE blob.
+
+    `_contiguous_records` only accepts a run whose footprints fill the VRAM blob exactly, and a
+    grow-replace breaks that: it APPENDS the new pixels and redirects one record's stored offset
+    (+0x6c), so the blob is longer than the sum of the records and enumeration comes back empty —
+    which is why an edited kit read back as nothing at all. Since a grow only ever appends, the
+    head of the blob still holds the original packing: keep the pristine offsets, and take the
+    offset/size/format of any record the writer redirected from the LIVE record. Returns [] if the
+    live records don't line up, so an unrecognised layout degrades to primary-only as before.
+    """
+    out = []
+    for cr in clean_recs:
+        b = cr.get("rec_off")
+        if b is None:
+            return []
+        lr = _parse_multi_rec(dram, b)
+        if lr is None or (lr["w"], lr["h"]) != (cr["w"], cr["h"]):
+            return []
+        v = _BE(dram, b + 0x6C)
+        vo = (v - 1) if v > 1 else cr["vram_off"]
+        if vo < 0 or vo + lr["mip0"] > len(vram):
+            return []
+        out.append(dict(cr, **lr, vram_off=vo))
+    return out
 
 
 def _extra_fetch_records(dram, vram, have):
@@ -979,24 +1127,6 @@ def _texture_tree(data: bytes, size: int):
     return vram, recs
 
 
-def _scene_records(host_iff: str):
-    """Scene/front-end textures (fixed VRAM offset, no resource tree) expressed as
-    tree-style records, so a host iff (e.g. titlepage.iff) lists them as sub-textures.
-    `label` carries the short name (cover, 2k_logo, …) used for the DDS filename."""
-    recs = []
-    for pseudo, (host, vo, w, h, fmt) in SCENE_ASSETS.items():
-        if host != host_iff:
-            continue
-        label = pseudo[:-4]; pre = host[:-4] + "_"
-        if label.startswith(pre):
-            label = label[len(pre):]
-        bpu = _DXT_BPU.get(fmt, 16)
-        recs.append({"index": len(recs), "w": w, "h": h, "fmt": fmt, "bpu": bpu,
-                     "block": 1, "tiled": 1, "vram_off": vo,
-                     "mip0": (w // 4) * (h // 4) * bpu, "label": label})
-    return recs
-
-
 _LIVE_CACHE = None
 
 
@@ -1085,14 +1215,6 @@ _PORTRAIT_MIP0 = 0x10000                              # 256x256 DXT4_5 mip0 byte
 # alpha filter, then a small feather to match the measured native edge band (~1.4 partial px per
 # boundary px at each level).
 PORTRAIT_FEATHER = 0.35                               # Gaussian sigma applied to alpha per level
-
-
-def _portrait_blobs(name, clean_dir=None):
-    """(data, size, [portrait blobs]) — the >=0x10000 blobs (one per portrait). ((),0,[]) on miss."""
-    loc, data, size = _read_asset(name, clean_dir)
-    if loc is None:
-        return b"", 0, []
-    return data, size, [b for b in _walk_blobs(data, size) if b.get("dec") and len(b["dec"]) >= _PORTRAIT_MIP0]
 
 
 _PORTRAIT_PACK = None                                    # cached (data, size) for disc_b9610aac.iff
@@ -1648,58 +1770,6 @@ _PORTRAIT_FETCH = {
 }
 
 
-def portrait_set_sharp(name, indices, game_dir, sharp=True, mode=None, log=print) -> str:
-    """Patch portrait descriptors to clamp which mip levels the GPU may sample. `mode` is one of
-    _PORTRAIT_FETCH ('stock'/'mip1'/'mip0'); legacy `sharp` bool maps True->'mip0', False->'stock'.
-    `indices` = portrait blob indices, or None = all. Edits the 0xE0 header blob preceding each
-    portrait (fetch constant d3 mip_filter / d4 mip_max), re-encodes at native wp/codec, splices,
-    re-syncs portrait.iff, relocates."""
-    if mode is None:
-        mode = "mip0" if sharp else "stock"
-    if mode not in _PORTRAIT_FETCH:
-        raise ValueError(f"unknown mode {mode!r} (use {'/'.join(_PORTRAIT_FETCH)})")
-    game_dir = Path(game_dir)
-    loc = resolve(name, game_dir)
-    if not loc:
-        raise ValueError(f"{name}: not found in game TOC")
-    arc, off, size, idx, f3 = loc
-    with open(game_dir / arc, "rb") as f:
-        f.seek(off); data = bytearray(f.read(size))
-    blobs = _walk_blobs(bytes(data), size)
-    want = None if indices is None else set(indices)
-    by_off = {}
-    pi = -1
-    for j, b in enumerate(blobs):
-        if b["dec"] is None or len(b["dec"]) < _PORTRAIT_MIP0:
-            continue
-        pi += 1
-        if want is not None and pi not in want:
-            continue
-        h = blobs[j - 1] if j else None                  # its 0xE0 descriptor blob
-        if not h or h["dec"] is None or len(h["dec"]) != 0xE0:
-            log(f"  WARNING portrait #{pi}: no 0xE0 descriptor before it — skipped"); continue
-        hd = bytearray(h["dec"])
-        d3, d4 = struct.unpack_from(">II", hd, _PORTRAIT_FETCH_D3_OFF)
-        if (d3, d4) not in _PORTRAIT_FETCH.values():
-            log(f"  WARNING portrait #{pi}: unexpected fetch dwords {d3:#x},{d4:#x} — skipped"); continue
-        struct.pack_into(">II", hd, _PORTRAIT_FETCH_D3_OFF, *_PORTRAIT_FETCH[mode])
-        blob = EE.encode_payload(bytes(hd), wparam=h["wp"], codec=h["codec"])
-        err = _verify_blob(blob, bytes(hd))
-        if err:
-            raise ValueError(f"{name} portrait #{pi} descriptor: {err} — aborted, files untouched")
-        by_off[h["off"]] = (h["tot"], blob)
-    if not by_off:
-        return "no descriptors changed"
-    new_res = bytearray(data[:size])
-    for o in sorted(by_off, reverse=True):
-        old_tot, blob = by_off[o]
-        new_res[o:o + old_tot] = blob
-    _backup_once(game_dir / arc, log)
-    log(f"  {name}: '{mode}' descriptors on {len(by_off)} portrait(s)")
-    _sync_portrait_index(bytes(new_res), game_dir, log)
-    return _relocate(name, bytes(new_res), idx, game_dir, 256, 256, "DXT4_5", log)
-
-
 # ── Frontend branding bundles ─────────────────────────────────────────────────
 # The team-select / main-menu / loading-screen logos, wordmarks and colour-tint templates do NOT
 # come from logo_<code>.iff — they live in two baked bundles (found 2026-07-11 by needle-tracing
@@ -1744,17 +1814,53 @@ def _bundle_pairs(name, root):
     return pairs
 
 
+def _bundle_pairs_any(name, clean_dir=None):
+    """Bundle pairs, preferring the LIVE pack when it holds more tiles than the pristine one.
+    Teams added after ship (logos_atlas.add_team) splice extra tiles into the game archives; the
+    pristine pack has no idea they exist, so listing/decoding must read live or they'd be invisible.
+    Falls back to pristine whenever the live pack has no extra tiles (identical behaviour to before)."""
+    ref = _bundle_pairs(name, clean_dir)
+    try:
+        loc = resolve(name, GAME_DIR)
+        if not loc:
+            return ref
+        with open(_dir(GAME_DIR) / loc[0], "rb") as f:
+            f.seek(loc[1]); data = f.read(loc[2])
+        _, _w, _m, dec_sz, _idx = BUNDLE_PACKS[name]
+        blobs = _walk_blobs(data, len(data))
+        live, i = [], 0
+        while i + 1 < len(blobs):
+            a, b = blobs[i], blobs[i + 1]
+            if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                    and b["dec"] is not None and len(b["dec"]) == dec_sz):
+                live.append((a, b)); i += 2
+            else:
+                i += 1
+        return live if len(live) > len(ref) else ref
+    except Exception:
+        return ref
+
+
 def bundle_records(name, clean_dir=None):
-    """Tree-style records for a branding bundle — one WxW DXT4_5 texture per pair (its mip0)."""
-    _, w, mip0, dec_sz, _idx = BUNDLE_PACKS[name]
+    """Tree-style records for a branding bundle — one WxW DXT4_5 texture per pair (its mip0).
+
+    Each tile is labelled with the asset key the game looks it up by (`ana`, `sea`, …), read live
+    from the companion logos_*.iff index, so teams added after ship label themselves."""
+    _, w, mip0, dec_sz, index_iff = BUNDLE_PACKS[name]
+    try:
+        from . import logos_atlas as LA
+        labels = LA.tile_labels(index_iff, GAME_DIR)
+    except Exception:
+        labels = {}
     return [{"index": i, "w": w, "h": w, "fmt": "DXT4_5", "bpu": 16, "block": 1, "tiled": 1,
-             "mip0": mip0, "tail": dec_sz - mip0, "foot": mip0, "blob_off": p[1]["off"]}
-            for i, p in enumerate(_bundle_pairs(name, clean_dir))]
+             "mip0": mip0, "tail": dec_sz - mip0, "foot": mip0, "blob_off": p[1]["off"],
+             "label": f"{i} ({labels[i]})" if i in labels else str(i)}
+            for i, p in enumerate(_bundle_pairs_any(name, clean_dir))]
 
 
 def decode_bundle(name, index, clean_dir=None):
     """Decode bundle texture `index` (mip0, GPU byte order) -> PIL RGBA, or None."""
-    pairs = _bundle_pairs(name, clean_dir)
+    pairs = _bundle_pairs_any(name, clean_dir)
     if not (0 <= index < len(pairs)):
         return None
     _, w, mip0, dec_sz, _idx = BUNDLE_PACKS[name]
@@ -1789,10 +1895,11 @@ def replace_bundles(name, edits, game_dir, log=print) -> str:
             pairs.append((a, b)); i += 2
         else:
             i += 1
-    if len(pairs) != 120:
-        raise ValueError(f"{name}: expected 120 tile pairs, found {len(pairs)} — pack damaged? "
-                         f"run ensure_clean first")
-    ref_pairs = _bundle_pairs(name, None)
+    want = _bundle_tile_count(index_iff, game_dir)
+    if len(pairs) != want:
+        raise ValueError(f"{name}: expected {want} tile pairs (per {index_iff}), found "
+                         f"{len(pairs)} — pack damaged? run ensure_clean first")
+    ref_pairs = _bundle_pairs_any(name, None)
     by_off = {}
     n = 0
     for e in edits:
@@ -1831,13 +1938,33 @@ def replace_bundles(name, edits, game_dir, log=print) -> str:
     return status
 
 
+def _bundle_tile_count(index_iff: str, game_dir) -> int:
+    """How many tiles the bundle's atlas index says it has (120 as shipped, more once a team has
+    been added). Falls back to 120 if the index can't be read."""
+    try:
+        from . import logos_atlas as LA
+    except ImportError:
+        import logos_atlas as LA
+    try:
+        loc = resolve(index_iff, game_dir)
+        with open(_dir(game_dir) / loc[0], "rb") as f:
+            f.seek(loc[1]); return LA.parse(f.read(loc[2]))["n"]
+    except Exception:
+        return 120
+
+
 def _sync_bundle_index(pack_name: str, new_pack: bytes, game_dir: Path, log=print):
-    """Rewrite the logos_*.iff read table for a re-spliced bundle. The game seeks each tile via
-    a 120-entry table of [smallOff, smallSize, bigOff, bigSize] (exact compressed offsets/sizes,
-    the same scheme portrait.iff uses). The table base is found by matching the CLEAN pack's
-    first entries inside the CLEAN index file, then the GAME index is rewritten in place."""
+    """Rewrite the logos_*.iff read table for a re-spliced bundle. The game seeks each tile via a
+    table of [hdrOff, hdrSize, texOff, texSize] (exact compressed offsets/sizes, the same scheme
+    portrait.iff uses) — a splice changes the edited blob's size and shifts every later blob, so
+    stale entries truncate/corrupt reads. The index is parsed and rebuilt through `logos_atlas`
+    (the format is fully reversed and round-trips byte-exactly), which keeps this correct for any
+    tile count rather than only the 120 that shipped."""
+    try:
+        from . import logos_atlas as LA
+    except ImportError:
+        import logos_atlas as LA
     label, w, mip0, dec_sz, index_iff = BUNDLE_PACKS[pack_name]
-    # new pack's pair table
     blobs = _walk_blobs(new_pack, len(new_pack))
     entries = []
     i = 0
@@ -1848,33 +1975,31 @@ def _sync_bundle_index(pack_name: str, new_pack: bytes, game_dir: Path, log=prin
             entries.append((a["off"], a["tot"], b["off"], b["tot"])); i += 2
         else:
             i += 1
-    if len(entries) != 120:
-        log(f"  WARNING {index_iff} NOT synced ({len(entries)} pairs, expected 120)")
-        return
-    # locate the table base using the CLEAN index + CLEAN pack values
-    ref_pairs = _bundle_pairs(pack_name, None)
-    sig = struct.pack(">4I", ref_pairs[0][0]["off"], ref_pairs[0][0]["tot"],
-                      ref_pairs[0][1]["off"], ref_pairs[0][1]["tot"])
-    cloc = resolve(index_iff, None, clean=True)
-    with open(_arc_file(None, cloc[0], clean=True), "rb") as f:
-        f.seek(cloc[1]); cidx = f.read(cloc[2])
-    base = cidx.find(sig)
-    if base < 0:
-        log(f"  WARNING {index_iff}: read table not located — NOT synced")
-        return
     iloc = resolve(index_iff, game_dir)
     if not iloc:
         log(f"  WARNING {index_iff} not found in game TOC — not synced")
         return
-    with open(game_dir / iloc[0], "r+b") as f:
-        f.seek(iloc[1]); pidat = bytearray(f.read(iloc[2]))
-        changed = 0
-        for j, ent in enumerate(entries):
-            o = base + j * 16
-            if struct.unpack_from(">4I", pidat, o) != ent:
-                struct.pack_into(">4I", pidat, o, *ent); changed += 1
-        if changed:
-            f.seek(iloc[1]); f.write(pidat)
+    with open(game_dir / iloc[0], "rb") as f:
+        f.seek(iloc[1]); idat = f.read(iloc[2])
+    try:
+        info = LA.parse(idat)
+    except ValueError as e:
+        log(f"  WARNING {index_iff} NOT synced (unparseable: {e})")
+        return
+    if len(entries) != info["n"]:
+        log(f"  WARNING {index_iff} NOT synced ({len(entries)} pairs, index says {info['n']})")
+        return
+    changed = sum(1 for j, e in enumerate(entries) if tuple(info["readtable"][j]) != e)
+    if not changed:
+        log(f"  {index_iff} read-table already in sync")
+        return
+    info["readtable"] = entries
+    new_idx = LA.build(info)
+    if len(new_idx) == len(idat):                       # same size -> in-place, no relocate
+        with open(game_dir / iloc[0], "r+b") as f:
+            f.seek(iloc[1]); f.write(new_idx)
+    else:
+        _relocate(index_iff, new_idx, iloc[3], game_dir, w, w, "INDEX", log)
     log(f"  {index_iff} read-table synced ({changed} entr{'y' if changed == 1 else 'ies'} updated)")
 
 
@@ -1954,18 +2079,147 @@ def _fe_uniform_map():
     return _FE_UNIFORM_MAP
 
 
+def _fe_extra_path() -> Path:
+    """%APPDATA%\\NHL2K10 Mod Launcher\\fe_components_extra.json — layouts learned at runtime.
+
+    Not in `data/` on purpose (see resources.py): a PyInstaller build wipes the app folder, and
+    this file records the decal layout of jerseys that don't exist in the shipped map — an
+    expansion team's — which must survive a rebuild exactly like the user's team_fields.json.
+    """
+    base = os.environ.get("APPDATA") or os.environ.get("LOCALAPPDATA") or str(Path.home())
+    return Path(base) / "NHL2K10 Mod Launcher" / "fe_components_extra.json"
+
+
+_FE_EXTRA = None
+
+
+def _fe_extra() -> dict:
+    global _FE_EXTRA
+    if _FE_EXTRA is None:
+        try:
+            _FE_EXTRA = json.loads(_fe_extra_path().read_text())
+        except Exception:
+            _FE_EXTRA = {}
+    return _FE_EXTRA
+
+
+def _fe_extra_put(name, entry):
+    _fe_extra()[name] = entry
+    try:
+        p = _fe_extra_path()
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps(_FE_EXTRA, indent=1))
+    except Exception:
+        pass                                    # a cache miss next run is not worth failing over
+
+
+_FE_BY_HEADER = None
+
+
+def _fe_header_index() -> dict:
+    """sha1(first 0x200 bytes) -> component entry, over every sheet in the shipped map.
+
+    The three distinct `dxn_off` values are decided by the colour texture's mip tail, which is
+    described by the fetch constants in the resource header — so the header identifies the layout
+    even when the pixels have been repainted. Verified a function, not a relation: 224 distinct
+    headers across the 288 shipped sheets, zero conflicting dxn_off.
+    """
+    global _FE_BY_HEADER
+    if _FE_BY_HEADER is None:
+        _FE_BY_HEADER = {}
+        for k, e in _fe_components().items():
+            try:
+                loc, data, _size = _read_asset(k, None)
+            except Exception:
+                continue
+            if loc is not None:
+                _FE_BY_HEADER.setdefault(hashlib.sha1(bytes(data[:0x200])).hexdigest(), e)
+    return _FE_BY_HEADER
+
+
+def fe_component(name):
+    """The decal-sheet layout for `name`, or None if it isn't a team-select jersey sheet.
+
+    Three ways in, in order:
+      1. the shipped map, keyed by the synthetic `disc_<crc>` name it was built under;
+      2. that same entry via the sheet's REAL name — `uniform_frontend_<key>_<slot>.iff` hashes to
+         exactly the `disc_<crc>` the map uses, because they are the same TOC entry under two
+         names. Without this the real name lists ZERO textures, which is why an expansion team's
+         jersey edit silently failed to mirror to the front end (nothing to mirror INTO);
+      3. an expansion team's sheet, which is in neither: matched by resource header against the
+         shipped sheets (it is a byte clone of its donor, so the layout is the donor's) and then
+         remembered, so a later repaint that changes the header can't lose it.
+    """
+    d = _fe_components()
+    if name in d:
+        return d[name]
+    if not name.startswith("uniform_frontend_"):
+        return None
+    alias = "disc_%08x.iff" % (zlib.crc32(name.upper().encode("ascii")) & 0xFFFFFFFF)
+    if alias in d:
+        return d[alias]
+    x = _fe_extra()
+    if name in x:
+        return x[name]
+    try:
+        loc, data, _size = _read_asset(name, None)
+    except Exception:
+        return None
+    if loc is None:
+        return None
+    e = _fe_header_index().get(hashlib.sha1(bytes(data[:0x200])).hexdigest())
+    if e:
+        _fe_extra_put(name, e)
+    return e
+
+
 def fe_component_records(name):
     """Two records for a decal component: the colour sheet + its DXN normal map."""
-    e = _fe_components()[name]
+    e = fe_component(name)
     w, h, nw, nh = e["w"], e["h"], e["nw"], e["nh"]
+    # The colour sheet HAS a full mip chain — the gap to the DXN is 700,416 bytes larger than mip0
+    # on 254 of the 288 shipped sheets, and larger still on the rest.  Reporting foot == mip0 (what
+    # this did before) told replace_many the texture ended at mip0, so an edit rewrote the top level
+    # and left every smaller level stock.  The team-select jersey is a 3D render sampling those mips,
+    # which is exactly why a repainted jersey looked right in game and wrong on team select.  Derive
+    # the real footprint, bounded by where the DXN starts.
+    cfoot = _fitted_footprint("4444", w, h, e["dxn_off"] - e["color_off"])
     return [
         {"index": 0, "w": w, "h": h, "fmt": "4444", "bpu": 2, "block": 0, "tiled": 1,
-         "vram_off": e["color_off"], "mip0": w * h * 2, "tail": 0, "foot": w * h * 2,
+         "vram_off": e["color_off"], "mip0": w * h * 2, "tail": cfoot - w * h * 2, "foot": cfoot,
          "label": "decals"},
         {"index": 1, "w": nw, "h": nh, "fmt": "DXN", "bpu": 16, "block": 1, "tiled": 1,
          "vram_off": e["dxn_off"], "mip0": (nw // 4) * (nh // 4) * 16, "tail": 0,
          "foot": (nw // 4) * (nh // 4) * 16, "label": "decals_normal"},
     ]
+
+
+# ── player head assets: three per-player maps in one exact-fill VRAM blob ─────
+# Every one of the 447 player_head_id_NNNN.iff assets carries an IDENTICAL 983,040-byte VRAM blob
+# holding three 512x512 surfaces, each with a full mip tail, packed back-to-back with no slack:
+#     0x00000  DXT4_5  colour/diffuse   mip0 262144 + tail 131072 = 393216   (ColorSampler)
+#     0x60000  DXN     tangent normal   mip0 262144 + tail 131072 = 393216   (NormalSampler)
+#     0xC0000  DXT1    ambient occl.    mip0 131072 + tail  65536 = 196608   (PerPlayerOcclusionSampler)
+# 393216+393216+196608 == 983040 exactly, verified across all 447 heads.
+# The per-texture descriptors store +0x6C == 1 (loader-placed placeholder), so _texture_tree finds
+# NO records and the asset used to fall down the single-primary path — which exposed only the colour
+# map and left the normal + AO unreachable. These fixed records restore all three.
+_HEAD_VRAM = 983040
+_HEAD_MAPS = (("color", "DXT4_5", 393216), ("normal", "DXN", 393216), ("occlusion", "DXT1", 196608))
+
+
+def player_head_records(name):
+    """Three records (colour / normal / occlusion) for a player_head_id_*.iff, else []."""
+    if not _player_head_id(name):
+        return []
+    out, off = [], 0
+    for i, (label, fmt, foot) in enumerate(_HEAD_MAPS):
+        bpu = _FMT_BPU[fmt]
+        mip0 = (512 // 4) * (512 // 4) * bpu
+        out.append({"index": i, "w": 512, "h": 512, "fmt": fmt, "bpu": bpu, "block": 1, "tiled": 1,
+                    "vram_off": off, "mip0": mip0, "tail": foot - mip0, "foot": foot, "label": label})
+        off += foot
+    return out
 
 
 def _fe_component_vram(name, root):
@@ -1976,7 +2230,7 @@ def _fe_component_vram(name, root):
     return b["dec"] if b else None
 
 
-def list_textures(name: str, clean_dir: Path = None):
+def list_textures(name: str, clean_dir: Path = None, live: bool = False):
     """Enumerate every texture in a (possibly multi-texture) asset -> [records]
     (see _texture_tree). Empty for single/primary AND scene assets (those resolve to a
     single texture and use the primary path — only true multi-texture iffs get a sub-list).
@@ -1989,9 +2243,11 @@ def list_textures(name: str, clean_dir: Path = None):
         return portrait_records(name, clean_dir)
     if name in BUNDLE_PACKS:
         return bundle_records(name, clean_dir)
-    if name in _fe_components():
+    if fe_component(name):
         return fe_component_records(name)
-    _vram, recs = _load_tree(name, clean_dir)
+    if _player_head_id(name):                 # colour + normal + occlusion (fixed exact-fill layout)
+        return player_head_records(name)
+    _vram, recs = _load_tree(name, clean_dir, live)
     cat = catalog_records(name)
     # Multi-sub-package assets (rink_*/arena_presentation_*/led_*/…): the formal count@0x20 tree
     # covers only the FIRST sub-package; the tail textures are appended by the _extra_fetch_records
@@ -2024,13 +2280,15 @@ def list_textures(name: str, clean_dir: Path = None):
     return recs or cat
 
 
-def decode_record(name: str, rec: dict, clean_dir: Path = None):
-    """Decode one tree record (from list_textures) -> PIL RGBA, or None."""
+def decode_record(name: str, rec: dict, clean_dir: Path = None, live: bool = False):
+    """Decode one tree record (from list_textures) -> PIL RGBA, or None.
+    `live=True` decodes the CURRENT archives (applied edits visible); pass the same flag that was
+    passed to list_textures, since a record is only meaningful against the tree it came from."""
     if name in PORTRAIT_PACKS:
         return decode_portrait(name, rec["index"], clean_dir)
     if name in BUNDLE_PACKS:
         return decode_bundle(name, rec["index"], clean_dir)
-    if name in _fe_components():
+    if fe_component(name):
         vram = _fe_component_vram(name, clean_dir)
         if vram is None:
             return None
@@ -2052,7 +2310,7 @@ def decode_record(name: str, rec: dict, clean_dir: Path = None):
                                 rec["tiled"], 0).convert("RGBA"), rec["fmt"])
         except Exception:
             return None
-    vram, _recs = _load_tree(name, clean_dir)
+    vram, _recs = _load_tree(name, clean_dir, live)
     if vram is None:
         return None
     try:
@@ -2109,6 +2367,7 @@ def _team_asset_folder(name: str):
         ice_<code>_playoffs.iff        -> Ice/<TEAM>   (playoffs art == the regular ice)
         ice_<code>_finals.iff          -> Ice/<TEAM>
         rink_<code>.iff                -> Rink/<TEAM>
+        arena_<code>.iff               -> Arena/<TEAM>   (the bowl: seats, jumbotron, concourse)
         arena_presentation_<code>.iff  -> Arena_Presentation/<TEAM>
         zamboni_team_<code>.iff        -> Zamboni/<TEAM>   (the textured zamboni; zamboni_<code>
                                                             is the untextured model and is hidden)
@@ -2123,10 +2382,22 @@ def _team_asset_folder(name: str):
     m = re.match(r"arena_presentation_([a-z]+)\.iff$", name)
     if m:
         return f"Arena_Presentation/{m.group(1).upper()}"
+    m = re.match(r"arena_([a-z]+)\.iff$", name)      # after presentation: [a-z]+ can't eat the "_"
+    if m:
+        return f"Arena/{m.group(1).upper()}"
     m = re.match(r"zamboni_team_([a-z]+)\.iff$", name)
     if m:
         return f"Zamboni/{m.group(1).upper()}"
     return None
+
+
+def _player_head_id(name: str):
+    """0146 for player_head_id_0146.iff, else None. 447 faces ship, so they get the same
+    compacted <Category>/<id> treatment the per-team assets get rather than 447 sibling
+    folders each holding one file."""
+    import re
+    m = re.match(r"player_head_id_(\d{4})\.iff$", name)
+    return m.group(1) if m else None
 
 
 def asset_iff(name: str) -> str:
@@ -2134,7 +2405,11 @@ def asset_iff(name: str) -> str:
       logo_<code>.iff                    -> Logos/            (file <code>.dds)
       uniform[_base]_<code>_<kit>.iff    -> Uniform/<TEAM>/<KIT>/
       jersey-decal component             -> Uniform/<TEAM>/<KIT>/  (decals / decals_normal)
+      player_head_id_<id>.iff            -> Player_Heads/<id>/  (color/normal/occlusion .dds)
     Scene pseudo-assets map to their host iff; portrait/logo bundles to friendly folders."""
+    hid = _player_head_id(name)
+    if hid:
+        return f"Player_Heads/{hid}"
     if name in SCENE_ASSETS:
         return SCENE_ASSETS[name][0]
     if name in PORTRAIT_PACKS:                # portraits export to a clean, obvious folder
@@ -2187,45 +2462,6 @@ def texture_filename(name: str, rec=None) -> str:
         return "base.dds"                                   # Uniform/VAN/HOME/base.dds
     stem = name[:-4] if name.lower().endswith(".iff") else name
     return stem + ".dds"
-
-
-def find_edit_file(folder_dir, name: str, rec=None):
-    """The user's existing edit file for this texture (Original/ or Modified/), or None. Checks the
-    current name (t{idx}.dds / .png) AND the LEGACY t{idx}_{w}x{h}.dds/.png so edits made before the
-    dimensions were dropped from the filename are still found. Dims are never parsed from the name."""
-    folder_dir = Path(folder_dir)
-    base = folder_dir / texture_filename(name, rec)        # e.g. t10.dds  (or cover.dds / stem.dds)
-    for cand in (base.with_suffix(".png"), base):          # PNG wins when both exist (the edited file)
-        if cand.exists():
-            return cand
-    if rec is not None and "index" in rec and not rec.get("label"):   # legacy t{idx}_{w}x{h}.*
-        for ext in ("png", "dds"):
-            g = sorted(folder_dir.glob(f"t{rec['index']:02d}_*.{ext}"))
-            if g:
-                return g[0]
-    # LEGACY layout fallback: the per-iff folder (Modified/<name>/) with the old filenames —
-    # edits made before the grouped Logos/ & Uniform/ layout keep working.
-    legroot = folder_dir
-    tail = asset_iff(name).replace("\\", "/")
-    for _ in range(tail.count("/") + 1):
-        legroot = legroot.parent
-    legdir = legroot / _legacy_asset_iff(name)
-    if legdir != folder_dir and legdir.is_dir():
-        if rec is not None and rec.get("label"):
-            names = [rec["label"] + ".png", rec["label"] + ".dds"]
-            if rec.get("index") == 0:                       # decal sheet was the old 'primary'
-                stem = name[:-4] if name.lower().endswith(".iff") else name
-                names += [stem + ".png", stem + ".dds"]
-        elif rec is not None:
-            names = [f"t{rec['index']:02d}.png", f"t{rec['index']:02d}.dds"]
-        else:
-            stem = name[:-4] if name.lower().endswith(".iff") else name
-            names = [stem + ".png", stem + ".dds"]
-        for nm2 in names:
-            cand = legdir / nm2
-            if cand.exists():
-                return cand
-    return None
 
 
 # ── Xenia window / taskbar icon (the game's Xbox-360 title icon, embedded in the XEX) ─────
@@ -2358,11 +2594,11 @@ def _decode_at(dec, vram_off, w, h, fmt, tiled=1):
 
 
 def extract_dds_at(iff, vram_off, w, h, fmt, out_path, clean_dir=None, tiled=1):
-    loc = resolve(iff, clean_dir, clean=True)
+    loc, _cl = resolve_clean(iff, clean_dir)
     if not loc:
         raise ValueError(f"{iff}: not found")
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=_cl), "rb") as f:
         f.seek(off); data = f.read(size + 0x200000)
     vb = _big_vram_blob(data, size)
     if not vb:
@@ -2374,11 +2610,11 @@ def extract_dds_at(iff, vram_off, w, h, fmt, out_path, clean_dir=None, tiled=1):
 
 
 def decode_preview_at(iff, vram_off, w, h, fmt, clean_dir=None, tiled=1):
-    loc = resolve(iff, clean_dir, clean=True)
+    loc, _cl = resolve_clean(iff, clean_dir)
     if not loc:
         return None
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=_cl), "rb") as f:
         f.seek(off); data = f.read(size + 0x200000)
     vb = _big_vram_blob(data, size)
     if not vb:
@@ -2499,6 +2735,114 @@ def _dds_passthrough_mip0(edited_path, fmt, w, h):
         return None
 
 
+_MIN_TILE = 32          # Xenos tile = 32x32 ADDRESSED units (texels linear, 4x4 blocks for DXT/DXN)
+
+
+def _surf_h(fmt, sw, nbytes):
+    """Height of a `sw`-wide surface of exactly `nbytes` bytes, or 0 if it doesn't divide."""
+    bpu = _FMT_BPU[fmt]
+    if fmt in _BLOCK_FMTS:
+        row = (sw // 4) * bpu                          # bytes per 4-texel block row
+        return 4 * (nbytes // row) if row and nbytes % row == 0 else 0
+    row = sw * bpu
+    return (nbytes // row) if row and nbytes % row == 0 else 0
+
+
+def _mip_tail_plan(fmt, w, h, tail_bytes):
+    """Layout of the mip levels that follow the naive (both dims >= min tile) chain.
+
+    MEASURED from pristine shipped packs (uniform_{ana,bos,cgy}_home, records 0/1/2) — the
+    generic walk below assumes every level is stored at its naive size, which is true only
+    while BOTH dimensions are at least one Xenos tile.  Past that point:
+      * a level keeps its own surface, each dimension padded up to a whole tile, image at (0,0) —
+        but only while that still leaves a tile for the packed surface;
+      * everything from there down is PACKED into one final surface, each level at (0, its own
+        texel height).  Verified 64x16@(0,16), 32x8@(0,8), 16x4@(0,4) on three independent
+        packs (10-30x MSE margin over the (0,0) reading), and the DXN record's 64x16@(0,16).
+
+    Sizes predicted by this rule land EXACTLY on the shipped footprint for every pack checked —
+    4444 2048x512 and 1024x256, DXN 2048x512, DXT1 256x128 (overlay), 565 1024x1024 and 512x512
+    (uniform_base) — and the mismatch check below is what makes a wrong guess a no-op rather than
+    corruption.  Placement is measured for the >=32x32 levels; below that a downscale of mip0 no
+    longer predicts stored content well enough to discriminate, so those few hundred bytes rest on
+    the size fit alone (they are sub-16x16 mips — not observable in game).
+
+    Returns [(surf_w, surf_h, nbytes, [(lvl_w, lvl_h, x, y), ...]), ...], or None when the plan
+    does not account for EXACTLY `tail_bytes` — an unrecognised layout, which the caller must
+    leave untouched rather than corrupt.  On the two measured records the prediction is exact
+    (4,096 and 65,536).
+    """
+    unit = 4 if fmt in _BLOCK_FMTS else 1
+    mt = _MIN_TILE * unit                              # min tile edge, in TEXELS
+    mw, mh = w // 2, h // 2
+    while mw >= mt and mh >= mt:                       # skip what the naive walk already covers
+        mw //= 2; mh //= 2
+
+    plan, left = [], tail_bytes
+    while mw >= 4 and mh >= 4 and left > 0:
+        more = (mw // 2) >= 4 and (mh // 2) >= 4
+        sw, sh = max(mw, mt), max(mh, mt)              # own surface, padded up to a whole tile
+        need = _mip0_size(fmt, sw, sh)
+        if need <= left and (not more or left - need >= _mip0_size(fmt, mt, mt)):
+            plan.append((sw, sh, need, [(mw, mh, 0, 0)]))
+            left -= need
+            mw //= 2; mh //= 2
+            continue
+        sw = max(mw, mt)                               # packed surface takes ALL that remains
+        sh = _surf_h(fmt, sw, left)
+        if sh < mt:
+            return None
+        lv, a, b = [], mw, mh
+        while a >= 4 and b >= 4 and a <= sw and 2 * b <= sh:
+            lv.append((a, b, 0, b))                    # level of height b sits at y = b
+            a //= 2; b //= 2
+        if not lv:
+            return None
+        plan.append((sw, sh, left, lv))
+        left = 0
+        break
+    return plan if left == 0 and plan else None
+
+
+def _fitted_footprint(fmt, w, h, limit):
+    """The stored footprint the native layout accounts for EXACTLY, within `limit` bytes of room.
+
+    For assets with a texture-record tree the footprint is read from the record (`foot`).  The
+    front-end jersey sheets have no tree — fe_components.json gives only the two textures' start
+    offsets — so their footprint has to be DERIVED, and getting it wrong in the generous direction
+    would let a mip write run into the next texture.  Build it the same way the layout is built:
+    mip0, then full-size levels while both dims are at least a tile, then the SMALLEST tail
+    `_mip_tail_plan` accepts.
+
+    Smallest, not largest.  254 of the 288 shipped sheets leave exactly 700,416 bytes between the
+    two textures and 33 leave 8,192 more, which reads like a second layout — it isn't.  Decoding
+    the 64x16 level out of both groups puts it at (0,16) of a packed 64x32 surface either way (MSE
+    ~800 there against a downscale of mip0, vs ~12,000 at (0,0) — a 10-20x margin, measured on ten
+    sheets across both groups).  So the extra 8,192 is slack and the tail is the same everywhere.
+    Taking the largest fit instead would have claimed that slack as three own surfaces and written
+    those levels to the wrong place.
+
+    Everything is bounded by `limit`, and a limit that fits nothing past mip0 returns mip0's size —
+    the old behaviour — so this can only add correctly-described levels, never overrun.
+    """
+    unit = 4 if fmt in _BLOCK_FMTS else 1
+    mt = _MIN_TILE * unit
+    base = _mip0_size(fmt, w, h)
+    if base > limit:
+        return base
+    mw, mh = w // 2, h // 2
+    while mw >= mt and mh >= mt and base + _mip0_size(fmt, mw, mh) <= limit:
+        base += _mip0_size(fmt, mw, mh)
+        mw //= 2; mh //= 2
+    if mw >= mt and mh >= mt:                          # ran out of room mid-chain — no tail
+        return base
+    step = _mip0_size(fmt, mt, mt)                     # the tail is a whole number of min tiles
+    for k in range(1, (limit - base) // step + 1):
+        if _mip_tail_plan(fmt, w, h, k * step):
+            return base + k * step
+    return base
+
+
 def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, ref_dec=None,
                        mip_end=None, pt_mip0=None):
     """Splice the edited image into mip0 AND every following mip level — otherwise the
@@ -2564,7 +2908,7 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
         o = vram_off + mip0_sz; mw = w // 2
         while mw >= 32:                                  # own tiles: full-size >=128, else padded 128-tile
             try:
-                lvl = mip_src.resize((mw, mw), Image.BOX).convert("RGBA")
+                lvl = _box_lvl(mip_src, (mw, mw))
                 if mw >= 128:
                     enc = _enc_lvl(lvl)
                 else:
@@ -2581,7 +2925,7 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
                 canvas = Image.new("RGBA", (128, 128), (0, 0, 0, 0))
                 for s, x in ((16, 0), (8, 16), (4, 24)):
                     if s <= w:
-                        canvas.paste(mip_src.resize((s, s), Image.BOX).convert("RGBA"), (x, 0))
+                        canvas.paste(_box_lvl(mip_src, (s, s)), (x, 0))
                 enc = _enc_lvl(canvas)
                 if o + len(enc) <= cap and o + len(enc) <= len(out):
                     out[o:o + len(enc)] = enc; n += 1
@@ -2589,6 +2933,52 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
                 pass
         log(f"  replaced mip0 + {n} mip level(s) [square tail]")
         return bytes(out)
+
+    # The naive "every level is stored at its raw size, back to back" assumption holds only while
+    # BOTH dimensions are at least one Xenos tile. Past that levels are padded, then packed — so the
+    # old walk read the WRONG bytes there, the MSE gate blew up, and it STOPPED, leaving the donor's
+    # small mips in place. That is the "sharp up close, wrong art at distance" LOD bug. When the
+    # naive chain plus _mip_tail_plan account for the footprint EXACTLY, the layout is fully known:
+    # write every level deterministically and skip the gate entirely (the gate also mis-fires when
+    # re-importing over an already-damaged pack, which made the damage stick across re-imports).
+    plan = None
+    if orig0 is not None and mip_end is not None:
+        unit = 4 if block else 1
+        mt = _MIN_TILE * unit
+        nat, mw, mh = [], w // 2, h // 2
+        while mw >= mt and mh >= mt:
+            nat.append((mw, mh, _mip0_size(fmt, mw, mh)))
+            mw //= 2; mh //= 2
+        rest = cap - (vram_off + mip0_sz) - sum(s for _, _, s in nat)
+        plan = _mip_tail_plan(fmt, w, h, rest) if rest > 0 else ([] if rest == 0 else None)
+
+    if plan is not None:
+        o = vram_off + mip0_sz
+        try:
+            for mw, mh, msz in nat:                          # full levels, own surfaces
+                out[o:o + msz] = _enc_lvl(_box_lvl(mip_src, (mw, mh)))
+                o += msz; n += 1
+            for sw, sh, nbytes, levels in plan:              # padded / packed tail surfaces
+                try:
+                    # seed from the REFERENCE so padding and the sub-4 scraps we don't regenerate
+                    # keep their original bytes instead of going blank
+                    canvas = T.decode(_dxt_endian(bytes(ref[o:o + nbytes]), fmt),
+                                      sw, sh, fmt, bpu, block, tiled, 0).convert("RGBA")
+                except Exception:
+                    canvas = Image.new("RGBA", (sw, sh), (0, 0, 0, 0))
+                for lw, lh, x, y in levels:
+                    canvas.paste(_box_lvl(mip_src, (lw, lh)), (x, y))
+                enc = _enc_lvl(canvas)
+                if len(enc) != nbytes:
+                    raise ValueError(f"tail surface {sw}x{sh} encoded {len(enc)} != {nbytes}")
+                out[o:o + nbytes] = enc
+                o += nbytes; n += len(levels)
+            log(f"  replaced mip0 + {n} mip level(s) [native layout, "
+                f"{len(nat)} full + {len(plan)} tail surface(s)]")
+            return bytes(out)
+        except Exception as e:
+            log(f"  native mip layout failed ({e}) — falling back to the gated walk")
+            out = bytearray(dec); out[vram_off:vram_off + mip0_sz] = new0; n = 0
 
     if orig0 is not None:
         o = vram_off + mip0_sz; mw, mh = w // 2, h // 2
@@ -2598,7 +2988,7 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
             try:
                 # BOX (2x2 average) is the game's own mip filter: matches native compressibility
                 # (~native size -> fits in-place) and avoids LANCZOS ringing/overshoot at edges.
-                lvl_img = mip_src.resize((mw, mh), Image.BOX).convert("RGBA")
+                lvl_img = _box_lvl(mip_src, (mw, mh))
                 new_lvl = (_encode_tiled(lvl_img, fmt, tiled, premultiply=False, alpha_aware=False)
                            if premf else _encode_tiled(lvl_img, fmt, tiled))
             except Exception:
@@ -2623,11 +3013,11 @@ def _rebuild_with_mips(dec, vram_off, fmt, w, h, tiled, edited_img, log=print, r
 def _clean_ref_blob(name, vram_off):
     """The pristine CLEAN decompressed VRAM blob for `name` (mip-chain reference), or None."""
     try:
-        loc = resolve(name, None, clean=True)
+        loc, _cl = resolve_clean(name, None)
         if not loc:
             return None
         arc, off, size, idx, f3 = loc
-        with open(_arc_file(None, arc, clean=True), "rb") as f:
+        with open(_arc_file(None, arc, clean=_cl), "rb") as f:
             f.seek(off); data = f.read(size + 0x400000)
         vb = _big_vram_blob(data, size)
         return vb["dec"] if vb else None
@@ -2711,6 +3101,21 @@ def replace_at(iff, vram_off, w, h, fmt, edited_path, game_dir, log=print, tiled
         tag = f", posterized {used}lvl" if used else ""
         return (f"IN-PLACE: {iff} @VRAM 0x{vram_off:X} -> {arc}:0x{off:X} "
                 f"(blob {len(new_blob)}/{old_tot}, {w}x{h} {fmt}{tag})")
+
+    # Still over even at 16 levels. Before degrading further / refusing, try the WHOLE-PACK RELOCATE:
+    # the uncompressed layout is unchanged (same dims, same format, same offsets) — only the
+    # COMPRESSED blob outgrew its slot — so moving the whole resource to the end of 1B and repointing
+    # the TOC is safe and keeps FULL quality. Restricted to relocatable, non-sequential packs whose
+    # VRAM blob is last; _whole_pack_relocate_vram returns None for anything else.
+    if not _is_sequential_pack(iff, game_dir):
+        try:
+            full, _fd = _encode(0, quiet=True)            # back to un-posterized before relocating
+            reloc = _whole_pack_relocate_vram(iff, res, size, vb, full, idx, game_dir, log)
+        except Exception as we:
+            log(f"  whole-pack relocate aborted ({we})"); reloc = None
+        if reloc:
+            return (f"RELOCATED (full quality): {iff} @VRAM 0x{vram_off:X} — blob {len(full)} bytes "
+                    f"(was {old_tot}); layout preserved. {reloc}")
 
     over = len(new_blob) - old_tot
     raise ValueError(
@@ -2864,90 +3269,6 @@ def _is_sequential_pack(iff, clean_dir=None):
         return False
 
 
-def replace_sequential_convert(iff, items, game_dir, log=print) -> str:
-    """Convert selected textures of a SEQUENTIAL loader-placed pack (global.iff) to uncompressed
-    (8888/8_8) by SPLICING the bigger data into the record-order blob and rewriting those records'
-    format fields. `items` = [(edit_dict, PIL_img)]; edit_dict needs w,h,fmt and vram_off (the offset
-    in the file blob where the ORIGINAL texture bytes live — used to find the matching record(s), incl.
-    de-dup copies, so the texture changes everywhere it appears). Returns a status string or None if
-    nothing matched. Grows/relocates. WARNING: 8888 is 2-4x DXT; converting many textures balloons the
-    pack — convert only what you need."""
-    if not CONVERT_SEQUENTIAL:
-        return None
-    game_dir = Path(game_dir)
-    loc = resolve(iff, game_dir)
-    if not loc:
-        raise ValueError(f"{iff}: not found in game TOC")
-    arc, off, size, idx, f3 = loc
-    with open(game_dir / arc, "rb") as f:
-        f.seek(off); res = bytearray(f.read(size))
-    blobs = _walk_blobs(res, size)
-    dram_b = min(blobs, key=lambda b: len(b["dec"])); tex_b = _big_vram_blob(res, size)
-    dram = bytearray(dram_b["dec"]); tex = bytes(tex_b["dec"])
-
-    # Build the splice plan. With the RUNTIME MAP (global.iff catalog), each edit carries rec_base (the
-    # DRAM record to rewrite) and vram_off = the TRUE file offset — direct, no content-match needed.
-    # (Fallback: match by original bytes for packs without a map.)
-    recs = None
-    plan = []                                          # (rec_base, file_off, w, h, old_foot, tgt, img)
-    for (e, img) in items:
-        tgt = _lossless_target(e["fmt"])
-        if not tgt:
-            continue
-        if e.get("rec_base") is not None:
-            plan.append((e["rec_base"], e["vram_off"], e["w"], e["h"], e["foot"], tgt, img))
-            continue
-        if recs is None:
-            recs = _sequential_records(dram, tex) or []
-        orig = tex[e["vram_off"]:e["vram_off"] + _mip0_size(e["fmt"], e["w"], e["h"])]
-        for r in recs:
-            if r["w"] == e["w"] and r["h"] == e["h"] and r["fmt"] == e["fmt"] \
-               and tex[r["pos"]:r["pos"] + r["mip0"]] == orig:
-                plan.append((r["base"], r["pos"], r["w"], r["h"], r["foot"], tgt, img))
-    if not plan:
-        log(f"  {iff}: no convertible record matched (blank/degenerate texture?) — kept native")
-        return None
-    plan.sort(key=lambda p: p[1])                       # splice in blob (file-offset) order
-
-    # rebuild: copy the blob, splicing each target's bigger uncompressed data at its (shifting) position
-    new_tex = bytearray(); read_cur = 0
-    for (rec_base, fpos, w, h, old_foot, tgt, img) in plan:
-        if fpos < read_cur:                            # overlapping / duplicate target -> skip
-            continue
-        new_tex += tex[read_cur:fpos]                  # verbatim up to this target
-        if img.size != (w, h):
-            img = img.resize((w, h), Image.LANCZOS)
-        data = _encode_tiled(img, tgt, 1)              # mip0 only (these packs are mip0-only per record)
-        new_tex += data
-        read_cur = fpos + old_foot
-        # rewrite this record's format + footprint fields (+0x6c stays 1 = placeholder)
-        mip0 = _mip0_size(tgt, w, h); tail = len(data) - mip0
-        struct.pack_into(">I", dram, rec_base + 0x70, mip0)
-        struct.pack_into(">I", dram, rec_base + 0x74, tail)
-        for o2 in (0x08, 0x0C, 0x1C):
-            struct.pack_into(">I", dram, rec_base + o2, _FMT_DESCRIPTOR[tgt])
-        f1 = _BE(dram, rec_base + 0x98); struct.pack_into(">I", dram, rec_base + 0x98, (f1 & ~0xFFF) | _FMT_F1_LOW[tgt])
-        f3v = _BE(dram, rec_base + 0xA0); struct.pack_into(">I", dram, rec_base + 0xA0, (f3v & ~0xFFF) | _FMT_F3_LOW[tgt])
-        struct.pack_into(">I", dram, rec_base + 0xA8, (mip0 & ~0xFFF) | 0xA00)
-    new_tex += tex[read_cur:]                           # verbatim tail
-
-    dram_c = EE.encode_payload(bytes(dram), wparam=dram_b["wp"], codec=dram_b["codec"])
-    tex_c = EE.encode_payload(bytes(new_tex), wparam=tex_b["wp"], codec=tex_b["codec"])
-    for blob_c, dec in ((dram_c, bytes(dram)), (tex_c, bytes(new_tex))):
-        ve = _verify_blob(blob_c, dec)
-        if ve:
-            raise ValueError(f"{iff}: {ve} — sequential convert aborted, game files untouched")
-    new_res = bytearray(res[:dram_b["off"]]) + dram_c + tex_c
-    _patch_iff_section(new_res, 0xBB05A9C1, dram_b["off"], len(dram_c), dec_size=len(dram))
-    _patch_iff_section(new_res, 0x411536D5, dram_b["off"] + len(dram_c), len(tex_c), dec_size=len(new_tex))
-    struct.pack_into(">I", new_res, 8, len(new_res))
-    _backup_once(game_dir / arc, log)
-    _, _, w0, h0, _, fmt0, _ = plan[0]
-    log(f"  {iff}: SEQUENTIAL CONVERT — {len(plan)} record(s) -> uncompressed, blob {len(tex)}->{len(new_tex)} "
-        f"(+{len(new_tex) - len(tex)}); VERIFY it renders in-game (loader-placed pack, derived path)")
-    return _relocate(iff, bytes(new_res), idx, game_dir, w0, h0, fmt0, log)
-
-
 def _repack_scatter(iff, arc, off, idx, res, size, tex_b, items, game_dir, new_fmt, log):
     """Rebuild a scatter pack's VRAM blob with the edited textures stored as `new_fmt` (uncompressed),
     recomputing all group-relative offsets. Copies every UNedited texture's original bytes verbatim
@@ -3097,12 +3418,17 @@ def replace_many(iff, edits, game_dir, log=print, prefer_lossless=True) -> str:
         return replace_portraits(iff, [{"index": e["index"], "path": e["path"]} for e in edits], game_dir, log)
     if iff in BUNDLE_PACKS:                               # frontend branding bundle -> in-place tiles
         return replace_bundles(iff, [{"index": e["index"], "path": e["path"]} for e in edits], game_dir, log)
-    if iff in _fe_components():                           # jersey decal sheet + normal (fixed offsets)
-        st = None
-        for e in edits:
-            st = replace_at(iff, e["vram_off"], e["w"], e["h"], e["fmt"], e["path"], game_dir, log)
-            log(f"  {iff} {e.get('label', 't%d' % e['index'])}: {st}")
-        return st or "no decal edits"
+    # Front-end jersey decal sheets carry FIXED offsets supplied by fe_components.json (the resource
+    # has no texture-record tree), so the two record-rewriting growth paths are off the table: no
+    # lossless format upgrade and no _grow_many (there is no +0x6C to redirect). Everything else --
+    # the single-pass splice, and crucially the WHOLE-PACK RELOCATE fallback -- applies normally,
+    # because that path keeps the uncompressed layout byte-for-byte identical and only moves the
+    # resource. This used to loop replace_at instead, which predates both growth paths and is
+    # therefore in-place-ONLY: a team whose stock sheet has no compression slack (ANA/SEA/VGK ship a
+    # 774,848-byte resource; VAN ships 945,164) failed outright on art that VAN swallowed.
+    fe = fe_component(iff) is not None
+    if fe:
+        prefer_lossless = False
     # SEQUENTIAL loader-placed packs (global.iff, gamedata.iff): the game streams these to VRAM at a
     # runtime cursor in record order, so RESIZING or format-CONVERTING any one texture (8888/grow) shifts
     # the cursor for every texture after it and the whole pack desyncs in-game (confirmed: global.iff
@@ -3113,6 +3439,11 @@ def replace_many(iff, edits, game_dir, log=print, prefer_lossless=True) -> str:
     # (e.g. the DXN base normal -> 8_8) would corrupt the pack. Replace them same-dim, same-format,
     # IN-PLACE only — exactly how the overlay uniform normal is edited.
     if re.match(r"uniform_base_", str(iff)):
+        prefer_lossless = False
+    # player_head_id_*.iff is the same shape: three surfaces packed back-to-back with +0x6C==1 and
+    # ZERO slack (393216+393216+196608 == the whole 983,040-byte blob). Any resize or format upgrade
+    # would push the loader's cursor and desync the normal + occlusion maps -> same-dim, in-place only.
+    if _player_head_id(str(iff)):
         prefer_lossless = False
     loc = resolve(iff, game_dir)
     if not loc:
@@ -3206,10 +3537,16 @@ def replace_many(iff, edits, game_dir, log=print, prefer_lossless=True) -> str:
         # repoint TOC). Keeps FULL quality (NO posterize) for stored-offset packs
         # (rink/led/uniform/scene/…). Returns None for packs that can't grow safely — loader-
         # repacked like global.iff, or a non-last big blob like overlay_static -> posterize-to-fit.
-        try:
-            grown = _grow_many(iff, arc, off, idx, res, size, vb, items, game_dir, log)
-        except Exception as ge:
-            log(f"  relocate-grow aborted ({ge}); falling back to posterize"); grown = None
+        grown = None
+        # player heads are loader-placed (+0x6C==1): a redirected record is IGNORED, the surface is
+        # streamed from the cursor, so a grow silently leaves the stock texture in the game and
+        # inflates the pack. Their only safe overflow path is the whole-pack relocate below, which
+        # keeps the uncompressed layout byte-for-byte and only moves the resource.
+        if not fe and not _player_head_id(str(iff)):       # FE sheets have no records to redirect
+            try:
+                grown = _grow_many(iff, arc, off, idx, res, size, vb, items, game_dir, log)
+            except Exception as ge:
+                log(f"  relocate-grow aborted ({ge}); falling back to posterize"); grown = None
         if grown:
             return grown
         # WHOLE-PACK RELOCATE (full quality, no posterize): the edited blob1 keeps the SAME
@@ -3661,7 +3998,12 @@ def replace_multitex_convert(iff, vram_off, w, h, new_fmt, edited_path, game_dir
     _backup_once(game_dir / arc, log)
     log(f"  {iff}: converted {w}x{h} -> {new_fmt} @VRAM 0x{new_off:X}, blob "
         f"{len(tex_b['dec'])}->{len(tex)} (lossless, no DXT block artifacts)")
-    return _relocate(iff, bytes(new_res), idx, game_dir, w, h, new_fmt, log)
+    st = _relocate(iff, bytes(new_res), idx, game_dir, w, h, new_fmt, log)
+    # Only the PRIMARY's own record can be re-derived from the pack, so this readback is meaningful
+    # for the single-primary case (rec_off=0); a sub-texture convert is verified by its caller.
+    if VERIFY_WRITES and rec_off == 0 and verify_written_primary(iff, game_dir, bytes(chain[:mip0]), log):
+        st += "  [!] POST-WRITE VERIFY FAILED — see log"
+    return st
 
 
 def replace_primary_convert(iff, edited_path, game_dir, new_fmt="8888", log=print) -> str:
@@ -3722,6 +4064,9 @@ def ensure_clean(iff, game_dir, log=print) -> bool:
     bytes come from the game folder's own <arc>.orig backup; we relocate them back over the game
     TOC entry."""
     game_dir = Path(game_dir)
+    # Deliberately NOT resolve_clean: this is the reset-to-shipped path, and an expansion team's
+    # asset has no shipped version to reset to. Falling back to the live archive would compare the
+    # asset against itself and always report "already pristine" — same no-op, extra full read.
     cl = resolve(iff, None, clean=True); gl = resolve(iff, game_dir)
     if not cl or not gl:
         return False
@@ -3734,30 +4079,6 @@ def ensure_clean(iff, game_dir, log=print) -> bool:
     _relocate(iff, clean, gl[3], game_dir, 0, 0, "DXT4_5", log)
     log(f"  reset {iff} to clean (applying fresh)")
     return True
-
-
-def can_lossless_8888(iff, rec, game_dir) -> bool:
-    """True if this sub-texture record could be stored UNCOMPRESSED (grow-capable pack: texture blob
-    is LAST, record findable) — i.e. we can eliminate block artifacts here (colour DXT->8888,
-    DXN normal->8_8)."""
-    if _lossless_target(rec.get("fmt")) is None:
-        return False
-    if _is_scatter_pack(iff, rec):          # arena presentation: in-place DXT only (packed layout)
-        return False
-    try:
-        loc = resolve(iff, Path(game_dir))
-        if not loc:
-            return False
-        arc, off, size, _idx, _f3 = loc
-        with open(Path(game_dir) / arc, "rb") as f:
-            f.seek(off); res = f.read(size)
-        blobs = _walk_blobs(res, size); tex_b = _big_vram_blob(res, size)
-        if not tex_b or not blobs or tex_b["off"] != blobs[-1]["off"]:
-            return False
-        dram = _walk_blobs(res, size)[0]["dec"]
-        return _find_multitex_rec(dram, rec["vram_off"], w=rec["w"], h=rec["h"]) is not None
-    except Exception:
-        return False
 
 
 def smart_replace_record(iff, rec, edited_path, game_dir, log=print, prefer_lossless=True) -> str:
@@ -3807,30 +4128,104 @@ def extract_dds(name: str, out_path: Path, clean_dir: Path = None) -> tuple:
     (w, h, fmt) or raises."""
     if name in SCENE_ASSETS:
         return extract_dds_at(*SCENE_ASSETS[name][:5], out_path, clean_dir)
-    loc = resolve(name, clean_dir, clean=True)
+    loc, _cl = resolve_clean(name, clean_dir)
     if not loc:
         raise ValueError(f"{name}: not found in TOC")
     arc, off, size, idx, f3 = loc
-    with open(_arc_file(clean_dir, arc, clean=True), "rb") as f:
+    with open(_arc_file(clean_dir, arc, clean=_cl), "rb") as f:
         f.seek(off); data = f.read(size + 0x200000)
     blobs = _walk_blobs(data, size)
     vram, fetch = _find_primary(blobs)
     if not vram:
         raise ValueError(f"{name}: no decodable primary texture (packed/scene asset?)")
     fmt, bpu, block, w, h, tiled, mip0 = fetch
-    img = T.decode(_dxt_endian(vram["dec"][:mip0], fmt), w, h, fmt, bpu, block, tiled, 0).convert("RGBA")
+    # Honour the record's +0x6c redirect exactly as decode_preview does. A grow-replace APPENDS the
+    # new pixels and points the record at them, so mip0 is no longer at the head of the blob —
+    # slicing from 0 decodes the stale ORIGINAL texture (in the NEW format) and yields a shifted,
+    # garbled image. Preview did this right and extract did not, which is why an asset could look
+    # correct in the tab and come out wrong on disk.
+    vo = _primary_vram_off(blobs, len(vram["dec"]), mip0)
+    img = T.decode(_dxt_endian(vram["dec"][vo:vo + mip0], fmt), w, h, fmt, bpu, block, tiled, 0).convert("RGBA")
     Path(out_path).parent.mkdir(parents=True, exist_ok=True)
     Path(out_path).write_bytes(_uncompressed_dds(img.tobytes(), w, h))
     return (w, h, fmt)
 
 
 # ── REPLACE (into GAME archives) ─────────────────────────────────────────────
-# team code -> tile index in the frontend logo bundles (identical across large/medium/small)
+# team code -> tile index in the frontend logo bundles (identical across large/medium/small).
+#
+# ⚠ This table is a LAST RESORT, not the answer: a tile index is a POSITION in the atlas, and
+# the atlas is not fixed.  Adding Seattle and Vegas spliced two tiles in at 67 and 42, which
+# pushed 22 of these 30 down by one or two — every one of them was silently overwriting its
+# neighbour's logo.  `_logo_tile()` reads the real order off disk; this only covers the case
+# where that read fails.
 LOGO_BUNDLE_TILE = {"col": 9, "lak": 12, "chi": 20, "phi": 21, "fla": 28, "buf": 29, "pit": 31,
                     "cbj": 35, "njd": 44, "car": 52, "nyi": 53, "ana": 54, "van": 56, "edm": 62,
                     "dal": 65, "bos": 73, "ott": 74, "min": 75, "stl": 76, "mtl": 78, "cgy": 83,
                     "atl": 87, "tbl": 90, "pho": 101, "wsh": 104, "tor": 110, "nsh": 115,
                     "nyr": 117, "det": 118, "sjs": 119}
+
+
+def _logo_tile(code: str, game_dir, log=print):
+    """The atlas tile `logo_<code>.iff` really occupies, read off disk.
+
+    The bundles are keyed by crc32 of the asset key and stored in hash order, so a team added
+    after ship (Seattle, Vegas) lands in the middle and shifts everything below it.  Only the
+    file knows the current order — see logos_atlas.team_tiles(), which inverts the hashes.
+    """
+    try:
+        from . import logos_atlas as LA
+    except ImportError:
+        import logos_atlas as LA
+    try:
+        t = LA.team_tiles(game_dir).get(code)
+        if t is not None:
+            return t
+        log(f"  no atlas tile for asset key '{code}' — front-end logo not cascaded")
+        return None
+    except Exception as e:
+        log(f"  WARNING could not read the logo atlas ({e}); falling back to the shipped map")
+        return LOGO_BUNDLE_TILE.get(code)
+
+
+VERIFY_WRITES = True                 # set False only to benchmark; costs ~0.02s (logo) - 1.1s (ice)
+
+
+def verify_written_primary(name, game_dir, expect_mip0: bytes, log=print) -> str | None:
+    """Read `name` back the way the GAME will and confirm the GPU will sample `expect_mip0`.
+
+    The point is that this resolves the surface offset INDEPENDENTLY — through the record's stored
+    `+0x6c`, exactly as the loader does — instead of trusting the offset the writer used. That is
+    the one thing neither `_verify_blob` (blob round-trips, but says nothing about where it sits)
+    nor an in-memory assertion can check, and it is precisely what went wrong with the ice: a
+    perfectly valid blob, written 2.8 MB away from where the record points.
+
+    Decompress only, no pixel decode — ~1s on the biggest asset in the game. Returns None when the
+    write is good, else an error string (also logged as a WARNING)."""
+    try:
+        loc = resolve(name, game_dir)
+        if not loc:
+            return None                                # nothing to check against
+        arc, off, size, _idx, _f3 = loc
+        with open(_arc_file(game_dir, arc, clean=False), "rb") as f:
+            f.seek(off); data = f.read(size + 0x200000)
+        blobs = _walk_blobs(data, size)
+        vram, fetch = _find_primary(blobs)
+        if not vram or not fetch:
+            return None
+        vo = _primary_vram_off(blobs, len(vram["dec"]), fetch[6])
+        got = bytes(vram["dec"][vo:vo + len(expect_mip0)])
+    except Exception as e:
+        log(f"  (post-write verify skipped for {name}: {type(e).__name__}: {e})")
+        return None
+    if got == expect_mip0:
+        return None
+    where = next((i for i, (a, b) in enumerate(zip(got, expect_mip0)) if a != b), len(got))
+    err = (f"VERIFY FAILED: {name} — the game will sample from VRAM offset {vo:,} but the pixels we "
+           f"wrote are not there (first mismatch at byte {where:,} of {len(expect_mip0):,}). "
+           f"The art on disk will render wrong.")
+    log(f"  WARNING {err}")
+    return err
 
 
 def replace(name: str, edited_path: Path, game_dir: Path, log=print, prefer_lossless=True) -> str:
@@ -3839,7 +4234,7 @@ def replace(name: str, edited_path: Path, game_dir: Path, log=print, prefer_loss
     loading logos, all three sizes) so one edit covers every spot the logo appears."""
     st = _replace_impl(name, edited_path, game_dir, log, prefer_lossless)
     code = name[5:-4] if name.startswith("logo_") and name.endswith(".iff") else None
-    tile = LOGO_BUNDLE_TILE.get(code) if code else None
+    tile = _logo_tile(code, game_dir, log) if code else None
     if tile is not None:
         log(f"  cascading logo_{code} into the frontend logo bundles (tile {tile}) …")
         try:
@@ -3895,9 +4290,14 @@ def _replace_impl(name: str, edited_path: Path, game_dir: Path, log=print, prefe
             log(f"  WARNING {name}: source aspect {img.size} != {w}x{h} — it will be stretched")
         log(f"  {name}: fitting source {img.size} -> {w}x{h} (LANCZOS downscale)")
         img = img.resize((w, h), Image.LANCZOS)
-    new_dec = _rebuild_with_mips(vram["dec"], 0, fmt, w, h, tiled, img, log,
-                                 ref_dec=_clean_ref_blob(name, 0),    # mip0 + mip chain (CLEAN ref)
-                                 mip_end=len(vram["dec"]))            # single texture = whole blob
+    # The surface is NOT always at the head of the VRAM blob: when the record carries a real stored
+    # offset (+0x6c > 1) the loader samples from THERE, not 0. Writing mip0 at 0 leaves the GPU
+    # reading 2.8 MB into our new pixels — the art comes out rolled by that many bytes (this was the
+    # ice_* bug: ice packs keep mip0 at 0x2B0000, and extract honoured it while replace did not).
+    svo = _primary_vram_off(blobs, len(vram["dec"]), mip0)
+    new_dec = _rebuild_with_mips(vram["dec"], svo, fmt, w, h, tiled, img, log,
+                                 ref_dec=_clean_ref_blob(name, svo),  # mip0 + mip chain (CLEAN ref)
+                                 mip_end=len(vram["dec"]))            # single texture = to blob end
     new_blob = EE.encode_payload(new_dec, wparam=vram["wp"], codec=vram["codec"])  # native window
     err = _verify_blob(new_blob, new_dec)
     if err:
@@ -3905,19 +4305,27 @@ def _replace_impl(name: str, edited_path: Path, game_dir: Path, log=print, prefe
     old_tot = vram["tot"]
     vo = vram["off"]
 
+    expect0 = bytes(new_dec[svo:svo + _mip0_size(fmt, w, h)])   # what the GPU must end up sampling
+
     if len(new_blob) <= old_tot:                      # IN-PLACE: same resource size
         new_res = bytearray(res)
         new_res[vo:vo + old_tot] = new_blob + b"\x00" * (old_tot - len(new_blob))
         _backup_once(game_dir / arc, log)
         with open(game_dir / arc, "r+b") as f:
             f.seek(off); f.write(new_res)
-        return (f"IN-PLACE: {name} -> {arc}:0x{off:X} "
-                f"(blob {len(new_blob)}/{old_tot} bytes, {w}x{h} {fmt})")
+        st = (f"IN-PLACE: {name} -> {arc}:0x{off:X} "
+              f"(blob {len(new_blob)}/{old_tot} bytes, {w}x{h} {fmt})")
+        if VERIFY_WRITES and verify_written_primary(name, game_dir, expect0, log):
+            st += "  [!] POST-WRITE VERIFY FAILED — see log"
+        return st
 
     # RELOCATE: build new resource (bigger VRAM blob), append to end of 1B, repoint TOC
     new_res = bytearray(res[:vo] + new_blob + res[vo + old_tot:])
     _patch_grown_iff(new_res, vo, len(new_blob))       # fix IFF total_size + section size (grown blob)
-    return _relocate(name, bytes(new_res), idx, game_dir, w, h, fmt, log)
+    st = _relocate(name, bytes(new_res), idx, game_dir, w, h, fmt, log)
+    if VERIFY_WRITES and verify_written_primary(name, game_dir, expect0, log):
+        st += "  [!] POST-WRITE VERIFY FAILED — see log"
+    return st
 
 
 def _backup_once(path: Path, log):
@@ -3950,100 +4358,265 @@ def _orig_1b_size(game_dir, align=0x800):
     return (o.stat().st_size + align - 1) & ~(align - 1)
 
 
-def _relocate(name, new_res: bytes, toc_idx: int, game_dir: Path, w, h, fmt, log) -> str:
-    ALIGN = 0x800
-    a0 = game_dir / "0A"; a1b = game_dir / "1B"
-    _backup_once(a0, log); _backup_once(a1b, log)
-    cnt = _BE(open(a0, "rb").read(0x14), 0x10)                  # real TOC entry count
-    d0a = bytearray(open(a0, "rb").read(0x58 + cnt * 16))
-    sizes = [_BE(d0a, 0x18 + i * 16) * ALIGN for i in range(4)]
-    base1b = sizes[0] + sizes[1] + sizes[2]
-    eo = 0x58 + toc_idx * 16
-    cur_f3 = _BE(d0a, eo + 12); cur_size = _BE(d0a, eo + 4)
-    cur_local = cur_f3 * ALIGN - base1b
-    orig_a = _orig_1b_size(game_dir, ALIGN)
+# Appends roll into the LAST archive named by the 0A header. When one more asset would push that
+# archive past this ceiling, a fresh archive is minted instead ("1C", "1D", ...) and the append goes
+# there, so no single archive ever approaches the ~2 GiB wall. The shipped 1B is already 1.91 GiB,
+# so in practice the next append spills immediately.
+SPILL_CEILING = 2_000_000_000
 
-    # AUTO-REUSE: if this asset is ALREADY in the appended (relocated) region and the new data
-    # fits its existing slot, overwrite in place — no append, no growth, no orphan. This makes
-    # re-applying the same asset free instead of leaking dead space.
-    if orig_a and cur_local >= orig_a and len(new_res) <= cur_size:
-        with open(a1b, "r+b") as f:
+
+def _read_header(a0: Path):
+    """0A's header + the whole entry table + 16 trailing bytes of slack.
+
+    The slack is what a new archive row is carved out of: inserting a 16-byte row slides the entry
+    table 16 bytes later, and consuming 16 zero bytes behind it keeps 0A's total length -- and
+    therefore every asset offset in it -- unchanged."""
+    head = open(a0, "rb").read(0x18)
+    narc = _BE(head, 0x08)
+    cnt = _BE(head, 0x10)
+    need = 0x18 + narc * 16 + cnt * 16 + 16
+    buf = bytearray(open(a0, "rb").read(need))
+    if len(buf) != need:
+        raise RuntimeError(f"0A is shorter ({len(buf)}) than its own header claims ({need})")
+    tbl = arc_table(buf)
+    return buf, [n for n, _ in tbl], [s for _, s in tbl], 0x18 + narc * 16, cnt
+
+
+def _write_header(a0: Path, buf: bytes):
+    with open(a0, "r+b") as f:
+        f.seek(0); f.write(buf)
+
+
+def _next_arc_name(names, game_dir):
+    taken = set(names)
+    for d in "123456789":
+        for c in "ABCDEFGHIJKLMNOPQRSTUVWXYZ":
+            n = d + c
+            if n not in taken and not (Path(game_dir) / n).exists():
+                return n
+    raise RuntimeError("no free archive name left")
+
+
+def _add_archive(game_dir, buf: bytearray, names, log):
+    """Mint a new empty archive and register it as the last row of 0A's archive table.
+
+    The name field is 8 bytes of UTF-16BE with a NUL terminator, so a name is at most 3 characters
+    -- "1C" fits, "Expanded_Textures" does not. Verified in-game: the loader takes the archive
+    count, the file names and the cumulative bounds walk entirely from this table, for both the
+    synchronous front-end load path and the gameplay streaming path."""
+    narc = len(names)
+    cnt = _BE(buf, 0x10)
+    eend = 0x18 + narc * 16 + cnt * 16
+    if any(buf[eend:eend + 16]):
+        raise RuntimeError("no zero slack behind 0A's entry table -- adding an archive would have "
+                           "to move asset data; refusing")
+    name = _next_arc_name(names, game_dir)
+    row = struct.pack(">II", 0, 0) + name.encode("utf-16-be").ljust(8, b"\0")
+    buf[0x18 + narc * 16:0x18 + narc * 16] = row       # insert the row; entry table slides +16
+    struct.pack_into(">I", buf, 0x08, narc + 1)
+    del buf[eend + 16:eend + 32]                       # ... and 16 B of slack pays for it
+    (Path(game_dir) / name).write_bytes(b"")
+    log(f"  minted archive {name} (now {narc + 1} archives; "
+        f"entry table at 0x{0x18 + (narc + 1) * 16:x})")
+    return name
+
+
+def _appended_start(game_dir, arc_name, align=0x800):
+    """Byte offset inside `arc_name` where OUR appended data begins -- everything at or above it is
+    ours to reuse or repack. For a shipped archive that is the size of its .orig backup (None when
+    there is no backup, which disables reuse and compaction for it); an archive we minted is ours in
+    its entirety."""
+    if arc_name in ARCS:
+        o = Path(game_dir) / (arc_name + ".orig")
+        if not o.exists():
+            return None
+        return (o.stat().st_size + align - 1) & ~(align - 1)
+    return 0
+
+
+def _backup_if_shipped(p: Path, log):
+    if p.name in ARCS:
+        _backup_once(p, log)
+
+
+def _relocate(name, new_res: bytes, toc_idx: int, game_dir: Path, w, h, fmt, log) -> str:
+    """Write `new_res` over `name`'s TOC entry (reusing its slot when it fits, else appending).
+
+    Afterwards, top up the STREAMING-POOL headroom for whatever asset family `name` belongs to: the
+    game sizes each class's pool slot to the biggest SHIPPED member of that family and silently
+    refuses to load anything larger (forever-"Loading"). Growing an asset past that ceiling is
+    exactly what a replace does, so the check belongs here — every asset write funnels through it."""
+    st = _relocate_raw(name, new_res, toc_idx, game_dir, w, h, fmt, log)
+    try:
+        from . import streaming_pool as _SP
+    except ImportError:
+        try:
+            import streaming_pool as _SP
+        except ImportError:
+            _SP = None
+    if _SP is not None:
+        try:
+            _SP.ensure_headroom(name, game_dir, log)
+        except Exception as e:                       # headroom is a safety net, never a blocker
+            log(f"  (streaming-pool headroom check skipped: {type(e).__name__}: {e})")
+    return st
+
+
+def _relocate_raw(name, new_res: bytes, toc_idx: int, game_dir: Path, w, h, fmt, log) -> str:
+    """Point `name`'s TOC entry at `new_res`, reusing its slot when the data fits and otherwise
+    appending to the LAST archive -- minting a new one when that would cross SPILL_CEILING.
+
+    The archive set is read from 0A's header, never assumed. One invariant keeps that safe: an
+    archive's declared size is the base of every archive after it, so only the last archive may ever
+    change size. Appends always go to the last archive, so growth never moves anything."""
+    ALIGN = 0x800
+    game_dir = Path(game_dir)
+    a0 = game_dir / "0A"
+    _backup_once(a0, log)
+    buf, names, sizes, ebase, cnt = _read_header(a0)
+    bases, acc = [], 0
+    for s in sizes:
+        bases.append(acc); acc += s
+
+    eo = ebase + toc_idx * 16
+    cur_off = _BE(buf, eo + 12) * ALIGN
+    cur_size = _BE(buf, eo + 4)
+    ci = max(k for k in range(len(names)) if bases[k] <= cur_off)
+    cur_arc, cur_local = names[ci], cur_off - bases[ci]
+
+    # AUTO-REUSE: if this asset is ALREADY in appended (relocated) space and the new data fits its
+    # existing slot, overwrite in place — no append, no growth, no orphan. This makes re-applying
+    # the same asset free instead of leaking dead space.
+    astart = _appended_start(game_dir, cur_arc, ALIGN)
+    if astart is not None and cur_local >= astart and len(new_res) <= cur_size:
+        p = game_dir / cur_arc
+        _backup_if_shipped(p, log)
+        with open(p, "r+b") as f:
             f.seek(cur_local); f.write(new_res)
             if len(new_res) < cur_size:                        # wipe the stale tail (keeps it clean)
                 f.write(b"\x00" * (cur_size - len(new_res)))
-        struct.pack_into(">I", d0a, eo + 4, len(new_res))      # size only; f3 unchanged
-        with open(a0, "r+b") as f:
-            f.seek(0); f.write(d0a)
-        return (f"IN-PLACE (reused slot): {name} -> 1B:0x{cur_local:X} "
+        struct.pack_into(">I", buf, eo + 4, len(new_res))      # size only; f3 unchanged
+        _write_header(a0, buf)
+        return (f"IN-PLACE (reused slot): {name} -> {cur_arc}:0x{cur_local:X} "
                 f"({len(new_res)}/{cur_size} bytes, no growth) ({w}x{h} {fmt})")
 
-    old_1b_size = a1b.stat().st_size
-    new_local = (old_1b_size + ALIGN - 1) & ~(ALIGN - 1)       # 0x800-align the append point
-    with open(a1b, "r+b") as f:
-        if new_local > old_1b_size:
-            f.seek(old_1b_size); f.write(b"\x00" * (new_local - old_1b_size))
+    spill = names[-1]
+    spill_path = game_dir / spill
+    spill_size = spill_path.stat().st_size if spill_path.exists() else 0
+    new_local = (spill_size + ALIGN - 1) & ~(ALIGN - 1)        # 0x800-align the append point
+
+    # ROLLING SPILL: never let one archive approach the ~2 GiB wall. A brand-new archive is exempt
+    # from the check, so an asset larger than the ceiling still lands somewhere instead of looping.
+    if spill_size and new_local + len(new_res) > SPILL_CEILING:
+        log(f"  {spill} would reach {new_local + len(new_res):,} B, past the "
+            f"{SPILL_CEILING:,} B ceiling — spilling to a new archive")
+        spill = _add_archive(game_dir, buf, names, log)
+        names.append(spill); sizes.append(0); bases.append(acc)
+        spill_path = game_dir / spill
+        spill_size = 0
+        new_local = 0
+        ebase += 16                                            # the entry table just moved
+        eo = ebase + toc_idx * 16
+
+    si = len(names) - 1
+    _backup_if_shipped(spill_path, log)
+    with open(spill_path, "r+b" if spill_path.exists() else "wb") as f:
+        if new_local > spill_size:
+            f.seek(spill_size); f.write(b"\x00" * (new_local - spill_size))
         f.seek(new_local); f.write(new_res)
-    total_1b = new_local + len(new_res)
-    struct.pack_into(">I", d0a, 0x18 + 3 * 16, (total_1b + ALIGN - 1) // ALIGN)   # bump 1B size field
-    struct.pack_into(">I", d0a, eo + 4, len(new_res))          # size
-    struct.pack_into(">I", d0a, eo + 12, (base1b + new_local) // ALIGN)          # f3
-    with open(a0, "r+b") as f:
-        f.seek(0); f.write(d0a)
-    orphan = f" (old slot @0x{cur_local:X} orphaned — run compact_1b to reclaim)" if (orig_a and cur_local >= orig_a) else ""
-    return (f"RELOCATED: {name} -> 1B:0x{new_local:X} ({len(new_res)} bytes), "
-            f"TOC#{toc_idx} repointed, 1B grown ({w}x{h} {fmt}){orphan}")
+    total = new_local + len(new_res)
+    struct.pack_into(">I", buf, 0x18 + si * 16, (total + ALIGN - 1) // ALIGN)   # last archive's size
+    struct.pack_into(">I", buf, eo + 4, len(new_res))                          # size
+    struct.pack_into(">I", buf, eo + 12, (bases[si] + new_local) // ALIGN)     # f3
+    _write_header(a0, buf)
+    orphan = (f" (old slot @{cur_arc}:0x{cur_local:X} orphaned — run compact_1b to reclaim)"
+              if (astart is not None and cur_local >= astart) else "")
+    return (f"RELOCATED: {name} -> {spill}:0x{new_local:X} ({len(new_res)} bytes), "
+            f"TOC#{toc_idx} repointed, {spill} grown ({w}x{h} {fmt}){orphan}")
 
 
 def compact_1b(game_dir, log=print) -> str:
-    """Rebuild 1B keeping ONLY live data: the original region (everything an un-relocated TOC entry
-    still points into) plus every LIVE relocated entry, packed with no gaps. Drops all orphaned
-    copies (superseded relocations + reverted assets). Updates each moved entry's TOC f3 + the 1B
-    size bound. Run with the game CLOSED."""
+    """Reclaim dead space in EVERY archive we have appended to. Kept under the old name because a
+    dozen call sites use it.
+
+    For each such archive: keep the original region (everything an un-relocated TOC entry still
+    points into) plus every LIVE relocated entry, packed with no gaps, dropping orphaned copies
+    (superseded relocations + reverted assets) and repointing each moved entry's f3.
+
+    One rule matters for correctness now that there can be more than one archive: an archive's
+    DECLARED size is the base of every archive after it, so shrinking a non-last archive would
+    silently move all of them. Non-last archives are therefore truncated on disk but KEEP their
+    declared size — declared > actual is already true of the shipped 1B, and only dead entries ever
+    point past the end. Only the last archive may shrink its declared size. Run with the game
+    CLOSED."""
     ALIGN = 0x800
-    game_dir = Path(game_dir); a0 = game_dir / "0A"; a1b = game_dir / "1B"
-    orig_a = _orig_1b_size(game_dir, ALIGN)
-    if not orig_a:
-        return "no 1B.orig backup — cannot determine original boundary; nothing done"
-    cnt = _BE(open(a0, "rb").read(0x14), 0x10)
-    d0a = bytearray(open(a0, "rb").read(0x58 + cnt * 16))
-    sizes = [_BE(d0a, 0x18 + i * 16) * ALIGN for i in range(4)]
-    base1b = sizes[0] + sizes[1] + sizes[2]
-    cur_1b = a1b.stat().st_size
-    # collect LIVE appended entries (TOC f3 lands in the appended region)
-    live = []
+    game_dir = Path(game_dir)
+    a0 = game_dir / "0A"
+    buf, names, sizes, ebase, cnt = _read_header(a0)
+    bases, acc = [], 0
+    for s in sizes:
+        bases.append(acc); acc += s
+
+    per = {k: [] for k in range(len(names))}            # archive index -> [(toc_idx, local, size)]
     for i in range(cnt):
-        _fl, s, _f2, f3 = struct.unpack_from(">4I", d0a, 0x58 + i * 16)
-        local = f3 * ALIGN - base1b
-        if s > 0 and orig_a <= local < cur_1b:
-            live.append((i, local, s))
-    if not live:
-        # nothing live above the boundary -> just truncate the dead tail
-        if cur_1b > orig_a:
-            with open(a1b, "r+b") as f: f.truncate(orig_a)
-            struct.pack_into(">I", d0a, 0x18 + 3 * 16, orig_a // ALIGN)
-            with open(a0, "r+b") as f: f.seek(0); f.write(d0a)
-        return f"compacted 1B: {cur_1b} -> {orig_a} (no live relocations; dropped {cur_1b-orig_a} dead bytes)"
-    # read each live entry's bytes BEFORE truncating
-    blobs = {}
-    with open(a1b, "rb") as f:
-        for i, local, s in live:
-            f.seek(local); blobs[i] = f.read(s)
-    # rebuild appended region, packed
-    with open(a1b, "r+b") as f:
-        f.truncate(orig_a)
-        cur = orig_a
-        for i, local, s in live:
-            cur_aligned = (cur + ALIGN - 1) & ~(ALIGN - 1)
-            f.seek(cur_aligned); f.write(blobs[i])
-            struct.pack_into(">I", d0a, 0x58 + i * 16 + 12, (base1b + cur_aligned) // ALIGN)  # new f3
-            cur = cur_aligned + s
-    struct.pack_into(">I", d0a, 0x18 + 3 * 16, (cur + ALIGN - 1) // ALIGN)
-    with open(a0, "r+b") as f:
-        f.seek(0); f.write(d0a)
-    saved = cur_1b - cur
-    log(f"compacted 1B: {cur_1b} -> {cur} bytes (reclaimed {saved} = {saved//1024//1024}MB), "
-        f"{len(live)} live relocated entries repacked")
-    return f"compacted 1B: reclaimed {saved//1024//1024}MB ({len(live)} live entries kept)"
+        _fl, s, _f2, f3 = struct.unpack_from(">4I", buf, ebase + i * 16)
+        off = f3 * ALIGN
+        k = max(j for j in range(len(names)) if bases[j] <= off)
+        per[k].append((i, off - bases[k], s))
+
+    notes, saved_total, kept_total = [], 0, 0
+    for k, arc in enumerate(names):
+        start = _appended_start(game_dir, arc, ALIGN)
+        p = game_dir / arc
+        if start is None or not p.exists():
+            continue                                   # no .orig -> boundary unknown, leave alone
+        cur_sz = p.stat().st_size
+        if cur_sz <= start:
+            continue
+        live = sorted((e for e in per[k] if e[2] > 0 and start <= e[1] < cur_sz),
+                      key=lambda e: e[1])
+        blobs = {}
+        with open(p, "rb") as f:                       # read live bytes BEFORE truncating
+            for i, local, s in live:
+                f.seek(local); blobs[i] = f.read(s)
+        with open(p, "r+b") as f:
+            f.truncate(start)
+            cur = start
+            for i, local, s in live:
+                at = (cur + ALIGN - 1) & ~(ALIGN - 1)
+                f.seek(at); f.write(blobs[i])
+                struct.pack_into(">I", buf, ebase + i * 16 + 12, (bases[k] + at) // ALIGN)
+                cur = at + s
+        if k == len(names) - 1:                        # only the last archive may shrink its bound
+            struct.pack_into(">I", buf, 0x18 + k * 16, (cur + ALIGN - 1) // ALIGN)
+        saved_total += cur_sz - cur
+        kept_total += len(live)
+        if cur_sz != cur:
+            notes.append(f"{arc} {cur_sz:,}->{cur:,} ({len(live)} kept)")
+
+    # a minted archive that ended up empty, with nothing at all pointing into it, can be dropped
+    while len(names) > len(ARCS) and names[-1] not in ARCS and not per[len(names) - 1]:
+        arc = names[-1]
+        p = game_dir / arc
+        if p.exists() and p.stat().st_size:
+            break
+        narc = len(names)
+        eend = 0x18 + narc * 16 + cnt * 16
+        del buf[0x18 + (narc - 1) * 16:0x18 + narc * 16]       # drop the row; table slides back 16
+        struct.pack_into(">I", buf, 0x08, narc - 1)
+        buf[eend - 16:eend - 16] = b"\0" * 16                  # ... and the slack is handed back
+        if p.exists():
+            p.unlink()
+        names.pop(); ebase -= 16
+        notes.append(f"dropped empty archive {arc}")
+
+    _write_header(a0, buf)
+    if not notes:
+        return "nothing to compact (no dead space in any archive)"
+    log(f"compacted: reclaimed {saved_total:,} B ({saved_total // 1024 // 1024}MB), "
+        f"{kept_total} live relocated entries repacked — " + "; ".join(notes))
+    return (f"compacted: reclaimed {saved_total // 1024 // 1024}MB "
+            f"({kept_total} live entries kept across {len(notes)} change(s))")
 
 
 if __name__ == "__main__":

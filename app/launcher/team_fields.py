@@ -121,14 +121,32 @@ def _base_stride(ros):
     return TC._team_base(ros, c), c.stride
 
 
+def _rec_for(ros_path, code, rec, led):
+    """The record a read/write should land on: the team's own, or its arena-LED twin.
+
+    The twin used to be `rec + 30`; that only held while league-0 was exactly the 30
+    shipping teams. It is the team's AHL affiliate record, wherever it now sits — see
+    `team_colors.led_record`.
+    """
+    if not led:
+        return rec
+    r = TC.led_record(ros_path, code)
+    if r is None:
+        raise KeyError(f"{code.upper()} has no AHL affiliate record, so no LED twin")
+    return r
+
+
 def load_rows(ros_path, led=False) -> list[dict]:
-    """[{'code','rec','values': {field_name: text}}] for the 30 teams (or their LED twins)."""
+    """[{'code','rec','values': {field_name: text}}] for every team (or their LED twins)."""
     ros = RF.RosFile(str(ros_path)); d = ros.data
     base, S = _base_stride(ros)
     defs = load_defs()
     rows = []
     for code, rec in sorted(TC.team_map(ros_path).items(), key=lambda kv: kv[1]):
-        r = rec + (TC.LED_OFFSET if led else 0)
+        try:
+            r = _rec_for(ros_path, code, rec, led)
+        except KeyError:
+            continue                       # no affiliate -> that team simply has no LED row
         b = base + r * S
         vals = {f["name"]: decode(bytes(d[b + f["off"]: b + f["off"] + f["size"]]), f["type"])
                 for f in defs}
@@ -138,7 +156,7 @@ def load_rows(ros_path, led=False) -> list[dict]:
 
 def save_rows(ros_path, edits, led=False, backup=True, log=print) -> int:
     """Apply edits IN PLACE. edits: [(code, field_name, new_text)]. Returns the count written.
-    `led=True` writes each team's arena-LED twin (record +30) instead of its team record.
+    `led=True` writes each team's arena-LED twin (its AHL affiliate record) instead.
 
     Validates and encodes EVERY edit before touching a byte, so one bad value aborts the whole
     batch instead of half-writing it.
@@ -153,7 +171,7 @@ def save_rows(ros_path, edits, led=False, backup=True, log=print) -> int:
             raise KeyError(f"unknown field '{name}' — is it still in {DEFS_NAME}?")
         if code.upper() not in tmap:
             raise KeyError(f"unknown team '{code}'")
-        rec = tmap[code.upper()] + (TC.LED_OFFSET if led else 0)
+        rec = _rec_for(ros_path, code, tmap[code.upper()], led)
         try:
             plan.append((rec, f, encode(text, f["type"], f["size"]), code, name, text))
         except ValueError as e:
@@ -180,7 +198,7 @@ def record_hex(ros_path, code, led=False) -> str:
     """The raw 412 bytes of one team's record, as an annotated hex dump."""
     ros = RF.RosFile(str(ros_path)); d = ros.data
     base, S = _base_stride(ros)
-    rec = TC.team_map(ros_path)[code.upper()] + (TC.LED_OFFSET if led else 0)
+    rec = _rec_for(ros_path, code, TC.team_map(ros_path)[code.upper()], led)
     b = base + rec * S
     raw = bytes(d[b:b + S])
     out = [f"{code.upper()}  record {rec}  file offset 0x{b:X}  ({S} bytes)"]

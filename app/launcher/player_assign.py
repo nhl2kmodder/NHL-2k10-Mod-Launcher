@@ -21,9 +21,15 @@ which re-resolves by portrait key and goalie ordinal (see modpack._resolve_goali
 packs still land on the right goalies. Record 0 is now the chunk start, confirmed by the team
 records' player pointers, which target `player_record + 0x00`.
 
-(Pointer fields — the name pointers at +0x00/+0x04 — are not
-stored as offsets on disk; the loader resolves those, so per-player NAMES are still unsolved here.
-Identify a row by portrait key or by goalie order instead: find_rows_by_portrait_key / goalie_rows.)
+NAMES ARE SOLVED ON DISK (2026-08-06) — this file used to say they weren't. The name pointers at
++0x00 (last) and +0x04 (first) follow the same SELF-RELATIVE rule as the team-name pointers:
+
+    target = field_file_offset + value - 1          # string is UTF-16BE, NUL-terminated
+
+The target lands either in the shared name pool (chunk 0xEB69DFB9) for stock names, or INSIDE the
+player's own 420-byte record for created/edited players, which store the string inline — scanning
+only the pool is what made this look unsolvable. 2,676 of 2,715 rows resolve on the live 2026 save.
+Use name(row) / find_rows_by_name() to address a player; portrait key and goalie order still work.
 
 Verified against the live Roster.ROS (player chunk 0x1E159C31, 2714 records x 420B, big-endian):
   +0x1C  u16  portrait key   98.6% of values are keys that actually exist as blobs in
@@ -36,6 +42,18 @@ Verified against the live Roster.ROS (player chunk 0x1E159C31, 2714 records x 42
   +0xB4  u32  mask shell     (v>>23)&0xF; 270/280 goalies = shell 0.
   +0xB8  u32  mask pattern   v&0x1F; goalies span the full 0..31 range, skaters 2385/2411 zero.
                              IN-GAME CONFIRMED 2026-07-31 (pattern 28->3 and 0->22 both took).
+  +0xB8  u32  EYE COLOR      (v>>10)&3 — same dword as the mask pattern, different bits.
+                             SOLVED 2026-08-06 from the render path, not by guessing. The four
+                             eyeball BaseMap sheets are the only ones in the game (global.iff,
+                             512x512 DXT1) and sit contiguously in g_MeshDescriptorTable
+                             (= DAT_8208f638, 302 entries, stride 0x12e per side) as asset ids
+                             75 blue / 76 brown / 77 green / 78 hazel. Function_84090AE0 binds the
+                             eye part (0x1D) with Model_GetMeshHandleById({76,75,77,78}[e]) where
+                             e = FUN_840a8f28 = rotl32(*(u32*)(rec+0xB8), 18) >> 28, i.e. these
+                             bits. Confirmed on the live save: the field holds ONLY 0..3 across all
+                             2,715 records, and the spread is textbook — brown 1283 / blue 718 /
+                             hazel 505 / green 209. Spot checks match reality (Crosby brown,
+                             Ovechkin blue, Makar brown, Matthews brown).
   +0x158 u32  mask color 1   0xAARRGGBB, alpha FF. The mask texture is team-RECOLORED: the game
   +0x15C u32  mask color 2   substitutes these three colors weighted by the texture's R/G/B
   +0x160 u32  mask color 3   channels, so a custom TRUE-COLOR mask needs them set to the RGB
@@ -69,16 +87,31 @@ STRIDE = 420
 
 # Offsets are relative to record_base(row) = foff + row*STRIDE, i.e. identical to the
 # in-memory offsets used by goalie_equipment.py / portrait_assign.py.
+OFF_LAST     = 0x00                          # self-relative ptr -> UTF-16BE last name
+OFF_FIRST    = 0x04                          # self-relative ptr -> UTF-16BE first name
 OFF_TEAM     = 0x14                          # self-relative ptr back to this player's team record
 OFF_PORTRAIT = 0x1C                          # u16
+OFF_HEAD     = 0xB2                          # u16 head asset id -> player_head_id_%04d.iff
 OFF_POSITION = 0x40                          # u32, goalie iff (v>>3)&7 == 0
 OFF_SHELL    = 0xB4                          # u32, shell   = (v>>23)&0xF
 OFF_PATTERN  = 0xB8                          # u32, pattern = v&0x1F
 OFF_COLORS   = 0x158                         # 3 x u32 0xAARRGGBB at 0x158/0x15C/0x160
 OFF_CAGE     = 0x168                         # u32 0xAARRGGBB
 
+# The team record a player's OFF_TEAM pointer lands on carries its own name pointers here — the
+# same layout the live editor reads out of memory, which holds on disk too because the whole
+# record frame is shared (see the +0x73 reframe note above).
+OFF_TEAM_CITY, OFF_TEAM_NICK, OFF_TEAM_CODE = 0xA0, 0xA4, 0xA8
+
 SHELL_SHIFT, SHELL_MASK = 23, 0xF
 PATTERN_MASK = 0x1F
+
+# Eye colour shares the +0xB8 dword with the mask pattern — always read-modify-write it.
+OFF_EYES = 0xB8
+EYE_SHIFT, EYE_MASK = 10, 0x3
+EYE_COLORS = ("brown", "blue", "green", "hazel")
+# The g_MeshDescriptorTable asset id each value binds, for anyone extracting/replacing the sheet.
+EYE_ASSET_IDS = (76, 75, 77, 78)
 
 # Setting the 3 recolor slots to an RGB identity makes the team-recolor substitution a pass-through,
 # so a custom TRUE-COLOR mask texture renders exactly as authored.
@@ -123,6 +156,113 @@ class PlayerTable:
 
     def _set_u32(self, row, off, v):
         struct.pack_into(">I", self.ros.data, self._off(row, off), v & 0xFFFFFFFF)
+
+    # ── names (self-relative pointer -> UTF-16BE) ────────────────────────────
+    def _str_at(self, ptr_foff) -> str:
+        """The UTF-16BE string a self-relative pointer field at `ptr_foff` targets, or ''."""
+        d = self.ros.data
+        v = struct.unpack_from(">I", d, ptr_foff)[0]
+        if not v:
+            return ""
+        t = ptr_foff + v - 1                          # same rule as the team-name pointers
+        if not 0 <= t < len(d) - 1:
+            return ""
+        end = t
+        while end + 1 < len(d) and d[end:end + 2] != b"\0\0":
+            end += 2
+        if end - t > 128:                             # runaway = not a string
+            return ""
+        try:
+            return bytes(d[t:end]).decode("utf-16-be")
+        except UnicodeDecodeError:
+            return ""
+
+    def name(self, row):
+        """(first, last) for a row. Either may be '' if the pointer doesn't resolve."""
+        return (self._str_at(self._off(row, OFF_FIRST)), self._str_at(self._off(row, OFF_LAST)))
+
+    def team(self, row):
+        """(city, nickname, code) of this player's club, or ('', '', '').
+
+        The player record's +0x14 is a self-relative pointer straight at the team record, so this
+        needs no team table and no index arithmetic — follow it and read the three name pointers.
+        It reaches minor-league and national clubs too ('Utica / NJD Minors / UTC', 'Team /
+        Denmark / DMK'), which is exactly what makes it useful for telling apart the several
+        thousand rows that are not NHL players."""
+        d = self.ros.data
+        po = self._off(row, OFF_TEAM)
+        v = struct.unpack_from(">I", d, po)[0]
+        if not v:
+            return ("", "", "")
+        t = po + v - 1
+        if not 0 <= t + OFF_TEAM_CODE + 4 <= len(d):
+            return ("", "", "")
+        return tuple(self._str_at(t + o) for o in
+                     (OFF_TEAM_CITY, OFF_TEAM_NICK, OFF_TEAM_CODE))
+
+    def find_rows_by_name(self, first=None, last=None):
+        """Rows matching first and/or last name, case-insensitively. Duplicate names DO occur in the
+        shipped roster (and community rosters often leave a stale duplicate behind), so this returns
+        every match rather than one row — the caller decides."""
+        f = (first or "").strip().lower()
+        l = (last or "").strip().lower()
+        out = []
+        for r in range(self.nrec):
+            fr, lr = self.name(r)
+            if (not f or fr.lower() == f) and (not l or lr.lower() == l):
+                out.append(r)
+        return out
+
+    # ── head asset (the player's face) ───────────────────────────────────────
+    def head(self, row) -> int:
+        """Head asset id: <9000 resolves to player_head_id_%04d.iff, >=9000 (and the 65535 sentinel)
+        means the game generates the face procedurally and no asset is read."""
+        return self._u16(row, OFF_HEAD)
+
+    def set_head(self, row, head_id: int, validate=True, game_dir=None):
+        """Point `row` at head asset `head_id`. With validate=True the id must exist as a shipped or
+        added player_head_id_*.iff — an id below 9000 with no asset renders as a missing face."""
+        if not 0 <= head_id <= 0xFFFF:
+            raise ValueError(f"head id {head_id} out of u16 range")
+        if validate and head_id < 9000:
+            try:
+                from .char_model import head_ids
+            except ImportError:
+                from char_model import head_ids
+            if head_id not in set(head_ids(game_dir)):
+                raise ValueError(f"head id {head_id} has no player_head_id_{head_id:04d}.iff")
+        self._set_u16(row, OFF_HEAD, head_id)
+
+    def head_usage(self):
+        """{head_id: [rows]} — how many players share each face. A prototype face must go into an id
+        used by nobody, or it repaints every player pointing at it."""
+        out = {}
+        for r in range(self.nrec):
+            out.setdefault(self.head(r), []).append(r)
+        return out
+
+    # ── eye colour ───────────────────────────────────────────────────────────
+    def eye_color(self, row) -> int:
+        """0..3 -> EYE_COLORS[v]. Applies to every player, generated face or authored head."""
+        return (self._u32(row, OFF_EYES) >> EYE_SHIFT) & EYE_MASK
+
+    def eye_color_name(self, row) -> str:
+        return EYE_COLORS[self.eye_color(row)]
+
+    def set_eye_color(self, row, value):
+        """Set eye colour by index 0..3 or by name ('brown'/'blue'/'green'/'hazel').
+
+        Read-modify-write: this dword also carries the goalie mask pattern (bits 0..4), so a blind
+        store would wipe it."""
+        if isinstance(value, str):
+            key = value.strip().lower()
+            if key not in EYE_COLORS:
+                raise ValueError(f"unknown eye colour {value!r} (want one of {EYE_COLORS})")
+            value = EYE_COLORS.index(key)
+        if not 0 <= value <= EYE_MASK:
+            raise ValueError(f"eye colour {value} out of range 0..{EYE_MASK}")
+        v = self._u32(row, OFF_EYES)
+        self._set_u32(row, OFF_EYES, (v & ~(EYE_MASK << EYE_SHIFT)) | (value << EYE_SHIFT))
 
     # ── portrait ─────────────────────────────────────────────────────────────
     def portrait(self, row) -> int:
@@ -224,7 +364,8 @@ class PlayerTable:
             shell, pattern = self.mask(r)
             out.append({"row": r, "portrait": self.portrait(r), "position": self.position(r),
                         "is_goalie": self.is_goalie(r), "shell": shell, "pattern": pattern,
-                        "colors": list(self.mask_colors(r)), "cage": self.cage_color(r)})
+                        "colors": list(self.mask_colors(r)), "cage": self.cage_color(r),
+                        "head": self.head(r), "eyes": self.eye_color_name(r)})
         return out
 
     # ── save ─────────────────────────────────────────────────────────────────
@@ -302,13 +443,15 @@ def rows_for_live(table, live_recs):
     return ok, notes
 
 
-def apply_assignments(ros_path, portraits=None, masks=None, log=print, backup=True):
-    """Apply {row: key} portraits and {row: (shell, pattern)} masks to a Roster.ROS in place.
+def apply_assignments(ros_path, portraits=None, masks=None, heads=None, eyes=None,
+                      log=print, backup=True):
+    """Apply {row: key} portraits, {row: (shell, pattern)} masks, {row: head_id} heads and
+    {row: eye colour} to a Roster.ROS in place.
 
     Rows sitting on a sentinel key are skipped for portraits (they are placeholder records).
     Returns (n_portraits, n_masks, skipped)."""
     t = PlayerTable(ros_path)
-    npor = nmask = 0
+    npor = nmask = nhead = neyes = 0
     skipped = []
     for row, key in (portraits or {}).items():
         cur = t.portrait(row)
@@ -339,9 +482,27 @@ def apply_assignments(ros_path, portraits=None, masks=None, log=print, backup=Tr
             log(f"  row {row}: mask {cur['shell']},{cur['pattern']} -> {new['shell']},{new['pattern']}"
                 f"  colors {[f'{c:06X}' for c in cur['colors']]} -> {[f'{c:06X}' for c in new['colors']]}"
                 f"  cage {cur['cage']:06X} -> {new['cage']:06X}")
-    if npor or nmask:
+    for row, head_id in (heads or {}).items():
+        cur = t.head(row)
+        try:
+            t.set_head(row, head_id)
+        except (ValueError, IndexError) as e:
+            skipped.append((row, str(e))); continue
+        if cur != head_id:
+            nhead += 1
+            log(f"  row {row}: head {cur} -> {head_id}")
+    for row, colour in (eyes or {}).items():
+        cur = t.eye_color(row)
+        try:
+            t.set_eye_color(row, colour)
+        except (ValueError, IndexError) as e:
+            skipped.append((row, str(e))); continue
+        if cur != t.eye_color(row):
+            neyes += 1
+            log(f"  row {row}: eyes {EYE_COLORS[cur]} -> {t.eye_color_name(row)}")
+    if npor or nmask or nhead or neyes:
         t.save(backup=backup)
-        log(f"saved {ros_path} ({npor} portraits, {nmask} masks)")
+        log(f"saved {ros_path} ({npor} portraits, {nmask} masks, {nhead} heads, {neyes} eyes)")
     else:
         log("nothing to change")
     for row, why in skipped:
@@ -358,6 +519,9 @@ if __name__ == "__main__":
     ap.add_argument("--show", type=int, metavar="ROW")
     ap.add_argument("--set-portrait", nargs=2, type=int, metavar=("ROW", "KEY"))
     ap.add_argument("--set-mask", nargs=3, type=int, metavar=("ROW", "SHELL", "PATTERN"))
+    ap.add_argument("--set-head", nargs=2, type=int, metavar=("ROW", "HEAD_ID"))
+    ap.add_argument("--set-eyes", nargs=2, metavar=("ROW", "COLOR"),
+                    help=f"eye colour: index 0..3 or name {EYE_COLORS}")
     ap.add_argument("--set-colors", nargs=4, metavar=("ROW", "C1", "C2", "C3"),
                     help="3 mask recolor slots as RRGGBB hex")
     ap.add_argument("--set-cage", nargs=2, metavar=("ROW", "RRGGBB"))
@@ -380,7 +544,9 @@ if __name__ == "__main__":
         print(f"rows using portrait {a.find_key}: {t.find_rows_by_portrait_key(a.find_key)}")
     if a.show is not None:
         r = a.show
-        print(f"row {r}: portrait={t.portrait(r)} position={t.position(r)} "
+        first, last = t.name(r)
+        print(f"row {r}: {first} {last} portrait={t.portrait(r)} position={t.position(r)} "
+              f"head={t.head(r)} eyes={t.eye_color_name(r)} "
               f"goalie={t.is_goalie(r)} look={t.goalie_look(r)}")
     if a.set_portrait:
         row, key = a.set_portrait
@@ -388,6 +554,12 @@ if __name__ == "__main__":
     if a.set_mask:
         row, shell, pattern = a.set_mask
         apply_assignments(a.ros, masks={row: (shell, pattern)})
+    if a.set_head:
+        row, head_id = a.set_head
+        apply_assignments(a.ros, heads={row: head_id})
+    if a.set_eyes:
+        row, colour = int(a.set_eyes[0]), a.set_eyes[1]
+        apply_assignments(a.ros, eyes={row: int(colour) if colour.isdigit() else colour})
     if a.set_colors:
         row = int(a.set_colors[0]); cols = [int(x, 16) for x in a.set_colors[1:]]
         apply_assignments(a.ros, masks={row: {"colors": cols}})

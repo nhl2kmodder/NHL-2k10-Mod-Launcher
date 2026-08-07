@@ -1,13 +1,46 @@
 """Work out which NHL team an audio stream belongs to.
 
-Two sources, in order of trust:
+Four sources, in order of trust:
 
+0. The stream's SLOT in its wave bank -- ``audio_team_slots.json``. Several banks hand
+   the engine a team's audio by position alone: there is no lookup table, the team id
+   *is* the index. Team ids are 0..29 in city-alphabetical order, which is exactly the
+   order of ``TEAMS`` below, so the id doubles as an index into it.
+
+     pamusic.bin              cue 43 + id   -> that team's goal song
+     teams.bin                slot i        -> id i//2 (two PxP takes per team)
+     loadingaudio_teams.bin   slot i        -> id i//2 (two pre-game takes per team)
+     horns.bin                run slot i    -> the i'th of ids 0..29 minus {1,8,9};
+                                               Atlanta, Columbus and Dallas sit in the
+                                               tail block and are remapped by the bank
+                                               trailer's 29-entry array
+
+   This is the strongest source there is -- it is how the game itself picks the file --
+   and it is the only one that can tag a stream whose name says nothing (a goal song is
+   just a music track; nothing in it mentions the team). Generated offline; see the
+   project_goal_songs note for the evidence.
 1. The arena sound banks. A stream referenced by exactly one ``arena_<code>`` bank is
    that team's by construction -- this is an archive fact, not a guess, but it only
    covers ~7% of the catalogue.
 2. The stream's name -- but only when it spells the team out in full. A city
    (``Crowd_Chant_Vancouver``, ``Chatter_Str_OnMinnesota``) or a full nickname
    (``Goal_Horn_Canucks``) is trusted; an abbreviation is not.
+3. What the stream actually SAYS -- ``audio_team_from_text.json``, built offline from the
+   full ASR sweep of all 54,268 speech takes. Filenames are transcripts truncated to
+   ~25 chars, so a line that names its team late ("Save made, oh it doesn't get any
+   bigger. The *Buffalo* fans...") has the team in the audio and nothing in the stem.
+   This source only fills in where 1 and 2 are silent, and it is a lookup rather than a
+   rule: every entry was decided offline under the same "spelled out in full, exactly
+   one team" test, so nothing here can be looser than what ``team_from_name`` allows.
+
+   Two things the offline pass had to get right, both learned the hard way:
+   *ambiguity must count the weak nicknames too* -- "The **Ducks** want to finish strong
+   ... but the **Thrashers**..." reads as single-team if only ``_STRONG`` votes, and
+   tagged 9 two-team lines with the wrong one until weak tokens were allowed to veto;
+   and *composite takes* (one file holding two alternate readings) name two teams and
+   must stay blank. Validation over the takes where the name ALSO has an opinion:
+   3,680 agree, 2 conflict -- and both conflicts are cases like these, where the name
+   wins anyway because this source never overrides it.
 
 Everything else stays blank. A wrong team is worse than no team here: the Team filter
 is used to find a specific team's audio, and a false positive means the user edits the
@@ -156,11 +189,82 @@ def _standalone(name: str, token: str) -> bool:
     return bool(re.search(r"(?<![A-Za-z])" + re.escape(token.capitalize()) + r"(?![a-z])", name))
 
 
-def team_for(name: str, bank_display: str = "") -> str:
+def canon(value: str) -> str:
+    """Fold any spelling of a team onto the exact string the Team filter offers.
+
+    The filter combobox is built from ``TEAMS``, and it matches by equality, so a tag
+    reading "ANA", "Anaheim" or "Ducks" is invisible to it however correct it is -- and
+    the shipped data had accumulated 102 distinct spellings of 30 teams. Anything that
+    does not resolve is handed back untouched rather than blanked: it may be a team this
+    build has never heard of (an expansion club) or a note the user typed, and losing it
+    would be worse than leaving it unfilterable."""
+    v = (value or "").strip()
+    if not v or v in _ALIASES:
+        return v
+    if v.upper() in _CODES:
+        return _CODES[v.upper()]
+    return team_from_name(v) or v
+
+
+_SLOTS: dict[str, str] | None = None
+
+
+def _from_slot(akey: str) -> str:
+    """Team that owns this stream's slot in its wave bank. '' when it owns none.
+
+    Cached, and a missing data file degrades to the other three sources -- see _from_text
+    for why that is deliberate."""
+    global _SLOTS
+    if _SLOTS is None:
+        try:
+            try:
+                from . import resources
+            except ImportError:
+                import resources
+            import json
+            p = resources.data_path("audio_team_slots.json")
+            _SLOTS = (json.loads(p.read_text(encoding="utf-8")).get("slots") or {}) \
+                if p.exists() else {}
+        except Exception:
+            _SLOTS = {}
+    return _SLOTS.get(akey, "")
+
+
+_FROM_TEXT: dict[str, str] | None = None
+
+
+def _from_text(akey: str) -> str:
+    """Team the stream SPELLS OUT in its audio, per the offline sweep. '' when unknown.
+
+    Loaded once and cached. A missing data file is not an error -- the column simply
+    falls back to what the name and banks say, which is what it did before this source
+    existed, so an incomplete install degrades instead of raising."""
+    global _FROM_TEXT
+    if _FROM_TEXT is None:
+        try:
+            try:
+                from . import resources
+            except ImportError:
+                import resources                       # running from launcher/ directly
+            import json
+            p = resources.data_path("audio_team_from_text.json")
+            _FROM_TEXT = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        except Exception:
+            _FROM_TEXT = {}
+    return _FROM_TEXT.get(akey, "")
+
+
+def team_for(name: str, bank_display: str = "", akey: str = "") -> str:
     """Team for one stream. ``bank_display`` is audio_names.bank_info()'s first value;
-    a single-arena reference ('VAN only') outranks anything the name says."""
+    a single-arena reference ('VAN only') outranks anything the name says. ``akey`` is the
+    manifest key ('1B:0x0933A000') and is what the transcript table is keyed on -- omit it
+    and the transcript source is simply skipped."""
+    if akey:
+        slot = _from_slot(akey)
+        if slot:
+            return slot
     if bank_display:
         m = re.match(r"^([A-Z]{2,3}) only$", bank_display.strip())
         if m and m.group(1) in _CODES:
             return _CODES[m.group(1)]
-    return team_from_name(name)
+    return team_from_name(name) or (_from_text(akey) if akey else "")

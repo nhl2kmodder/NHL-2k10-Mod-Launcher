@@ -55,12 +55,13 @@ from pathlib import Path
 
 TEAM_CHUNK = 0x8489FAF3
 STRIDE = 0x19C
-NHL = 30                        # the block the menus list
+NHL = 30                        # the shipping block size — see league0_slots()
 
 OFF_PLAYERS = range(0x08, 0x74, 4)
 OFF_CITY, OFF_NICK, OFF_CODE, OFF_LOWER, OFF_AKEY = 0xA8, 0xAC, 0xB0, 0xB4, 0xB8
 OFF_ARENA, OFF_PRO, OFF_FARM, OFF_MISC = 0xCC, 0xD0, 0xD4, 0xD8
 OFF_ID = 0xC8
+OFF_LEAGUE = 0x110              # league << 28 | division << 24
 
 PTR_FIELDS = list(OFF_PLAYERS) + [OFF_CITY, OFF_NICK, OFF_CODE, OFF_LOWER, OFF_AKEY,
                                   OFF_ARENA, OFF_PRO, OFF_FARM, OFF_MISC]
@@ -158,20 +159,37 @@ def find_table(d) -> tuple[int, int]:
 
 # ── reading ─────────────────────────────────────────────────────────────────────
 
-def read_order(ros_path) -> list[dict]:
-    """The 30 NHL teams in their current display order.
+def league0_slots(d, base, count) -> list[int]:
+    """Record indices of the top-league teams, in physical (= display) order.
 
-    [{'slot', 'code', 'city', 'name', 'id', 'label'}, ...] — `slot` is the position in the
-    menu list, `id` the record's team id (+0xC8), which does NOT change when teams move.
+    NOT `range(30)`: an expansion team lives in a spare record high in the table until it
+    is reordered, so the menu list is "every league-0 record", however many that is and
+    wherever they sit.  See [[project_expansion_teams]].
+    """
+    out = [i for i in range(count)
+           if _u32(d, base + i * STRIDE + OFF_LEAGUE) >> 28 == 0
+           and (_text(d, base + i * STRIDE + OFF_CITY) or
+                _text(d, base + i * STRIDE + OFF_NICK))]
+    if not out:
+        raise TeamOrderError("no league-0 team records found")
+    return out
+
+
+def read_order(ros_path) -> list[dict]:
+    """The top-league teams in their current display order.
+
+    [{'slot', 'record', 'code', 'city', 'name', 'id', 'label'}, ...] — `slot` is the
+    position in the menu list, `record` the physical record index, `id` the record's team
+    id (+0xC8), which does NOT change when teams move.
     """
     d = Path(ros_path).read_bytes()
-    base, _count = find_table(d)
+    base, count = find_table(d)
     out = []
-    for slot in range(NHL):
-        r = base + slot * STRIDE
+    for slot, rec in enumerate(league0_slots(d, base, count)):
+        r = base + rec * STRIDE
         city, name, code = (_text(d, r + o) for o in (OFF_CITY, OFF_NICK, OFF_CODE))
         label = " ".join(x for x in (city, name) if x) or f"record {slot}"
-        out.append({"slot": slot, "code": code, "city": city, "name": name,
+        out.append({"slot": slot, "record": rec, "code": code, "city": city, "name": name,
                     "id": d[r + OFF_ID], "label": label})
     return out
 
@@ -183,57 +201,60 @@ def order_codes(ros_path) -> list[str]:
 # ── writing ─────────────────────────────────────────────────────────────────────
 
 def apply_order(ros_path, order, backup=True, log=print) -> int:
-    """Permute the NHL block into `order` and rewrite every affected pointer.
+    """Permute the top-league block into `order` and rewrite every affected pointer.
 
-    `order` is the 30 team display CODES in the wanted order (a permutation of what
-    read_order() reports), or the 30 current slot numbers.  Returns the number of teams
+    `order` is the team display CODES in the wanted order (a permutation of what
+    read_order() reports), or the current slot numbers.  Returns the number of teams
     that actually moved.  Writes in place; the file size is unchanged.
+
+    The league-0 teams are packed to the FRONT of the table in `order`; every other record
+    (affiliates, nationals, HOME/AWAY) keeps its current relative order in what is left.
+    That is what promotes an expansion team out of a spare high record and into the menu.
     """
     ros_path = Path(ros_path)
     old = ros_path.read_bytes()
     base, count = find_table(old)
     end = base + count * STRIDE
+    l0 = league0_slots(old, base, count)
+    n = len(l0)
 
-    # ── resolve `order` to a permutation of slots ──────────────────────────────
+    # ── resolve `order` to a permutation of RECORD indices ─────────────────────
     current = read_order(ros_path)
     if all(isinstance(x, int) for x in order):
-        perm = list(order)
+        perm = [current[s]["record"] for s in order]
     else:
         by_code = {}
         for t in current:
-            by_code.setdefault(t["code"].upper(), []).append(t["slot"])
+            by_code.setdefault(t["code"].upper(), []).append(t["record"])
         perm = []
         for code in order:
-            slots = by_code.get(str(code).upper())
-            if not slots:
-                raise TeamOrderError(f"'{code}' is not one of this roster's 30 NHL teams")
-            perm.append(slots.pop(0))
-    if sorted(perm) != list(range(NHL)):
-        raise TeamOrderError(f"the order must list each of the {NHL} teams exactly once "
+            recs = by_code.get(str(code).upper())
+            if not recs:
+                raise TeamOrderError(f"'{code}' is not one of this roster's {n} league teams")
+            perm.append(recs.pop(0))
+    if sorted(perm) != sorted(l0):
+        raise TeamOrderError(f"the order must list each of the {n} teams exactly once "
                              f"(got {len(order)} entries)")
 
-    # newpos[old record] = new record.  Each NHL team's AHL affiliate is found through its
-    # own FARM pointer and moved to match, so the organisation stays together.
-    newpos = {i: i for i in range(count)}
-    farm_of = {}
-    for slot in range(NHL):
-        pro = _target(old, base + slot * STRIDE + OFF_PRO)
-        farm = _target(old, base + slot * STRIDE + OFF_FARM)
-        if pro is None or pro != base + slot * STRIDE + 8:
-            raise TeamOrderError(f"record {slot} does not own its pro roster — refusing to reorder")
-        if farm is None or not (base <= farm < end):
-            raise TeamOrderError(f"record {slot} has no affiliate — refusing to reorder")
-        farm_of[slot] = (farm - 8 - base) // STRIDE
-    if len(set(farm_of.values())) != NHL:
-        raise TeamOrderError("two NHL teams share an affiliate record — refusing to reorder")
-    # affiliates keep the same relative arrangement as their parents, so record 30+i
-    # goes on mirroring record i
-    farm_slots = sorted(farm_of.values())
-    for new_slot, old_slot in enumerate(perm):
-        newpos[old_slot] = new_slot
-        newpos[farm_of[old_slot]] = farm_slots[new_slot]
+    # newpos[old record] = new record.  League-0 teams take positions 0..n-1 in `order`;
+    # everything else keeps its relative order in the positions that remain.  Affiliate
+    # linkage rides on the FARM pointer, which is re-derived below, so an organisation
+    # stays together wherever its two records land.
+    for rec in perm:
+        r = base + rec * STRIDE
+        if _target(old, r + OFF_PRO) != r + 8:
+            raise TeamOrderError(f"record {rec} does not own its pro roster — refusing to reorder")
+    newpos = {}
+    for new_slot, old_rec in enumerate(perm):
+        newpos[old_rec] = new_slot
+    free = iter(range(n, count))
+    for i in range(count):
+        if i not in newpos:
+            newpos[i] = next(free)
+    if sorted(newpos.values()) != list(range(count)):
+        raise TeamOrderError("internal error: the record permutation is not a bijection")
 
-    moved = sum(1 for slot in range(NHL) if newpos[slot] != slot)
+    moved = sum(1 for i in range(count) if newpos[i] != i)
     if not moved:
         log("  team order unchanged")
         return 0
@@ -275,13 +296,14 @@ def apply_order(ros_path, order, backup=True, log=print) -> int:
         raise TeamOrderError("internal error: file size changed")
 
     # ── verify before touching the file ───────────────────────────────────────
-    for new_slot, old_slot in enumerate(perm):
-        r = base + new_slot * STRIDE
-        if _target(new, r + OFF_PRO) != r + 8:
-            raise TeamOrderError(f"verify failed: slot {new_slot} lost its own roster")
+    for old_rec in range(count):
+        r = base + newpos[old_rec] * STRIDE
+        if _target(new, r + OFF_PRO) != r + 8 and _target(old, base + old_rec * STRIDE + OFF_PRO) \
+                == base + old_rec * STRIDE + 8:
+            raise TeamOrderError(f"verify failed: record {old_rec} lost its own roster")
         if [_target(new, r + f) for f in OFF_PLAYERS] != \
-           [_target(old, base + old_slot * STRIDE + f) for f in OFF_PLAYERS]:
-            raise TeamOrderError(f"verify failed: slot {new_slot}'s roster changed")
+           [_target(old, base + old_rec * STRIDE + f) for f in OFF_PLAYERS]:
+            raise TeamOrderError(f"verify failed: record {old_rec}'s roster changed")
     for off, t in inbound:
         was = (t - base - 8) // STRIDE
         now = _target(new, off)

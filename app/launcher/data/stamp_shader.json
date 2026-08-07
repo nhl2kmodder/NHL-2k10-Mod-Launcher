@@ -1,0 +1,267 @@
+{
+ "_": "Stamp placement as the game's pixel shader actually computes it. See launcher/stamp_shader.py for the mechanisms and tools/build_stamp_map.py for how decal_atlas.npz is baked. Every entry below was read off a RenderDoc capture of the game's own jersey-composite pass -- render caps/back_num.rdc (draws 1038/1050/1055/1070/1080) plus render caps/missing_renders (closeup_front draw 590 = shoulder band, closeup_left draw 445 = helmet); nothing here is estimated unless its 'verified' field says so.",
+ "_advance_px": "Every `advance_px` below is a FALLBACK, not the answer. The digit advance and the per-digit ink rects are a property of the KIT, not of the site: they live in the uniform's own DRAM blob at 0x540 (u32 advance px, u32 128) and 0x550 (27 slot rects, entry 8+d = digit d). Measured cgy_home 92, ana_away 104, chi_home 79 -- and those are exactly the advances the matching captures' pixel-shader constant buffers carry. stamp_shader.kit_metrics() reads them and jersey_preview uses them when it can, which is the 1:1 path; digit_constants() reproduces the model capture's own c33/c34 and c35/c36 float4s for both digits of #74 to within 2e-5. The numbers left here are one captured kit's values (79 = chi_home, 67 = the front_num_big capture) and are only right for that kit -- drawing a Calgary digit with 79 made it 92/79 = 1.16x too wide, which is the 'numbers look oddly big' report. `helmet_number` is the exception: it draws from the helmet's own 1024x256 sheet in its own UV space, and 0x540 is the 2048x512 garment sheet's advance, so its 62 stands until a per-kit helmet header is found.",
+ "sheet_size": [
+  2048,
+  512
+ ],
+ "uv_size": [
+  1024,
+  1024
+ ],
+ "logo_sites": {
+  "crest": {
+   "piece": "shirt",
+   "ku": 1.25,
+   "bu": -0.5,
+   "kv": 5.0,
+   "bv": -3.232,
+   "window": [
+    0.0,
+    0.0,
+    0.25,
+    1.0
+   ],
+   "keyed": false,
+   "_": "Collapsed from shader 1012's constants: t=uv*c9.y+c7.w; t.x=t.x*c22.w+c21.w; t.y=t.y*c24.w+c23.w; t=t*c8.w+c8.w; sheet=t*c39.xy+c39.zw; mask=c40. With c9.y=2 c7.w=-1 c8.w=0.5 c21.w=0 c22.w=5 c23.w=-2.464 c24.w=5 c39=(0.25,1,0,0) c40=(0,0,0.25,1). Puts sheet tile x[0,512] y[0,512] onto body-map x[409.6,614.4] y[661.9,866.8]. Validated pixel-exact against the game's render target."
+  }
+ },
+ "decal_sites": {
+  "front_number_small": {
+   "piece": "shirt",
+   "slots": [
+    2,
+    3
+   ],
+   "role": "number",
+   "advance_px": 79,
+   "glyph": "digit",
+   "keyed": true,
+   "_": "Upper-left chest. Verified: the capture's #71 reads '7' in slot 2, '1' in slot 3."
+  },
+  "front_number_big": {
+   "piece": "shirt",
+   "slots": [
+    4,
+    5
+   ],
+   "role": "number",
+   "advance_px": 67,
+   "glyph": "digit",
+   "keyed": true,
+   "verified": "slots measured; advance from the front_num_big capture. The back_num capture's kit wears the small style, so slots 4/5 are empty there and the tens/ones order is by position (slot 4 is left of slot 5), not by observed glyph.",
+   "_": "Centre chest. The ROS uniform +0x18 enum picks small vs big; they land nowhere near each other."
+  },
+  "letter": {
+   "piece": "shirt",
+   "slots": [
+    1
+   ],
+   "role": "letter",
+   "glyph": "cell",
+   "keyed": true,
+   "verified": "slot measured; the captured kit has no captaincy patch, so the slot is empty there and the mapping to the C/A cell is from stamp_placement.json's measured source cell.",
+   "_": "Captaincy patch, right of the crest."
+  },
+  "back_number": {
+   "piece": "back",
+   "slots": [
+    1,
+    2
+   ],
+   "role": "number",
+   "advance_px": 79,
+   "glyph": "digit",
+   "keyed": true,
+   "_": "Verified against the game's back-panel render: #71 reads '7' in slot 1, '1' in slot 2. The panel is stored 180-degree rotated, so slot 1 sits to the RIGHT of slot 2 in UV space and the reading order looks reversed; it is not."
+  },
+  "jersey_maker_back": {
+   "piece": "back",
+   "slots": [
+    0
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    1792,
+    128,
+    2048,
+    256
+   ],
+   "confidence": "measured",
+   "_": "Maker mark across the top of the back panel, above the nameplate -- a Reebok wordmark on the shipped 2009 kits, the Fanatics flag on a modern conversion. Feeds from the sheet's `jersey_sponsor` cell (1792,128,256,128), which the profile's art table already fills with fanatics_logo.png. The slot was baked into decal_atlas.npz all along but left unassigned: back slot 0 is a real 78x47-texel quad at world centre [1.8,64.0,-325.2], rear-facing and high on the back, above the back numbers at y=39. Its decalUV[0,1] window is ~62x35 texels, a 1.77 aspect that matches the 2:1 source cell."
+  },
+  "sleeve_number": {
+   "piece": "sleeves",
+   "slots": [
+    1,
+    0
+   ],
+   "role": "sleeve_number",
+   "advance_px": 79,
+   "glyph": "digit",
+   "keyed": true,
+   "_": "Left sleeve, digits stacked down the arm. Verified: '7' in slot 1 (upper), '1' in slot 0 (lower)."
+  },
+  "sleeve_number_right": {
+   "piece": "sleeves",
+   "slots": [
+    2,
+    3
+   ],
+   "role": "sleeve_number",
+   "advance_px": 79,
+   "glyph": "digit",
+   "keyed": true,
+   "verified": "slots measured, order mirrored from the left sleeve. The captured kit leaves the right sleeve unstamped, so no glyph was observed in either slot.",
+   "_": "Right sleeve. Its slots exist in the mesh whether or not a given kit fills them."
+  },
+  "pants_mark": {
+   "piece": "pants",
+   "slots": [
+    2
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    512,
+    0,
+    768,
+    256
+   ],
+   "confidence": "measured",
+   "_": "Team mark on the FRONT-LEFT thigh -- the pants patch. Slot picked off the mesh, not off texture coordinates: looking the atlas slot up at each pants vertex puts slot 2 at world centre [-12.4,-26.0,-300.0], size [15.2,12.4,8.1], normal +0.9 along the jersey-front axis, and it is the largest of the three pants quads. Feeds from the sheet's `pants_patch` cell (512,0,256,256). An earlier pass had this on slot 0 with no source cell, so it drew nothing, and put the NHL shield on slot 2 instead -- which is why the launcher showed a shield where the pants patch belongs."
+  },
+  "nhl_shield_collar": {
+   "piece": "shirt2",
+   "slots": [
+    0
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    1664,
+    256,
+    1792,
+    384
+   ],
+   "confidence": "measured",
+   "_": "NHL shield at the base of the collar. Un-projecting rd8 draw 1167 with the camera solved off draw 1137 puts the quad at world x[-0.8,+1.9] y[51.0,53.9] z[-304.8,-303.6] -- a 2.7 x 2.9 patch dead centre at the front, just under the lace notch, which is where the game's own front render shows it. Only 12 of the collar's 168 vertices carry a real decalUV; the other 156 emit (0,0). Those 12 form THREE quads: [1,2,3,4] and [13,14,15,16] unwrap normally, and [5,6,7,8] is COLLAPSED in base UV -- all four corners at (0.5010,0.6520). That third quad is the middle of the shield, and because the preview bakes decals into piece TEXTURE space and the mesh then samples them by base UV, a zero-area UV triangle can never receive one: it renders as the flat dark wedge between the shield's two halves. The game does not have the problem because its VS interpolates decalUV per vertex. Fixing it needs a mesh-space decal path, not a different cell or window. An earlier note here claimed a measured destination of x[192,242] y[718,768]; that is stale -- shirt2's atlas coverage tops out at x=183 and the real footprint is x[14,107] y[1002,1011]."
+  },
+  "nhl_shield_pants": {
+   "piece": "pants",
+   "slots": [
+    0
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    1664,
+    256,
+    1792,
+    384
+   ],
+   "confidence": "measured",
+   "_": "NHL shield on the BACK of the pants -- which is where the game itself puts it: the in-game back view shows the shield on the rear hip, and no shield on the front thigh. Slot 0 measures to world centre [-15.4,-31.1,-326.0], normal -0.9 along the jersey-front axis, i.e. rear-facing. It was previously on slot 2 (front thigh), which the game never stamps."
+  },
+  "maker_mark": {
+   "piece": "pants",
+   "slots": [
+    1
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    1792,
+    0,
+    2048,
+    128
+   ],
+   "confidence": "measured",
+   "_": "Manufacturer wordmark on the FRONT-RIGHT thigh ('CCM' on the captured kit, a Reebok oval on others), destination x[763,797] y[232,255]. Slot 1 measures to world centre [13.4,-24.3,-300.2], front-facing, mirroring the pants patch on the other leg. This is the site the old config called 'sponsor'."
+  },
+  "helmet_number": {
+   "piece": "helmet",
+   "sheet": "helmet",
+   "slots": [
+    1,
+    2
+   ],
+   "role": "number",
+   "advance_px": 62,
+   "glyph": "digit",
+   "keyed": true,
+   "confidence": "measured",
+   "_": "Helmet digits, stacked: slot 1 tens at x[16,93] y[450,496], slot 2 ones at y[497,543]. Verified against the capture -- player #71 reads '7' in slot 1 and '1' in slot 2. Advance 62 px on the 1024x256 helmet sheet: '7' ink centre 480 -> 480-31 = 449 = 0.43848*1024, '1' centre 288 -> 257 = 0.25098*1024. Exact."
+  },
+  "helmet_logo": {
+   "piece": "helmet",
+   "sheet": "helmet",
+   "slots": [
+    3,
+    4
+   ],
+   "role": "logo",
+   "glyph": "cell",
+   "fit": "cell",
+   "keyed": false,
+   "cell": [
+    0,
+    0,
+    256,
+    256
+   ],
+   "confidence": "measured",
+   "_": "Team mark on both helmet sides -- slot 3 left x[201,313] y[244,357], slot 4 right (mirrored) x[742,867] y[233,358]. Both slots pull the SAME 256x256 cell; the mirroring lives in the mesh's decal UVs, not in the constants."
+  }
+ },
+ "sheets": {
+  "stamps": {
+   "index": 0,
+   "size": [
+    2048,
+    512
+   ],
+   "_": "The garment stamps sheet."
+  },
+  "helmet": {
+   "index": 2,
+   "size": [
+    1024,
+    256
+   ],
+   "digit_origin": [
+    256,
+    0
+   ],
+   "digit_cell": [
+    64,
+    128
+   ],
+   "_": "The helmet's own decal sheet inside uniform_<team>_<kit>.iff: a 256x256 team mark at the left, then digits on a 64x128 grid from x=256 -- evens on the top row, odds on the bottom."
+  }
+ },
+ "no_decal": {
+  "_": "The selector value a material uses for 'no decal on this texel'. Not the same everywhere: the garment shaders park it at 6, the helmet parks it at 0 and starts real slots at 1.",
+  "helmet": [
+   0
+  ],
+  "default": 6
+ },
+ "not_shaded": {
+  "back_name": "A third mechanism: draw 1055 binds two 1024x256 RGBA8 textures holding a pre-rendered name strip, placed by a switch/case affine rather than by either stamp layer. Stays on the measured rect path in jersey_preview.",
+  "helmet_slot5": "A 230x527 band at x[435,664] y[32,558] on the helmet, carrying the FRONT SPONSOR badge -- the white Reebok wordmark visible on the shell front in the game's own render. Left unassigned on purpose: its art is not in uniform_<team>_<kit>.iff at all. The helmet draw binds a shared 256x256 BC3 sheet holding an Easton wordmark and an NHL shield, and the badge is drawn from there, so nothing the Jersey Editor can author changes it and the preview would only be inventing a fixed logo."
+ },
+ "single_digit": "right",
+ "_single_digit": "A slot holds exactly one glyph and its quad is baked into the mesh, so a one-digit number cannot be centred between the two slots -- one of them must go empty. 'right' fills the ones slot. No capture of a single-digit player exists to confirm which slot the game leaves blank."
+}

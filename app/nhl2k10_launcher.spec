@@ -33,6 +33,13 @@ _required = [
     'global_iff_runtime_map.csv', 'fe_components.json', 'fe_uniform_map.json',
     'frontend_logo_tile_map.json', 'team_fields.json', 'jersey_map.json',
     'live_offsets.json', 'audio_authored_names.json', 'authored_sfx_labels.json',
+    'jersey_convert_profile.json', 'uniform_uv_regions.png',
+    'stamp_shader.json', 'decal_atlas.npz',
+    # Head editor. Without the landmarker there is no face fit at all; without the segmenter the
+    # projector cannot tell hair from the arena behind it and every head ships with the base head's
+    # hair recoloured. Both are ~20 MB and both are silently droppable by a glob, which is exactly
+    # what this list is for.
+    'face_landmarker.task', 'selfie_multiclass.tflite',
 ]
 _have = {p.name for p in data_src.glob('*') if p.is_file()} if data_src.is_dir() else set()
 _gone = [f for f in _required if f not in _have]
@@ -45,9 +52,19 @@ if _gone:
           "Restore them to launcher/data/ and rebuild. Keep this list in sync with "
           "launcher/resources.py REQUIRED."
     )
+# Editing tools drop rescue copies next to the real file (speech_seed_names.json.prereferee.bak,
+# named_assets.csv.bak, …). A bare glob swept them into the ONEFILE exe — ~40 MB of snapshots the
+# app never opens, decompressed to _MEIPASS on every launch. Keep them on disk, out of the build.
 for _p in sorted(data_src.glob('*')):
-    if _p.is_file():
+    if _p.is_file() and not _p.name.endswith('.bak'):
         datas.append((str(_p), 'data'))
+# SUBDIRECTORIES too (data/stamp_art/ — the Jersey Conversion tab's patch art). The glob above
+# is files-only, so a subfolder was silently dropped from the build and the shipped app fell
+# back to the kit's own 2009 sponsor marks with no error anywhere.
+for _d in sorted(p for p in data_src.glob('*') if p.is_dir()):
+    for _p in sorted(_d.rglob('*')):
+        if _p.is_file() and not _p.name.endswith('.bak'):
+            datas.append((str(_p), str(Path('data') / _p.parent.relative_to(data_src))))
 
 # onnxruntime ships native DLLs (capi / providers) that PyInstaller's static analysis misses — collect
 # them explicitly so the bundled exe can run the face-parsing model (jersey compositing). Optional: if
@@ -68,12 +85,28 @@ try:
 except Exception:
     _scipy_hidden = []
 
+# mediapipe (head editor: the face landmarker and the hair/skin segmenter) is not a pure-Python
+# package. Besides its native _framework_bindings pyd it reads DATA off disk at runtime — the
+# .binarypb calculator graphs and the .tflite models its task APIs build themselves from — and
+# those are opened by path relative to the package, so static analysis never sees them and the
+# frozen app dies inside create_from_options with a missing-file error rather than an ImportError.
+# The two models the builder passes explicitly (face_landmarker.task, selfie_multiclass.tflite)
+# are OURS and travel in launcher/data; these are mediapipe's own.
+try:
+    from PyInstaller.utils.hooks import collect_data_files, collect_dynamic_libs, collect_submodules
+    _mp_datas = collect_data_files('mediapipe', includes=['**/*.binarypb', '**/*.tflite',
+                                                          '**/*.txt', '**/*.pbtxt'])
+    _mp_binaries = collect_dynamic_libs('mediapipe')
+    _mp_hidden = collect_submodules('mediapipe.tasks.python')
+except Exception:
+    _mp_datas, _mp_binaries, _mp_hidden = [], [], []
+
 # ── Analysis ──────────────────────────────────────────────────────────────────
 a = Analysis(
     [str(HERE / 'nhl2k10_launcher.py')],
     pathex=[str(HERE), str(HERE / 'launcher')],
-    binaries=_ort_binaries,
-    datas=datas,
+    binaries=_ort_binaries + _mp_binaries,
+    datas=datas + _mp_datas,
     hiddenimports=['numpy', 'PIL', 'PIL.Image', 'PIL.ImageTk',
                    'nhl2k10_trace_dump', 'decode_e4837_fixed',
                    'encode_e4837_lazy', 'encode_dxt5', 'archive_textures',
@@ -81,8 +114,11 @@ a = Analysis(
                    'live_capture', 'f0985030',
                    'goalie_equipment', 'customasset', 'roster_editor', 'ros_file', 'ros_editor_gui',
                    'ros_live_editor', 'team_colors', 'team_fields', 'team_fields_gui', 'colorpick', 'jerseys',
-                   'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime']
-                  + _scipy_hidden,
+                   'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime',
+                   # head editor
+                   'cv2', 'mediapipe', 'face_shape', 'face_builder', 'facial_hair',
+                   'face_editor_gui']
+                  + _scipy_hidden + _mp_hidden,
     hookspath=[],
     runtime_hooks=[],
     # scipy is here for exactly THREE functions -- distance_transform_edt (archive_textures,

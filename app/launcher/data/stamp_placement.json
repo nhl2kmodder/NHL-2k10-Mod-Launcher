@@ -1,0 +1,85 @@
+{
+ "_comment": [
+  "NHL 2K10 uniform decal ('stamp') SOURCE cells, plus the one destination rect still in use.",
+  "",
+  "src_cell = rect in the 2048x512 stamps.dds sheet, in PIXELS (x0,y0,x1,y1).",
+  "  Decoded from the pixel-shader float constants of the player draws:",
+  "  cN = (slotW, slotH, slotU0, slotV0) and cN+1 = (u0, v0, u1, v1), both",
+  "  normalised to the 2048x512 sheet. cN is a PADDED slot: the tight glyph rect",
+  "  cN+1 centred in it (verified exactly, e.g. 0.699707 = 0.70166 - (79-71)/2/2048).",
+  "",
+  "WHY THE dst_cell RECTS ARE GONE",
+  "  Every stamp except the back NAME is now placed by the game's own shader math",
+  "  (launcher/stamp_shader.py + data/stamp_shader.json), which has no destination",
+  "  rectangle at all: the crest rides an affine function of the base UV, and the",
+  "  numbers and letters ride decal quads baked into the mesh. Both were reproduced",
+  "  pixel-exactly against the game's own render target.",
+  "",
+  "  The rects that used to live here were measured, but a rect blit has to STRETCH",
+  "  the art to fill its rect, and the measurements were not tight enough to survive",
+  "  that: the crest rect was 278x277 where the shader's own mask works out to",
+  "  204x205, a 36% oversize that ran the crest into the jersey's stripes. Keeping",
+  "  them around would only invite someone to place a new stamp the wrong way, so",
+  "  only back_name -- which genuinely still needs one -- keeps its rect.",
+  "",
+  "  The back NAME is a third mechanism: draw 1055 binds two 1024x256 RGBA8 textures",
+  "  holding a PRE-RENDERED name strip, positioned by a switch/case affine rather",
+  "  than by either stamp layer. Until that affine is decoded the nameplate stays on",
+  "  its measured rect, and stamp_shader.unshaded() reports it as such.",
+  "",
+  "keyed=true means the art is colour-keyed rather than literal: the blue channel is",
+  "the fill mask and green/red are outline masks, recoloured from the team palette.",
+  "flip180 = the art is rotated 180 degrees before blitting. The shirt is unwrapped",
+  "flat across the SHOULDER seam (front panel v 608-1021, back panel v 1-510, arms",
+  "between), so back art is stored upside-down."
+ ],
+ "sheet_size": [
+  2048,
+  512
+ ],
+ "uv_size": [
+  1024,
+  1024
+ ],
+ "decals": {
+  "letter": {
+   "src_cell": [
+    768,
+    256,
+    896,
+    512
+   ],
+   "keyed": true,
+   "draw": 1147,
+   "constants": "c44/c45",
+   "confidence": "measured",
+   "comment": "The captured player wears an 'A'. The 'C' cell is the neighbouring 128px column (896,256)-(1024,512). Placement comes from decal slot 1 of the shirt piece -- see stamp_shader.json."
+  },
+  "back_name": {
+   "glyphs": 9,
+   "dst_cell": [
+    361.0,
+    372.0,
+    661.0,
+    433.0
+   ],
+   "flip180": true,
+   "sheet": "letters",
+   "keyed": true,
+   "draw": 1055,
+   "confidence": "measured",
+   "measured_from": "bake_back_num_1055: 'CELEBRINI' ink bbox x[422,600] y[372,433]; centred on the back-panel axis x=511, cell widened to 300 so longer names still fit"
+  },
+  "nhl_shield": {
+   "src_cell": [
+    1664,
+    256,
+    1792,
+    384
+   ],
+   "draw": 1038,
+   "constants": "c33/c34",
+   "note": "Source is certain; which sleeve site consumes it is not, so it is not drawn."
+  }
+ }
+}

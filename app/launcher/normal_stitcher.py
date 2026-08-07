@@ -1,13 +1,18 @@
 """
-NHL 2k10 — Jersey Normal Stitcher  (standalone tool, launchable from the Mod Launcher)
+NHL 2k10 — Jersey Normal Stitcher  (the engine; its UI is a page in the Jersey Editor tab)
 
 Problem it solves
 -----------------
-When you author a NEW base-jersey colour (uniform_base_*.iff "base" texture) with your own
-striping, the matching DXN "base_normal" still carries the *stock* stitching relief — the fine
-sewn-on look (edge ridges + dashed stitches + twill infill) that traces the OLD stripes. This
-tool regenerates that relief so it follows YOUR new striping, reusing the garment's wrinkles and
-construction seams (which never change — same mesh/UV) as an untouched base.
+When you author NEW jersey art — a re-striped base colour, a new crest, a new number font — the
+matching DXN normal map still carries the *stock* relief: the fine sewn-on look (edge ridges +
+dashed stitches + twill infill) that traces the OLD art. This regenerates that relief so it
+follows YOUR art, reusing the garment's wrinkles and construction seams (which never change —
+same mesh, same UVs) as an untouched base.
+
+Three sheets carry one, and all three are stitchable — see `SHEET_SPECS`:
+  base    uniform_base_<t>_<k>.iff  #0 base    -> #2 base_normal
+  stamps  uniform_<t>_<k>.iff       #0 stamps  -> #1 normal
+  letters uniform_<t>_<k>.iff       #3 letters -> #4 letters_normal
 
 How it works (all in the decoded-normal domain: R=X, G=Y, B=Z, flat = 128,128,255)
   1. CLEAN BASE  — heal the stock stripe-stitching out of the stock normal (found from the stock
@@ -16,32 +21,40 @@ How it works (all in the decoded-normal domain: R=X, G=Y, B=Z, flat = 128,128,25
   3. SYNTHESISE  — stamp edge ridges + periodic dashed stitches + subtle twill as a height field,
                    convert to a detail normal.  Orientation-aware, so it follows any stripe angle.
   4. COMPOSITE   — partial-derivative (whiteout) blend of clean-base ⊕ stitch-detail.
-  5. SAMPLE      — measure ridge width / stitch spacing / twill period off the stock normal to seed
-                   sensible slider DEFAULTS; every value stays overridable by a slider.
+  5. SAMPLE      — MEASURE the style off the stock pair: where the seam's crest sits relative to
+                   the colour edge, how wide it is, its dash pitch along the seam, the split between
+                   its constant and dashed parts, and the overall gain. Every value stays
+                   overridable, but nothing here is a chosen number.
 
-Delivery: its own window (Toplevel under the launcher, or a standalone Tk root).  Game I/O reuses
-the launcher's proven archive_textures codec (DXN in-place, no grow — uniform_base is load-assigned).
+Why it is measured and not tuned: the test for this tool is that a regenerated normal is
+indistinguishable from the one the artists shipped. So the gain is fitted by making our slope
+distribution match the stock sheet's in the band where its stitching lives. Across the shipped kits
+that lands within a few percent per sheet (cgy/ana/bos/tor x base/stamps/letters: -6%..+6%), with a
+per-sheet gain from 1.1 to 13.5 -- which is why a single hand-picked `strength` could never be right
+for all of them.
+
+This module is pure numpy and has no UI of its own. It used to open its own window with its own
+team/kit pickers, which meant choosing the kit twice and generating a normal that could not be
+seen on anything. It now lives on the Jersey Editor's Normals page, where "the kit" is already
+decided and the model preview lights the result.
 """
 from __future__ import annotations
-import os, sys, tempfile, threading, traceback
 import numpy as np
-from PIL import Image, ImageTk
-from scipy.ndimage import gaussian_filter, distance_transform_edt, sobel
+from PIL import Image
+from scipy.ndimage import gaussian_filter, distance_transform_edt, map_coordinates, sobel
 
-# ── optional launcher integration (game extract/apply) ───────────────────────
-try:
-    from launcher import archive_textures as archtex
-except Exception:
-    try:
-        import archive_textures as archtex           # running from inside launcher/
-    except Exception:
-        archtex = None
+KITS = ["home", "away", "alt"]
 
-# The 30 team codes + kits, matching uniform_base_<team>_<kit>.iff naming.
-TEAMS = ["ana","atl","bos","buf","cgy","car","chi","col","cbj","dal","det","edm","fla","lak",
-         "min","mtl","nsh","njd","nyi","nyr","ott","phi","phx","pit","sjs","stl","tbl","tor",
-         "van","wsh"]
-KITS = ["home", "away"]
+# The three colour->normal pairs a kit carries, keyed by the Jersey Editor's sheet name.
+#   asset:  "base" = uniform_base_<t>_<k>.iff, "uniform" = uniform_<t>_<k>.iff
+#   index:  the texture record the generated normal is written to
+# There is deliberately no helmet entry: the helmet sheet has no normal record.
+SHEET_SPECS = {
+    "base":    dict(asset="base",    label="base_normal",    index=2, order=0),
+    "stamps":  dict(asset="uniform", label="normal",         index=1, order=1),
+    "letters": dict(asset="uniform", label="letters_normal", index=4, order=2),
+}
+SHEET_ORDER = sorted(SHEET_SPECS, key=lambda k: SHEET_SPECS[k]["order"])
 
 # ─────────────────────────────────────────────────────────────────────────────
 #  CORE  (numpy)  — importable & unit-testable without any GUI
@@ -50,6 +63,8 @@ DEFAULTS = dict(
     color_thr   = 40.0,   # colour distance (0-255) that counts as "not base fabric"
     edge_k      = 2.0,    # colour-change (× color_thr) that counts as a stripe edge (lower = more)
     ridge_w     = 1.6,    # px — half-width of the raised seam ridge at a stripe edge
+    ridge_off   = 0.0,    # px — how far the ridge CENTRE sits from the colour edge (measured; the
+                          #   stock art puts it a couple of pixels inside the stripe, not on the line)
     ridge_h     = 0.55,   # relief height of the edge ridge
     stitch_off  = 2.0,    # px — inset of the stitch row from the stripe edge
     stitch_w    = 1.4,    # px — width of the stitch row band
@@ -59,8 +74,11 @@ DEFAULTS = dict(
     twill_ang   = 45.0,   # deg — direction of the in-band weave
     twill_prd   = 3.0,    # px — weave period
     twill_h     = 0.06,   # relief height of the weave (subtle!)
-    strength    = 1.6,    # overall height->normal gain
+    strength    = 0.0,    # height->normal gain. 0 = MEASURE it off this sheet's own stock normal
+                          #   (see sample_style); type a number to override.
     heal_blur   = 4.0,    # px — blur radius used to heal out the stock stitching
+    pre_blur    = 1.0,    # px — blur on the colour before the gradient (kills DXT block ringing)
+    relief_blur = 0.6,    # px — blur on the finished height field (kills the EDT's pixel staircase)
 )
 
 def rgb_to_n(img: np.ndarray) -> np.ndarray:
@@ -74,16 +92,35 @@ def n_to_rgb(n: np.ndarray) -> np.ndarray:
     rgb = (n + 1.0) * 127.5
     return np.clip(rgb, 0, 255).astype(np.uint8)
 
+SOBEL_GAIN = 8.0     # scipy's sobel kernel sums to 8; divide it out to get d(height)/d(pixel)
+
+
 def _height_to_n(h: np.ndarray, strength: float) -> np.ndarray:
-    gy = sobel(h, axis=0, mode="nearest"); gx = sobel(h, axis=1, mode="nearest")
+    """Height field -> unit normals.
+
+    The sobel is divided by its kernel weight so `strength` means what it says: the slope in
+    height units per pixel. Without that every relief was rendered at 8x its authored height,
+    which is what turned a stitch row into the bright bead of rope running along each stripe.
+    """
+    gy = sobel(h, axis=0, mode="nearest") / SOBEL_GAIN
+    gx = sobel(h, axis=1, mode="nearest") / SOBEL_GAIN
     n = np.stack([-gx * strength, -gy * strength, np.ones_like(h)], -1)
     return n / np.linalg.norm(n, axis=-1, keepdims=True).clip(1e-6)
 
-def _blend(base: np.ndarray, det: np.ndarray) -> np.ndarray:
-    """Partial-derivative (whiteout) detail-normal blend of two unit-normal fields."""
+def _blend(base: np.ndarray, det: np.ndarray, max_slope: float = 0.0) -> np.ndarray:
+    """Partial-derivative (whiteout) detail-normal blend of two unit-normal fields.
+
+    `max_slope` caps how steep the sum may get, in height-per-pixel. Adding two slopes can produce
+    a surface steeper than either input, and a normal steep enough to round-trip through 8-bit RGB
+    with n.z at zero reads as a hard bright bead rather than as cloth. The cap is not a taste knob:
+    sample_style() reads it off the stock sheet's own steepest relief.
+    """
     bxy = base[..., :2] / base[..., 2:3].clip(1e-3)
     dxy = det[..., :2] / det[..., 2:3].clip(1e-3)
     g = bxy + dxy
+    if max_slope > 0:
+        mag = np.linalg.norm(g, axis=-1, keepdims=True)
+        g = g * np.minimum(1.0, max_slope / mag.clip(1e-6))
     n = np.concatenate([g, np.ones(g.shape[:2] + (1,), np.float32)], -1)
     return n / np.linalg.norm(n, axis=-1, keepdims=True).clip(1e-6)
 
@@ -91,15 +128,28 @@ def base_fabric_rgb(color: np.ndarray) -> np.ndarray:
     """Dominant fabric colour = median (robust to stripes/logos)."""
     return np.median(color.reshape(-1, 3), axis=0)
 
-def stripe_fields(color: np.ndarray, base_rgb: np.ndarray, thr: float, edge_k: float = 2.0):
+def stripe_fields(color: np.ndarray, base_rgb: np.ndarray, thr: float, edge_k: float = 2.0,
+                  pre_blur: float = 1.0):
     """From a base-colour texture -> (edge_mask, region_mask, tangent_x, tangent_y).
 
     Edges are taken from COLOUR transitions anywhere in the texture (per-channel gradient), so
     stripe↔stripe boundaries (e.g. black↔gold↔white bands stacked together) each get relief — not
     only where a stripe meets the base fabric.  `region` (far from the base fabric colour) is still
     used to gate the in-band twill.  `edge_k` scales the colour-change needed to count as an edge
-    (lower = more sensitive)."""
-    c = color.astype(np.float32)
+    (lower = more sensitive).
+
+    The colour is blurred first. These sheets arrive out of DXT, so a flat stripe edge carries the
+    codec's 4x4 block ringing, and an unblurred gradient turns that ringing into relief — the
+    stripe borders came out visibly ragged rather than sewn.
+
+    The tangent comes from the STRUCTURE TENSOR, not from the gradient direction. A stripe's two
+    borders have opposite gradient signs, so the raw tangent is a line field with a 180-degree
+    ambiguity: smoothing it directly (which is what this used to do) cancels opposing neighbours
+    to nearly zero, and the dash phase built on it degenerated into irregular blobs instead of a
+    periodic row. Smoothing the doubled angle is sign-blind, so the field survives it.
+    """
+    c = gaussian_filter(color.astype(np.float32), (pre_blur, pre_blur, 0)) if pre_blur > 0 \
+        else color.astype(np.float32)
     dist = np.linalg.norm(c - base_rgb, axis=-1)
     region = dist > thr
     # per-channel colour gradient -> magnitude captures ANY stripe boundary, incl. stripe↔stripe
@@ -107,29 +157,93 @@ def stripe_fields(color: np.ndarray, base_rgb: np.ndarray, thr: float, edge_k: f
     gY = np.stack([sobel(c[..., i], axis=0, mode="nearest") for i in range(3)], -1)
     mag_per = np.hypot(gX, gY)                     # H×W×3
     edge = mag_per.sum(-1) > max(edge_k * thr, 1.0)
-    # tangent from the strongest-changing channel (⟂ to that gradient) = the stripe's run direction
+    # strongest-changing channel carries the boundary
     ch = np.argmax(mag_per, axis=-1)[..., None]
     gx = np.take_along_axis(gX, ch, -1)[..., 0]
     gy = np.take_along_axis(gY, ch, -1)[..., 0]
-    mag = np.hypot(gx, gy)
-    with np.errstate(invalid="ignore", divide="ignore"):
-        tx = np.where(mag > 1e-6, -gy / (mag + 1e-6), 0.0)   # tangent ⟂ gradient
-        ty = np.where(mag > 1e-6,  gx / (mag + 1e-6), 0.0)
+    # structure tensor -> orientation mod pi -> tangent (perpendicular to the gradient)
+    s = 2.0
+    Jxx = gaussian_filter(gx * gx, s); Jyy = gaussian_filter(gy * gy, s)
+    Jxy = gaussian_filter(gx * gy, s)
+    ang = 0.5 * np.arctan2(2.0 * Jxy, Jxx - Jyy)   # dominant gradient direction
+    tx, ty = -np.sin(ang), np.cos(ang)             # tangent = gradient rotated 90 degrees
     return edge, region, tx, ty
+
+def seam_arclength(edge: np.ndarray, indices: np.ndarray) -> np.ndarray:
+    """Distance travelled ALONG each seam, spread out to every pixel from its nearest seam point.
+
+    `mod(this, stitch_spc)` is the dash phase. It used to be `mod(x*tx + y*ty, spc)` -- the pixel's
+    position projected on the local tangent. On a straight stripe that IS arc length, which is why
+    the base sheet's horizontal bands always came out as a tidy periodic row of stitches. On a
+    CURVED seam it is not: the tangent rotates while x,y stay large, so the phase swings by the
+    distance to the origin per radian of turn. Round the crest -- an outline a few hundred pixels
+    from the corner of the sheet -- one lap swept well over a hundred dash periods for a contour
+    only a few dozen dashes long. That is the crumbly speckle the crest border was reported with:
+    straight seams looked sewn, curved ones looked chewed.
+
+    Integrating the tangent field does not fix it either. Round a closed outline the tangent field
+    is pure circulation, so it has no potential at all and a least-squares solve returns a nearly
+    flat field (measured |grad| ~ 0.06 instead of 1, i.e. no dashes). Arc length round a loop is
+    genuinely multi-valued.
+
+    So walk the contour instead: shortest path over the 8-connected graph of edge pixels, seeded
+    once per connected component. On a loop that runs both ways from the seed and meets at the
+    antipode, which puts one join in the dash rhythm -- exactly what a real sewn seam has. Band
+    pixels take the arc length of the edge pixel they are nearest to (`indices`, straight out of
+    the same EDT that gives the band its width), so a dash is a tick running square across the
+    band rather than a slice of a plane wave.
+    """
+    from scipy.sparse import csr_matrix
+    from scipy.sparse.csgraph import dijkstra
+    from scipy.ndimage import label as _label
+
+    H, W = edge.shape
+    ys, xs = np.nonzero(edge)
+    arc = np.zeros((H, W), np.float32)
+    n = len(ys)
+    if n == 0:
+        return arc
+    order = -np.ones((H, W), np.int64)
+    order[ys, xs] = np.arange(n)
+    r, c, w = [], [], []
+    for dy, dx in ((0, 1), (1, 0), (1, 1), (1, -1)):
+        y2, x2 = ys + dy, xs + dx
+        ok = (y2 >= 0) & (y2 < H) & (x2 >= 0) & (x2 < W)
+        j = np.where(ok, order[y2.clip(0, H - 1), x2.clip(0, W - 1)], -1)
+        ok &= j >= 0
+        r.append(np.arange(n)[ok]); c.append(j[ok])
+        w.append(np.full(int(ok.sum()), float(np.hypot(dy, dx)), np.float32))
+    g = csr_matrix((np.concatenate(w), (np.concatenate(r), np.concatenate(c))), shape=(n, n))
+    g = g + g.T
+    lab, nlab = _label(edge, np.ones((3, 3), bool))
+    # one seed per component: the first edge pixel of each label, in raster order
+    seen = np.zeros(nlab + 1, bool)
+    keep = np.zeros(n, bool)
+    for i, l in enumerate(lab[ys, xs]):
+        if not seen[l]:
+            seen[l] = True; keep[i] = True
+    dist = dijkstra(g, indices=np.nonzero(keep)[0], min_only=True, unweighted=False)
+    dist[~np.isfinite(dist)] = 0.0
+    arc[ys, xs] = dist.astype(np.float32)
+    return arc[indices[0], indices[1]]
 
 def synth_stitch_height(color: np.ndarray, base_rgb: np.ndarray, p: dict):
     """Build the stripe-following relief height field from a colour texture."""
-    edge, region, tx, ty = stripe_fields(color, base_rgb, p["color_thr"], p.get("edge_k", 2.0))
+    edge, region, tx, ty = stripe_fields(color, base_rgb, p["color_thr"], p.get("edge_k", 2.0),
+                                         p.get("pre_blur", 1.0))
     H, W = region.shape
-    d = distance_transform_edt(~edge)
+    d, near_i = distance_transform_edt(~edge, return_indices=True)
     h = np.zeros((H, W), np.float32)
-    # 1) edge ridge
-    h += np.exp(-(d / max(p["ridge_w"], 1e-3)) ** 2) * p["ridge_h"]
-    # 2) dashed stitches, in a band inset from the edge, periodic along the local tangent
-    tsx = gaussian_filter(tx, 2.0); tsy = gaussian_filter(ty, 2.0)
+    # 1) edge ridge. Centred `ridge_off` px INSIDE the colour edge rather than on it: the stock
+    #    normals put the seam's crest a couple of pixels off the line (measured -- see sample_style),
+    #    which is what a real overlaid panel does, and a ridge sitting exactly on the colour
+    #    transition reads as an outline drawn on the cloth instead of a piece sewn onto it.
+    h += np.exp(-((d - p.get("ridge_off", 0.0)) / max(p["ridge_w"], 1e-3)) ** 2) * p["ridge_h"]
+    # 2) dashed stitches, in a band inset from the edge, periodic along ARC LENGTH round the seam
+    #    (see seam_arclength -- projecting onto the tangent only works where the seam is straight).
     ys, xs = np.mgrid[0:H, 0:W]
-    along = xs * tsx + ys * tsy
     band = (d >= p["stitch_off"]) & (d <= p["stitch_off"] + p["stitch_w"])
+    along = seam_arclength(edge, near_i)
     duty = np.mod(along, max(p["stitch_spc"], 1e-3)) < p["dash_len"]
     dash = gaussian_filter((band & duty).astype(np.float32), 0.6) * p["stitch_h"]
     h += dash
@@ -137,14 +251,35 @@ def synth_stitch_height(color: np.ndarray, base_rgb: np.ndarray, p: dict):
     a = np.deg2rad(p["twill_ang"])
     twill = np.sin((xs * np.cos(a) + ys * np.sin(a)) / max(p["twill_prd"], 1e-3)) * p["twill_h"]
     h += np.where(region, twill, 0.0)
-    return h, region, edge
+    # The distance field is quantised to whole pixels, so every ridge came out of step 1 as a
+    # staircase and the stitch band as a run of hard-cornered blocks. Half a pixel of blur costs
+    # nothing in shape and is the difference between a sewn seam and a jagged one.
+    smooth = float(p.get("relief_blur", 0.6))
+    return (gaussian_filter(h, smooth) if smooth > 0 else h), region, edge
 
 def clean_base_normal(orig_normal_rgb: np.ndarray, orig_color: np.ndarray,
-                      base_rgb: np.ndarray, p: dict) -> np.ndarray:
-    """Heal the stock stripe-stitching out of the stock normal -> wrinkles + seams only."""
-    old_edge, _, _, _ = stripe_fields(orig_color, base_rgb, p["color_thr"], p.get("edge_k", 2.0))
-    reach = p["ridge_w"] + p["stitch_off"] + p["stitch_w"] + 2.0
+                      base_rgb: np.ndarray, p: dict, new_color: np.ndarray = None) -> np.ndarray:
+    """Heal the stock stripe-stitching out of the stock normal -> wrinkles + seams only.
+
+    Two things have to go. The seam relief in a band around the OLD colour edges, because the new
+    art's edges are somewhere else -- that is the `reach` term, and it was all this used to do.
+    And the INTERIOR relief of any area the conversion re-authored: the stock art embroiders the
+    inside of a logo, not just its border, and an ~8 px band around the old outline never reached
+    it. Calgary's stock crest carries a radial satin fan across its whole face; invisible under the
+    black crest it was drawn for, it read as white scratches under the new white crest and is what
+    "logo/crest stitching is especially weird" was looking at. So heal wherever the colour actually
+    changed as well. Art the conversion left alone keeps the relief the artists authored for it.
+    """
+    old_edge, _, _, _ = stripe_fields(orig_color, base_rgb, p["color_thr"], p.get("edge_k", 2.0),
+                                      p.get("pre_blur", 1.0))
+    reach = p.get("ridge_off", 0.0) + p["ridge_w"] + p["stitch_off"] + p["stitch_w"] + 2.0
     heal = distance_transform_edt(~old_edge) < reach
+    if new_color is not None:
+        changed = np.linalg.norm(new_color.astype(np.float32) - orig_color.astype(np.float32),
+                                 axis=-1) > p["color_thr"]
+        # grow a little: an antialiased rim can match the old colour while its relief belongs to
+        # the art that was there before.
+        heal |= distance_transform_edt(~changed) < 2.0
     base_n = rgb_to_n(orig_normal_rgb)
     smooth = np.stack([gaussian_filter(base_n[..., i], p["heal_blur"]) for i in range(3)], -1)
     smooth = smooth / np.linalg.norm(smooth, axis=-1, keepdims=True).clip(1e-6)
@@ -152,54 +287,222 @@ def clean_base_normal(orig_normal_rgb: np.ndarray, orig_color: np.ndarray,
 
 def generate_normal(orig_normal_rgb: np.ndarray, orig_color: np.ndarray,
                     new_color: np.ndarray, p: dict, heal: bool = True) -> np.ndarray:
-    """Full pipeline -> new normal-map RGB (uint8).  All inputs same HxW."""
+    """Full pipeline -> new normal-map RGB (uint8).  All inputs same HxW.
+
+    A `strength` of 0 (the default) means "match the game": the gain is measured off THIS sheet's
+    own stock normal, so the new thread sits as proud as the thread the artists shipped, instead of
+    at whatever number happened to look right on one kit. Each sheet gets its own measurement —
+    embroidery on the letters sheet is not as deep as a garment seam on the base.
+    """
     old_base = base_fabric_rgb(orig_color)
     new_base = base_fabric_rgb(new_color)
-    clean = (clean_base_normal(orig_normal_rgb, orig_color, old_base, p) if heal
+    if float(p.get("strength", 0.0)) <= 0 or "max_slope" not in p:
+        got = sample_style(orig_color, orig_normal_rgb, p)
+        p = dict(p, max_slope=got.get("max_slope", 0.0))
+        if float(p.get("strength", 0.0)) <= 0:
+            # 0.2 is the fallback for a sheet with no stock relief to measure (a flat normal), not
+            # a tuned value -- there is nothing to match in that case.
+            p["strength"] = float(got["strength"]) if got["strength"] > 0 else 0.2
+    clean = (clean_base_normal(orig_normal_rgb, orig_color, old_base, p, new_color) if heal
              else rgb_to_n(orig_normal_rgb))
-    h, _, _ = synth_stitch_height(new_color, new_base, p)
-    det = _height_to_n(h, p["strength"])
-    return n_to_rgb(_blend(clean, det))
+    h, _, new_edge = synth_stitch_height(new_color, new_base, p)
+    cap = float(p.get("max_slope", 0.0))
+
+    # ── CLOSE THE LOOP ON THE GAIN ────────────────────────────────────────────────────────────
+    # `strength` is an open-loop estimate: it is calibrated against the synthesised height field
+    # BEFORE the whiteout blend and its slope cap, and against the stock sheet's seams rather than
+    # ours. On the Calgary home base sheet that estimate landed 2.1x hot -- the shipped art's seams
+    # carry 0.025 of slope above open cloth and a first pass put out 0.054, which is the difference
+    # between the artists' barely-there dotted seam and a zipper running down every stripe. So
+    # measure what actually came out, against the NEW art's own edges, and correct. The height
+    # field is already built, so each extra pass is a couple of blurs rather than another walk of
+    # the contours.
+    target = _seam_excess(relief_slope(orig_normal_rgb),
+                          stripe_fields(orig_color, old_base, p["color_thr"],
+                                        p.get("edge_k", 2.0), p.get("pre_blur", 1.0))[0])
+    dn = distance_transform_edt(~new_edge)
+    near, far = dn < 8.0, dn > 20.0
+    s = float(p["strength"])
+    out = _blend(clean, _height_to_n(h, s), cap)
+    if target > 1e-5 and near.sum() > 256 and far.sum() > 256:
+        for _ in range(4):
+            got = _seam_excess(relief_slope(n_to_rgb(out)), None, near, far)
+            if got <= 1e-6 or abs(got - target) <= 0.08 * target:
+                break
+            s *= float(np.clip(target / got, 0.2, 5.0))
+            out = _blend(clean, _height_to_n(h, s), cap)
+    return n_to_rgb(out)
+
+def relief_slope(normal_rgb: np.ndarray, hp_sigma: float = 6.0) -> np.ndarray:
+    """A normal map -> the DETAIL slope |d(height)/d(pixel)| it encodes.
+
+    Slope, not raw n.xy, because that is the quantity `strength` scales and the quantity a
+    synthesised height field can be compared against directly. The low frequencies are removed so
+    what is left is stitching and weave rather than the garment's drape.
+    """
+    n = rgb_to_n(normal_rgb)
+    nz = n[..., 2].clip(1e-3)
+    s = np.hypot(n[..., 0] / nz, n[..., 1] / nz)
+    return np.abs(s - gaussian_filter(s, hp_sigma))
+
+
+def _seam_excess(R: np.ndarray, edge: np.ndarray = None, near=None, far=None) -> float:
+    """How much more detail slope a sheet carries AT its seams than in open cloth.
+
+    The absolute figure is not the thing to match: cloth relief is present everywhere, seams or no
+    seams, so matching the total makes synthesised thread as proud as the deepest wrinkle. The
+    excess is what tells embroidery (stamps sheet, ~28x open cloth on the shipped Calgary kit) from
+    a sublimated stripe the artists never sewed (base sheet, 1.2x).
+    """
+    if near is None:
+        d = distance_transform_edt(~edge)
+        near, far = d < 8.0, d > 20.0
+    if near.sum() < 256 or far.sum() < 256:
+        return 0.0
+    return float(np.percentile(R[near], 90) - np.percentile(R[far], 90))
+
+
+def _period_along(field: np.ndarray, mask: np.ndarray, tx: np.ndarray, ty: np.ndarray,
+                  kmin: int, kmax: int) -> float | None:
+    """The repeat length of `field` measured ALONG the local tangent, in pixels.
+
+    This used to be an FFT of the masked values in raster order, which is meaningless: that 1-D
+    sequence jumps between unrelated seams every time a scanline leaves one. Here the field is
+    resampled at each texel displaced k pixels along its OWN tangent and correlated with itself, so
+    the lag being tested is genuinely arc length down the seam. The winning lag is the first
+    correlation peak, which is the stitch pitch; taking the global max would happily return a
+    harmonic.
+    """
+    ys, xs = np.nonzero(mask)
+    if ys.size < 256:
+        return None
+    if ys.size > 200_000:                              # cap the cost; the pitch is global anyway
+        sel = np.linspace(0, ys.size - 1, 200_000).astype(np.int64)
+        ys, xs = ys[sel], xs[sel]
+    f0 = field[ys, xs]
+    f0 = f0 - f0.mean()
+    den = float(np.dot(f0, f0)) + 1e-9
+    tX, tY = tx[ys, xs], ty[ys, xs]
+    corr = []
+    for k in range(kmin, kmax + 1):
+        fk = map_coordinates(field, [ys + k * tY, xs + k * tX], order=1, mode="nearest")
+        fk = fk - fk.mean()
+        corr.append(float(np.dot(f0, fk)) / den)
+    c = np.array(corr)
+    # first interior local maximum, i.e. the shortest lag that lines the pattern back up
+    for i in range(1, len(c) - 1):
+        if c[i] > c[i - 1] and c[i] >= c[i + 1] and c[i] > 0.02:
+            return float(kmin + i)
+    return None
+
 
 def sample_style(orig_color: np.ndarray, orig_normal_rgb: np.ndarray, p: dict) -> dict:
-    """Measure ridge width / stitch spacing / twill period off the stock normal near its
-    stripe edges, to seed slider DEFAULTS.  Degrades gracefully to DEFAULTS on any failure."""
+    """Measure this kit's thread style off the stock colour/normal pair.
+
+    Everything here is a measurement of the shipped art, because the standard for this tool is that
+    a regenerated normal is indistinguishable from the one the artists made, not that it looks
+    plausible. What comes out:
+
+      ridge_w / stitch_off / stitch_w   the relief profile ACROSS a seam, read off the stock normal
+      ridge_h : stitch_h : twill_h      the same profile's relative heights
+      stitch_spc / twill_prd            repeat lengths ALONG the seam and inside the panel
+      strength                          the gain that makes our slope distribution match the stock's
+
+    Degrades gracefully to whatever was passed in on any failure.
+    """
     out = dict(p)
     try:
         base_rgb = base_fabric_rgb(orig_color)
-        edge, region, tx, ty = stripe_fields(orig_color, base_rgb, p["color_thr"], p.get("edge_k", 2.0))
+        edge, region, tx, ty = stripe_fields(orig_color, base_rgb, p["color_thr"],
+                                             p.get("edge_k", 2.0), p.get("pre_blur", 1.0))
         if edge.sum() < 50:
             return out
-        n = rgb_to_n(orig_normal_rgb)
-        # high-pass magnitude of the XY normal = where relief detail lives
-        detail = np.hypot(n[..., 0], n[..., 1])
-        hp = detail - gaussian_filter(detail, 6.0)
+        R = relief_slope(orig_normal_rgb)
         d = distance_transform_edt(~edge)
-        # ridge width: spread of |hp| vs distance from edge (first bin where it falls to ~1/e)
-        near = hp[(d > 0) & (d < 8)]
-        if near.size:
-            prof = [np.mean(np.abs(hp[(d >= k) & (d < k + 1)]) ) for k in range(8)]
-            prof = np.array(prof); pk = prof.max() + 1e-6
-            w = next((k for k, v in enumerate(prof) if v < pk / np.e), 2)
-            out["ridge_w"] = float(np.clip(w * 0.9, 1.0, 4.0))
-        # stitch spacing: dominant period of |hp| in the stitch band along the edge tangent (FFT)
-        band = region & (d > 1) & (d < 5)
-        vals = np.abs(hp[band])
-        if vals.size > 64:
-            sig = vals - vals.mean()
-            spec = np.abs(np.fft.rfft(sig))
-            spec[:2] = 0
-            k = int(np.argmax(spec)) or 1
-            period = max(3.0, min(12.0, sig.size / k)) if k else p["stitch_spc"]
-            # the raw index->period on a scrambled 1-D scan is only a hint; clamp to a sane band
-            out["stitch_spc"] = float(np.clip(period if 3 <= period <= 12 else 6.0, 3.0, 12.0))
-        # twill period: dominant fine period inside the band interior
-        inband = region & (d > 4)
-        iv = np.abs(hp[inband])
-        if iv.size > 64:
-            s2 = iv - iv.mean(); sp2 = np.abs(np.fft.rfft(s2)); sp2[:3] = 0
-            k2 = int(np.argmax(sp2)) or 1
-            out["twill_prd"] = float(np.clip(s2.size / k2 if k2 else 3.0, 2.0, 6.0))
+
+        # ── the cross-seam profile: median relief at each whole pixel of distance from the edge ──
+        # Median, not mean: a crest or a number crossing the band would otherwise drag the profile.
+        NP = 14
+        prof = np.array([np.median(R[(d >= k) & (d < k + 1)]) if ((d >= k) & (d < k + 1)).any()
+                         else 0.0 for k in range(NP)], np.float32)
+        floor = float(np.median(prof[8:])) if NP > 8 else 0.0    # flat cloth, far from any seam
+        j = int(np.argmax(prof[:6]))                             # WHERE the crest actually is
+        above = prof - floor
+        if above[j] > 1e-4:
+            # The crest is not on the colour edge. On the stock base sheets it sits ~2 px inside the
+            # stripe, and the profile is a single bump there -- there is no second, separate stitch
+            # row to find. Modelling it as "ridge at 0 plus a row further out" was the reason the
+            # sampler kept pinning ridge_w at its clip ceiling: the value at d=0 is already down in
+            # the floor, so nothing ever decayed relative to it.
+            out["ridge_off"] = float(np.clip(j, 0.0, 6.0))
+            thr = above[j] / np.e
+            hi = next((k for k in range(j + 1, NP) if above[k] < thr), j + 2)
+            lo = next((k for k in range(j - 1, -1, -1) if above[k] < thr), max(j - 2, 0))
+            out["ridge_w"] = float(np.clip((hi - lo) * 0.5, 0.8, 4.0))
+            # The dashes ride ON the crest -- they are a modulation of it along the seam, which is
+            # why they show up as a dotted line in the stock art rather than as a parallel row. So
+            # the stitch band IS the ridge band, and the split between a constant part (ridge_h) and
+            # a dashed part (stitch_h) comes from the crest's own trough-to-peak contrast.
+            out["stitch_off"] = float(max(0.0, out["ridge_off"] - out["ridge_w"]))
+            out["stitch_w"] = float(2.0 * out["ridge_w"])
+            crest = (d >= out["stitch_off"]) & (d <= out["stitch_off"] + out["stitch_w"])
+            if crest.sum() > 256:
+                q10, q90 = np.percentile(R[crest], [10, 90])
+                total = float(p["ridge_h"])
+                frac = float(np.clip(q10 / max(q90, 1e-6), 0.05, 0.95))   # always-present share
+                out["ridge_h"] = total * frac
+                out["stitch_h"] = total * (1.0 - frac)
+            # the weave is whatever relief is left in the middle of a panel -- on these sheets, none
+            unit = above[j]
+            out["twill_h"] = float(np.clip(p["ridge_h"] * max(above[NP - 1], 0.0) / unit, 0.0, 0.3))
+
+        # ── repeat lengths, measured along the seam / across the panel ──
+        band = (d >= out["stitch_off"] - 0.5) & (d <= out["stitch_off"] + out["stitch_w"] + 0.5)
+        spc = _period_along(R, band, tx, ty, 3, 14)
+        if spc:
+            out["stitch_spc"] = float(spc)
+            out["dash_len"] = float(np.clip(spc * 0.5, 1.0, spc - 1.0))
+        inner = region & (d > out["stitch_off"] + out["stitch_w"] + 2.0)
+        prd = _period_along(R, inner, tx, ty, 2, 8)
+        if prd:
+            out["twill_prd"] = float(prd)
+
+        # ── OVERALL GAIN ──
+        # `strength` converts height units into a surface slope, so the honest way to set it is to
+        # make the synthesised relief carry the SAME slope the game's own normal carries where its
+        # stitching lives. Run the synthesiser on the STOCK colour at unit gain and take the ratio
+        # of the two slope distributions. p90 rather than max: a few texels sit on a construction
+        # seam far deeper than any stitch, and matching those would over-drive everything else.
+        h_ref, _, _ = synth_stitch_height(orig_color, base_rgb, dict(out, strength=1.0))
+        gy = sobel(h_ref, axis=0, mode="nearest") / SOBEL_GAIN
+        gx = sobel(h_ref, axis=1, mode="nearest") / SOBEL_GAIN
+        slope_ref = np.hypot(gx, gy)
+        # R is high-passed, so the reference has to be too or the ratio is biased low and the output
+        # comes out shallower than the art it is supposed to match.
+        slope_ref = np.abs(slope_ref - gaussian_filter(slope_ref, 6.0))
+        m = d < (out["ridge_w"] + out["stitch_off"] + out["stitch_w"] + 2.0)
+        if m.sum() > 256:
+            # ...and the slope to match is the EXCESS at the seam over the panel's own cloth, not
+            # the total. Cloth relief is everywhere, seams or no seams, and matching the total made
+            # the synthesised thread as proud as the deepest wrinkle in the sheet. Measured on the
+            # shipped Calgary home pair: the base sheet's seams carry only 1.22x the relief of open
+            # panel (p90 0.1415 vs 0.1164) -- the artists put essentially NO stitching on the
+            # stripes, which is exactly what the stock kit renders as. Calibrating on the total
+            # over-drove it 5.6x and turned every stripe into a rope ladder. The stamps sheet
+            # measures 28x and the letters sheet 10x on the same test, so real embroidery is
+            # unaffected: this only backs off where the art has nothing to match.
+            far = d > 20.0
+            floor_R = float(np.percentile(R[far], 90)) if far.sum() > 256 else 0.0
+            a = max(float(np.percentile(R[m], 90)) - floor_R, 0.0)
+            b = float(np.percentile(slope_ref[m], 90))
+            if b > 1e-4:
+                # The bounds are a sanity rail, not a tuning range: measured gains across the
+                # shipped kits run from ~1.1 (a soft base sheet) to ~12 (deep letter embroidery).
+                out["strength"] = float(np.clip(a / b, 0.05, 30.0))
+        # A ceiling for the composite, taken from the stock sheet rather than invented. The shipped
+        # normals never exceed this steepness, and without the cap the detail-blend produced texels
+        # steep enough to round-trip through 8 bits with n.z at zero -- the hard bright bead.
+        out["max_slope"] = float(np.percentile(R[m] if m.any() else R, 99.9) * 1.5)
     except Exception:
         pass
     return out
@@ -211,351 +514,76 @@ def _fit(color: np.ndarray, target_hw) -> np.ndarray:
         return color
     return np.asarray(Image.fromarray(color.astype(np.uint8)).resize((W, H), Image.NEAREST))
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-#  GUI
+#  SHEET-LEVEL API  — what the Jersey Editor's Normals page drives
 # ─────────────────────────────────────────────────────────────────────────────
-def open_stitcher(parent=None, game_dir=None, extract_root=None):
-    import tkinter as tk
-    from tkinter import ttk, filedialog, messagebox
+# What a transparent decal texel counts as when a sheet is flattened for edge detection. The stamps
+# and letters sheets are mostly empty, and their real relief boundary is the ART SILHOUETTE — an
+# embroidered crest or a twill number is sewn on around its outline. Flattening onto a flat grey
+# turns that alpha edge into a colour edge, so the same stripe detector finds it. The value only has
+# to differ from the art; mid-grey does for anything short of a deliberately 50% grey crest.
+FLATTEN_BG = 128
 
-    standalone = parent is None
-    root = tk.Tk() if standalone else tk.Toplevel(parent)
-    root.title("NHL 2K10 — Jersey Normal Stitcher")
-    root.geometry("1180x820")
 
-    state = dict(orig_color=None, orig_normal=None, new_color=None,
-                 game_dir=game_dir, extract_root=extract_root,
-                 iff=None, normal_rec=None, base_rec=None,
-                 new_from_edit=False, result=None, preview_imgtk=None)
-    params = dict(DEFAULTS)
-    sliders = {}
+def to_color(img) -> np.ndarray:
+    """A PIL image (any mode) -> the H×W×3 uint8 array the detector wants.
 
-    # ---- layout: left = controls, right = preview ----
-    left = ttk.Frame(root, padding=10); left.pack(side="left", fill="y")
-    right = ttk.Frame(root, padding=10); right.pack(side="right", fill="both", expand=True)
+    RGBA is composited onto FLATTEN_BG rather than dropped, because for a decal sheet the alpha
+    edge IS the seam and throwing it away would leave nothing to stitch around.
+    """
+    im = img if isinstance(img, Image.Image) else Image.fromarray(np.asarray(img))
+    if im.mode == "RGBA":
+        bg = Image.new("RGBA", im.size, (FLATTEN_BG, FLATTEN_BG, FLATTEN_BG, 255))
+        im = Image.alpha_composite(bg, im)
+    return np.asarray(im.convert("RGB"), np.uint8)
 
-    ttk.Label(left, text="Jersey Normal Stitcher", font=("Segoe UI", 13, "bold")).pack(anchor="w")
-    ttk.Label(left, text="Regenerate the sewn-stripe relief so it follows your new striping.",
-              wraplength=330, foreground="#555").pack(anchor="w", pady=(0, 8))
 
-    status = tk.StringVar(value="Load a stock normal + colour, and your new colour.")
+def stitch_sheet(stock_color, stock_normal, new_color, params: dict | None = None,
+                 heal: bool = True, scale: float = 1.0) -> Image.Image:
+    """One sheet's regenerated normal, as a PIL image the size of `stock_normal`.
 
-    # ── Source group ──────────────────────────────────────────────────────────
-    src = ttk.LabelFrame(left, text="Sources", padding=8); src.pack(fill="x", pady=4)
-
-    # Game load row
-    grow = ttk.Frame(src); grow.pack(fill="x", pady=2)
-    ttk.Label(grow, text="Team").grid(row=0, column=0, sticky="w")
-    team_v = tk.StringVar(value="van"); kit_v = tk.StringVar(value="home")
-    ttk.Combobox(grow, textvariable=team_v, values=TEAMS, width=6, state="readonly").grid(row=0, column=1, padx=3)
-    ttk.Combobox(grow, textvariable=kit_v, values=KITS, width=6, state="readonly").grid(row=0, column=2, padx=3)
-
-    def pick_game_dir():
-        from tkinter import filedialog
-        d = filedialog.askdirectory(title="Game files folder (with 0A/0B/1A/1B)")
-        if d:
-            state["game_dir"] = d; status.set(f"Game dir: {d}")
-    ttk.Button(grow, text="Game folder…", command=pick_game_dir).grid(row=0, column=3, padx=3)
-
-    def load_from_game():
-        if archtex is None:
-            messagebox.showerror("Unavailable", "archive_textures not importable — use the file loaders below.")
-            return
-        if not state.get("game_dir"):
-            pick_game_dir()
-            if not state.get("game_dir"):
-                return
-        iff = f"uniform_base_{team_v.get()}_{kit_v.get()}.iff"
-        try:
-            recs = archtex.list_textures(iff, state["game_dir"])
-            base_rec = next(r for r in recs if r.get("label") == "base")
-            norm_rec = next(r for r in recs if r.get("label") == "base_normal")
-            oc = np.asarray(archtex.decode_record(iff, base_rec, state["game_dir"]).convert("RGB"))
-            on = np.asarray(archtex.decode_record(iff, norm_rec, state["game_dir"]).convert("RGB"))
-        except StopIteration:
-            messagebox.showerror("Not found", f"{iff}: couldn't find base/base_normal records."); return
-        except Exception as e:
-            messagebox.showerror("Load failed", f"{iff}\n{e}"); return
-        state.update(orig_color=oc, orig_normal=on, iff=iff, normal_rec=norm_rec, base_rec=base_rec)
-        # Auto-load YOUR base colour straight from the game: the modified base texture if you've
-        # edited it, otherwise the stock base.  No manual "New colour…" browse needed.
-        nc, src_note, from_edit = oc.copy(), "stock base", False
-        er = state.get("extract_root")
-        if er and archtex is not None:
-            try:
-                ef = archtex.find_any_edit(er, iff, base_rec)
-                if ef:
-                    nc = np.asarray(Image.open(ef).convert("RGB"))
-                    src_note = "your edited base"; from_edit = True
-            except Exception:
-                pass
-        state["new_color"] = nc; state["new_from_edit"] = from_edit
-        status.set(f"Loaded stock {iff}  (normal {on.shape[1]}×{on.shape[0]}) — new colour: {src_note}")
-        do_sample(); regen()
-    ttk.Button(src, text="⤓  Load stock from game", command=load_from_game).pack(fill="x", pady=(4, 2))
-
-    def _load_img(kind):
-        from tkinter import filedialog
-        f = filedialog.askopenfilename(title=f"Choose {kind}",
-                                       filetypes=[("Images", "*.png *.dds *.jpg *.bmp"), ("All", "*.*")])
-        if not f:
-            return None
-        try:
-            return np.asarray(Image.open(f).convert("RGB"))
-        except Exception as e:
-            messagebox.showerror("Open failed", str(e)); return None
-
-    frow = ttk.Frame(src); frow.pack(fill="x", pady=2)
-    def load_orig_normal():
-        a = _load_img("stock base_normal (PNG)")
-        if a is not None: state["orig_normal"] = a; status.set("Loaded stock normal (file)."); regen()
-    def load_orig_color():
-        a = _load_img("stock base colour (PNG)")
-        if a is not None: state["orig_color"] = a; status.set("Loaded stock colour (file)."); regen()
-    def load_new_color():
-        a = _load_img("YOUR new base colour (PNG)")
-        if a is not None:
-            state["new_color"] = a; state["new_from_edit"] = False
-            status.set("Loaded new colour (file)."); regen()
-    ttk.Button(frow, text="Stock normal…", command=load_orig_normal).grid(row=0, column=0, sticky="ew", padx=1)
-    ttk.Button(frow, text="Stock colour…", command=load_orig_color).grid(row=0, column=1, sticky="ew", padx=1)
-    ttk.Button(frow, text="New colour…", command=load_new_color).grid(row=0, column=2, sticky="ew", padx=1)
-    frow.columnconfigure((0, 1, 2), weight=1)
-
-    heal_v = tk.BooleanVar(value=True)
-    ttk.Checkbutton(src, text="Heal stock stitching first (recommended)", variable=heal_v,
-                    command=lambda: regen()).pack(anchor="w", pady=(4, 0))
-
-    # ── Sliders ───────────────────────────────────────────────────────────────
-    sf = ttk.LabelFrame(left, text="Stitch style", padding=8); sf.pack(fill="x", pady=6)
-    SPECS = [
-        ("ridge_h", "Edge ridge height", 0.0, 1.5, 0.01),
-        ("ridge_w", "Edge ridge width", 0.5, 5.0, 0.1),
-        ("stitch_h", "Stitch height", 0.0, 1.2, 0.01),
-        ("stitch_spc", "Stitch spacing", 3.0, 14.0, 0.5),
-        ("dash_len", "Stitch dash length", 1.0, 10.0, 0.5),
-        ("stitch_off", "Stitch inset", 0.0, 6.0, 0.5),
-        ("twill_h", "Twill depth", 0.0, 0.3, 0.005),
-        ("twill_prd", "Twill period", 1.5, 8.0, 0.25),
-        ("twill_ang", "Twill angle", 0.0, 180.0, 5.0),
-        ("strength", "Overall strength", 0.3, 4.0, 0.1),
-        ("color_thr", "Stripe threshold", 10.0, 120.0, 2.0),
-        ("edge_k", "Edge sensitivity", 0.5, 6.0, 0.25),
-        ("heal_blur", "Heal blur", 1.0, 10.0, 0.5),
-    ]
-    _debounce = {"id": None}
-    def _queue_regen():
-        if _debounce["id"]:
-            root.after_cancel(_debounce["id"])
-        _debounce["id"] = root.after(180, regen)
-
-    for key, lbl, lo, hi, step in SPECS:
-        r = ttk.Frame(sf); r.pack(fill="x", pady=1)
-        ttk.Label(r, text=lbl, width=16).pack(side="left")
-        val = tk.DoubleVar(value=params[key])
-        vlbl = ttk.Label(r, width=5, text=f"{params[key]:.2f}")
-        vlbl.pack(side="right")
-        def mk(k=key, v=val, vl=vlbl):
-            def _cb(_=None):
-                params[k] = float(v.get()); vl.config(text=f"{params[k]:.2f}"); _queue_regen()
-            return _cb
-        s = ttk.Scale(r, from_=lo, to=hi, variable=val, command=mk())
-        s.pack(side="left", fill="x", expand=True, padx=4)
-        sliders[key] = (val, vlbl)
-
-    def do_sample():
-        if state["orig_color"] is None or state["orig_normal"] is None:
-            messagebox.showinfo("Sample", "Load the stock colour + stock normal first."); return
-        oc = state["orig_color"]; on = _fit(state["orig_normal"], oc.shape[:2]) if False else state["orig_normal"]
-        sm = sample_style(state["orig_color"], state["orig_normal"], params)
-        for k, (v, vl) in sliders.items():
-            if k in sm:
-                params[k] = sm[k]; v.set(sm[k]); vl.config(text=f"{sm[k]:.2f}")
-        status.set("Sampled stitch style from stock normal → defaults updated.")
-
-    def reset_defaults():
-        for k, (v, vl) in sliders.items():
-            params[k] = DEFAULTS[k]; v.set(DEFAULTS[k]); vl.config(text=f"{DEFAULTS[k]:.2f}")
-        regen()
-
-    brow = ttk.Frame(sf); brow.pack(fill="x", pady=(6, 0))
-    ttk.Button(brow, text="Sample from stock", command=lambda: (do_sample(), regen())).pack(side="left", expand=True, fill="x", padx=1)
-    ttk.Button(brow, text="Reset", command=reset_defaults).pack(side="left", expand=True, fill="x", padx=1)
-
-    # ── Output ────────────────────────────────────────────────────────────────
-    of = ttk.LabelFrame(left, text="Output", padding=8); of.pack(fill="x", pady=6)
-    def export_png():
-        if state["result"] is None:
-            messagebox.showinfo("Export", "Nothing generated yet."); return
-        from tkinter import filedialog
-        f = filedialog.asksaveasfilename(defaultextension=".png",
-                                         filetypes=[("PNG", "*.png")], title="Save new base_normal")
-        if f:
-            Image.fromarray(state["result"]).save(f); status.set(f"Saved {f}")
-    def _extract_root():
-        r = state.get("extract_root")
-        if r:
-            return r
-        gd = state.get("game_dir")                       # standalone fallback: <game>/NHL2k10_Extracted_Files
-        return os.path.join(gd, "NHL2k10_Extracted_Files") if gd else None
-
-    def apply_to_game():
-        iff = state.get("iff")
-        if archtex is None or not iff or state.get("normal_rec") is None:
-            messagebox.showerror("Apply", "Use 'Load stock from game' first so the tool knows which IFF/slot to write."); return
-        if state["result"] is None:
-            messagebox.showinfo("Apply", "Nothing generated yet."); return
-        root = _extract_root()
-        if not root:
-            messagebox.showerror("Apply",
-                "No Extracted files folder — open the tool from the launcher, or pick a Game folder."); return
-        nrec = state["normal_rec"]
-        try:
-            # 1) Write the generated normal as THIS jersey's base_normal EDIT file in the Extracted
-            #    folder (so it shows up in the launcher's IFF tab and re-applies with Apply-All).
-            edir = archtex.edit_dirs(root, iff)[0]        # …/Textures/Extracted/Uniform/<TEAM>/<KIT>
-            os.makedirs(edir, exist_ok=True)
-            stem = os.path.splitext(archtex.texture_filename(iff, nrec))[0]   # "base_normal"
-            npath = os.path.join(edir, stem + ".png")
-            Image.fromarray(state["result"]).save(npath)
-            # 2) Apply ONLY this one jersey's IFF from the Extracted folder: reset it to clean, then
-            #    splice back EVERY edited record it has (your base striping + our new normal together
-            #    — never just the normal, so the base colour is preserved). prefer_lossless=False so
-            #    the DXN normal stays DXN in-place (uniform_base is load-assigned — must not grow).
-            recs = archtex.list_textures(iff, state["game_dir"])
-            edits = []
-            for rec in recs:
-                p = archtex.find_any_edit(root, iff, rec)
-                if p and rec.get("fmt") in archtex.REPLACE_FORMATS:
-                    edits.append({**rec, "path": str(p)})
-            logs = []
-            archtex.ensure_clean(iff, state["game_dir"], logs.append)
-            msg = archtex.replace_many(iff, edits, state["game_dir"], logs.append, prefer_lossless=False)
-            labels = ", ".join(e.get("label", "t%d" % e["index"]) for e in edits)
-            status.set(f"Applied {iff}: {msg}")
-            messagebox.showinfo("Applied",
-                f"{iff} updated from the Extracted folder.\n"
-                f"Records re-applied: {labels}\n\n"
-                f"New normal saved as an edit: {npath}\n\n{msg}")
-        except Exception as e:
-            messagebox.showerror("Apply failed", f"{e}\n\n{traceback.format_exc()}")
-    ttk.Button(of, text="💾  Export normal PNG", command=export_png).pack(fill="x", pady=1)
-    ttk.Button(of, text="▶  Save normal + apply this jersey", command=apply_to_game).pack(fill="x", pady=1)
-
-    ttk.Label(left, textvariable=status, wraplength=330, foreground="#0a6").pack(anchor="w", pady=(8, 0))
-
-    # ── Preview pane ──────────────────────────────────────────────────────────
-    ttk.Label(right, text="Preview", font=("Segoe UI", 11, "bold")).pack(anchor="w")
-    prow = ttk.Frame(right); prow.pack(fill="x", pady=2)
-    view_v = tk.StringVar(value="Result normal")
-    ttk.Combobox(prow, textvariable=view_v, state="readonly", width=22,
-                 values=["Result normal", "Overlay: colour on normal",
-                         "New colour", "Clean base", "Stitch height"]
-                 ).pack(side="left")
-    view_v.trace_add("write", lambda *_: show())
-    # Alpha slider — how strongly the base colour shows over the normal (overlay view only),
-    # so you can check the stitching lines up with your striping.
-    ttk.Label(prow, text="  colour α").pack(side="left")
-    overlay_a = tk.DoubleVar(value=0.5)
-    ttk.Scale(prow, from_=0.0, to=1.0, variable=overlay_a, length=140,
-              command=lambda *_: show() if view_v.get().startswith("Overlay") else None
-              ).pack(side="left", padx=4)
-    canvas = ttk.Label(right, relief="sunken"); canvas.pack(fill="both", expand=True, pady=4)
-
-    PREV = 560  # preview working resolution (fast); export/apply run full-res
-
-    def _prev_arrays():
-        """Return small-res arrays for a responsive preview."""
-        on, oc, nc = state["orig_normal"], state["orig_color"], state["new_color"]
-        if on is None or nc is None:
-            return None
+    `scale` < 1 shrinks everything to a working resolution for a responsive preview; the pixel-sized
+    parameters are scaled with it, or the stitch density would come out wrong at preview size and
+    then change under you on export. Pass 1.0 for the real thing.
+    """
+    p = dict(DEFAULTS if params is None else params)
+    on = to_color(stock_normal)
+    oc = _fit(to_color(stock_color), on.shape[:2])
+    nc = _fit(to_color(new_color), on.shape[:2])
+    if scale < 1.0:
         H, W = on.shape[:2]
-        oc = _fit(oc, (H, W)) if oc is not None else nc
-        nc = _fit(nc, (H, W))
-        sc = min(1.0, PREV / max(H, W))
-        if sc < 1.0:
-            nh, nw = int(H * sc), int(W * sc)
-            rs = lambda a: np.asarray(Image.fromarray(a.astype(np.uint8)).resize((nw, nh), Image.NEAREST))
-            on, oc, nc = rs(on), rs(oc), rs(nc)
-        # px-scale params for the downsampled preview so stitch density looks right
-        pp = dict(params)
-        for k in ("ridge_w", "stitch_off", "stitch_w", "stitch_spc", "dash_len", "twill_prd", "heal_blur"):
-            pp[k] = max(0.3, params[k] * sc)
-        return on, oc, nc, pp, sc
-
-    def regen(*_):
-        pa = _prev_arrays()
-        if pa is None:
-            return
-        on, oc, nc, pp, sc = pa
-        try:
-            state["_clean"] = n_to_rgb(clean_base_normal(on, oc, base_fabric_rgb(oc), pp)
-                                       if heal_v.get() else rgb_to_n(on))
-            h, _, _ = synth_stitch_height(nc, base_fabric_rgb(nc), pp)
-            state["_height"] = h
-            state["_prev_result"] = generate_normal(on, oc, nc, pp, heal=heal_v.get())
-            state["_prev_newcolor"] = nc
-            # full-res result (for export/apply) — cheap enough on demand, but keep preview snappy:
-            state["result"] = None  # computed lazily on export/apply via _full_result()
-        except Exception as e:
-            status.set(f"Preview error: {e}"); return
-        show()
-
-    def _full_result():
-        on, oc, nc = state["orig_normal"], state["orig_color"], state["new_color"]
-        H, W = on.shape[:2]
-        oc = _fit(oc, (H, W)) if oc is not None else nc
-        nc = _fit(nc, (H, W))
-        return generate_normal(on, oc, nc, params, heal=heal_v.get())
-
-    # export/apply need full-res: wrap them
-    _orig_export = export_png; _orig_apply = apply_to_game
-    def export_png_full():
-        if state.get("_prev_result") is None:
-            messagebox.showinfo("Export", "Load sources first."); return
-        state["result"] = _full_result(); _orig_export()
-    def apply_full():
-        if state.get("_prev_result") is None:
-            messagebox.showinfo("Apply", "Load sources first."); return
-        state["result"] = _full_result(); _orig_apply()
-
-    def show():
-        v = view_v.get()
-        arr = None
-        if v == "Result normal":
-            arr = state.get("_prev_result")
-        elif v.startswith("Overlay"):
-            nrm = state.get("_prev_result"); col = state.get("_prev_newcolor")
-            if nrm is not None and col is not None:
-                a = float(overlay_a.get())
-                nf = nrm.astype(np.float32); cf = col.astype(np.float32)
-                arr = np.clip(nf * (1.0 - a) + cf * a, 0, 255).astype(np.uint8)
-        elif v == "New colour":
-            arr = state.get("_prev_newcolor")
-        elif v == "Clean base":
-            arr = state.get("_clean")
-        elif v == "Stitch height":
-            h = state.get("_height")
-            if h is not None:
-                arr = (np.clip((h - h.min()) / (np.ptp(h) + 1e-6), 0, 1) * 255).astype(np.uint8)
-        if arr is None:
-            return
-        im = Image.fromarray(arr)
-        im.thumbnail((720, 720))
-        state["preview_imgtk"] = ImageTk.PhotoImage(im)
-        canvas.config(image=state["preview_imgtk"])
-
-    # rebind the output buttons to the full-res wrappers (case-insensitive; the apply button label
-    # is "Save normal + apply this jersey")
-    for w in of.winfo_children():
-        t = w.cget("text").lower()
-        if "export" in t: w.config(command=export_png_full)
-        elif "apply" in t: w.config(command=apply_full)
-
-    if standalone:
-        root.mainloop()
-    return root
+        nh, nw = max(1, int(H * scale)), max(1, int(W * scale))
+        rs = lambda a: np.asarray(Image.fromarray(a).resize((nw, nh), Image.NEAREST))
+        on, oc, nc = rs(on), rs(oc), rs(nc)
+        for k in ("ridge_w", "ridge_off", "stitch_off", "stitch_w", "stitch_spc", "dash_len",
+                  "twill_prd", "heal_blur", "pre_blur", "relief_blur"):
+            p[k] = max(0.3, p.get(k, DEFAULTS.get(k, 1.0)) * scale)
+    return Image.fromarray(generate_normal(on, oc, nc, p, heal=heal))
 
 
-if __name__ == "__main__":
-    open_stitcher(None)
+def stitch_kit(stock: dict, new: dict, params: dict | None = None, heal: bool = True,
+               sheets=None, scale: float = 1.0) -> dict:
+    """Every stitchable sheet at once: {sheet -> new normal image}.
+
+    `stock` and `new` are the editor's own working sets. A sheet is skipped, silently, when either
+    its colour or its stock normal is missing — a kit that ships no letters_normal is a normal state,
+    not an error.
+    """
+    out = {}
+    for name in (sheets if sheets is not None else SHEET_ORDER):
+        sc, sn, nc = stock.get(name), stock.get(_normal_key(name)), new.get(name)
+        if sc is None or sn is None or nc is None:
+            continue
+        out[name] = stitch_sheet(sc, sn, nc, params, heal, scale)
+    return out
+
+
+def _normal_key(sheet: str) -> str:
+    """The working-set key a sheet's normal is stored under ('base' -> 'base_normal')."""
+    return SHEET_SPECS[sheet]["label"]
+
+
+def normal_key(sheet: str) -> str:
+    return _normal_key(sheet)
+

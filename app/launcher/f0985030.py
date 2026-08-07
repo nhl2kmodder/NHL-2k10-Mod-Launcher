@@ -21,10 +21,15 @@ Header (big-endian), verified across logos_large / portrait / iconnav:
     0x28  section table, stride 0x20: [type@+0, alloc@+0xC, dataoff@+0x14, compsize@+0x18]
           types 0xBB05A9C1 (DRAM) + 0x411536D5 (VRAM); dataoff is PAST-EOF (repacked).
 
-NOTE: the exact per-texture *sub-field* layout inside the desc/index arrays is only partially
-reversed — enough to recognise the format, list the textures, and drive a live VRAM capture, but
-NOT to decode from the file (there are no pixels in the file). For editing team logos today, use
-the per-team `logo_<code>.iff` files (standard IFF, already in the launcher catalog).
+SUPERSEDED for the logo atlases — use `logos_atlas.py`, which fully reverses this format
+(parse/build round-trip byte-exactly on all five files) and can ADD entries. Two fields this module
+mislabels: `0x20` and `0x24` are not `desc_off`/`index_off` but derived sizes (`24n+73` / `44n+69`);
+the real regions are laid out contiguously from `0x68`. This module is kept only for the
+header sniff + live-VRAM-capture path.
+
+Do NOT edit team logos via the per-team `logo_<code>.iff` files — nothing draws from them
+(`Tex_PrecacheTeamLogos` is their only reference). The front end looks a logo up by
+`crc32(lowercase asset key)` inside these atlases; that is what `logos_atlas.py` edits.
 """
 import struct
 

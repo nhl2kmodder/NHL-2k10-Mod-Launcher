@@ -9,8 +9,15 @@ in ros_fields.json so your field map grows over time.
 
 Run:  python ros_editor_gui.py  ["<path to Roster.ROS>"]
 CAVEAT: field meanings are yours to discover. There is no per-save scramble (see ros_file.py) — the
-goalie mask round-trips fine; what does NOT round-trip is anything the game re-derives on save, e.g.
-the audio-name ids below. Always test in-game; keep the .bak.
+goalie mask round-trips fine. Always test in-game; keep the .bak.
+
+ANNOUNCER NAMES: double-click `audio_last` (+0x2C) or `audio_first` (+0x2E) on the player table to
+pick from the names the PA announcer actually has recordings of, auditioning takes before you
+commit — see pa_names.py. An older note here claimed the game re-derives these ids on save and so
+ignores a file edit; that test predates the 2026-08-01 record reframe, when the editor's rows
+straddled two real players, so it most likely wrote the right value to the wrong row. Treat editing
+as UNCONFIRMED-BUT-EXPECTED-TO-WORK: the Ghidra side is unambiguous that the announcer resolves
+these ids (docs/32 §"Runtime player struct audio ids"), so verify in-game and keep the .bak.
 """
 import sys, json, struct
 from pathlib import Path
@@ -18,6 +25,17 @@ import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 sys.path.insert(0, str(Path(__file__).parent))
 from ros_file import RosFile, FMT
+
+# The announcer-name picker is a nicety, not a dependency: if the speech tables or the audio
+# store are missing, the two id columns fall back to plain numeric editing.
+try:
+    import pa_names
+except Exception:
+    pa_names = None
+try:
+    import winsound
+except Exception:
+    winsound = None
 
 FIELDS_JSON = Path(__file__).parent / "ros_fields.json"
 TYPES = ["u8", "i8", "u16", "i16", "u32", "i32", "f32", "hex"]
@@ -80,10 +98,11 @@ DEFAULT_ROS = ""
 
 
 class RosEditorFrame(ttk.Frame):
-    def __init__(self, master, path=None):
+    def __init__(self, master, path=None, game_root=None):
         super().__init__(master)
         self.ros: RosFile | None = None
         self.chunk = None
+        self.game_root = Path(game_root) if game_root else None   # for auditioning takes
         self.fielddefs = self._load_fielddefs()      # {hash_hex: [{name,off,type,len}]}
         self._edit_widget = None
         self._build()
@@ -206,7 +225,8 @@ class RosEditorFrame(ttk.Frame):
         self._grid.column("#", width=60, anchor=tk.E, stretch=False)
         for d in defs:
             self._grid.heading(d["name"], text=f"{d['name']} @{d['off']} {d['type']}")
-            self._grid.column(d["name"], width=90, anchor=tk.W)
+            # the announcer columns carry "919 · Niedermayer (4 takes)", not a bare number
+            self._grid.column(d["name"], width=200 if self._audio_kind(d) else 90, anchor=tk.W)
         self._grid.delete(*self._grid.get_children())
         c = self.chunk
         nrows = min(c.nrec, MAX_ROWS)
@@ -219,9 +239,19 @@ class RosEditorFrame(ttk.Frame):
         try:
             if d["type"] == "hex":
                 return self.ros.record(c, row)[d["off"]:d["off"] + int(d.get("len", 4))].hex()
-            return self.ros.get(c, row, d["off"], FMT[d["type"]])
+            v = self.ros.get(c, row, d["off"], FMT[d["type"]])
+            kind = self._audio_kind(d)
+            # Show the announcer ids as "724 · Leclair" -- the bare number is meaningless, and
+            # this is the whole point of the column. _commit_edit parses the leading integer back.
+            return pa_names.describe(kind, v) if kind else v
         except Exception:
             return "?"
+
+    def _audio_kind(self, d):
+        """"last"/"first" if this field def is a PA announcer name id, else ""."""
+        if not pa_names or self.chunk is None or self.chunk.name != "0x1E159C31":
+            return ""
+        return pa_names.kind_for_field(d.get("name", ""))
 
     def _add_field(self):
         if not self.chunk:
@@ -258,6 +288,10 @@ class RosEditorFrame(ttk.Frame):
         if ci < 0 or ci >= len(defs):
             return
         self._last_col_name = defs[ci]["name"]
+        kind = self._audio_kind(defs[ci])
+        if kind:                                        # announcer id -> pick a name, not a number
+            self._pick_audio_name(int(row), ci, kind)
+            return
         x, y, w, h = self._grid.bbox(row, col)
         cur = self._grid.set(row, self._grid["columns"][int(col[1:]) - 1])
         e = ttk.Entry(self._grid); e.place(x=x, y=y, width=w, height=h)
@@ -266,8 +300,24 @@ class RosEditorFrame(ttk.Frame):
         e.bind("<Escape>", lambda _e: self._destroy_editor())
         self._edit_widget = e
 
+    def _pick_audio_name(self, row, ci, kind):
+        """Choose a recorded announcer name for one player, auditioning takes before committing."""
+        d = self._defs()[ci]
+        try:
+            cur = self.ros.get(self.chunk, row, d["off"], FMT[d["type"]])
+        except Exception:
+            cur = 0
+        new = NamePicker(self, kind, cur, self.game_root).result
+        if new is None:
+            return
+        self.ros.set(self.chunk, row, d["off"], FMT[d["type"]], int(new))
+        self._grid.set(str(row), self._grid["columns"][ci + 1], self._cell(self.chunk, row, d))
+        self._refresh_dirty(); self._show_hex()
+
     def _commit_edit(self, row, ci, text):
         c = self.chunk; d = self._defs()[ci]; r = int(row)
+        if self._audio_kind(d):                         # "724 · Leclair" -> 724
+            text = text.split("·")[0].strip()
         try:
             if d["type"] == "hex":
                 b = bytes.fromhex(text.strip())
@@ -318,12 +368,96 @@ class RosEditorFrame(ttk.Frame):
                             "Reload the roster in-game to see changes.")
 
 
-def open_editor(parent, path=None):
+class NamePicker(tk.Toplevel):
+    """Modal chooser for a PA announcer name id.
+
+    Lists only the band that matches the field (surnames for +0x2C, given names for +0x2E), so
+    the ids offered are always ones the announcer can actually say. `Play` auditions a take,
+    which matters because ~4% of lines have no transcribed name and the id is otherwise opaque.
+    """
+
+    def __init__(self, master, kind, current, game_root=None):
+        super().__init__(master)
+        self.result = None
+        self.kind, self.game_root = kind, game_root
+        self.title("PA announcer — %s name" % ("surname" if kind == "last" else "given"))
+        self.geometry("460x560")
+        self.transient(master.winfo_toplevel()); self.grab_set()
+
+        bar = ttk.Frame(self, padding=6); bar.pack(fill=tk.X)
+        ttk.Label(bar, text="Search:").pack(side=tk.LEFT)
+        self._q = ttk.Entry(bar); self._q.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=4)
+        self._q.bind("<KeyRelease>", lambda _e: self._fill())
+
+        self._tree = ttk.Treeview(self, columns=("id", "name", "takes"), show="headings")
+        for c, t, w in (("id", "id", 70), ("name", "name", 250), ("takes", "takes", 60)):
+            self._tree.heading(c, text=t); self._tree.column(c, width=w, anchor=tk.W)
+        self._tree.pack(fill=tk.BOTH, expand=True, padx=6)
+        self._tree.bind("<Double-1>", lambda _e: self._ok())
+
+        note = ttk.Label(self, padding=(6, 2), foreground="#888", wraplength=440,
+                         text="Only names with a recording are listed. Blank name = recorded but "
+                              "not transcribed — use Play to identify it.")
+        note.pack(fill=tk.X)
+        btn = ttk.Frame(self, padding=6); btn.pack(fill=tk.X)
+        ttk.Button(btn, text="Play", command=self._play).pack(side=tk.LEFT)
+        ttk.Button(btn, text="Not spoken", command=self._silent).pack(side=tk.LEFT, padx=4)
+        ttk.Button(btn, text="Cancel", command=self.destroy).pack(side=tk.RIGHT)
+        ttk.Button(btn, text="OK", command=self._ok).pack(side=tk.RIGHT, padx=4)
+
+        self._fill(select=current)
+        self.wait_window(self)
+
+    def _fill(self, select=None):
+        q = self._q.get().strip().lower()
+        self._tree.delete(*self._tree.get_children())
+        for e in pa_names.catalogue(self.kind):
+            if q and q not in e["name"].lower() and q != str(e["id"]):
+                continue
+            self._tree.insert("", tk.END, iid=str(e["id"]),
+                              values=(e["id"], e["name"], e["takes"]))
+        if select is not None and self._tree.exists(str(select)):
+            self._tree.selection_set(str(select)); self._tree.see(str(select))
+
+    def _sel(self):
+        s = self._tree.selection()
+        return int(s[0]) if s else None
+
+    def _play(self):
+        i = self._sel()
+        if i is None:
+            return
+        if not self.game_root:
+            messagebox.showinfo("Play", "Open the editor from the launcher to audition takes "
+                                        "(it supplies the extracted-audio folder).", parent=self)
+            return
+        try:
+            paths = pa_names.wavs(self.game_root, i, self.kind)
+        except Exception as e:
+            messagebox.showerror("Play", str(e), parent=self); return
+        if not paths:
+            messagebox.showinfo("Play", "No extracted WAV for this line yet — run Extract on the "
+                                        "Audio tab first.", parent=self); return
+        if winsound:
+            winsound.PlaySound(str(paths[0]), winsound.SND_FILENAME | winsound.SND_ASYNC)
+
+    def _silent(self):
+        self.result = pa_names.SILENT
+        self.destroy()
+
+    def _ok(self):
+        i = self._sel()
+        if i is not None:
+            self.result = i
+        self.destroy()
+
+
+def open_editor(parent, path=None, game_root=None):
     """Open the ROS editor as a Toplevel window over `parent` (launcher integration)."""
     win = tk.Toplevel(parent)
     win.title("NHL 2K10 — Roster.ROS Editor")
     win.geometry("1280x820")
-    RosEditorFrame(win, path).pack(fill=tk.BOTH, expand=True)
+    RosEditorFrame(win, path, game_root).pack(fill=tk.BOTH, expand=True)
     return win
 
 
