@@ -102,8 +102,14 @@ except ImportError:
     import arena_colors as AC
 
 FORMAT = "nhl2k10-modpack"
-VERSION = 1
-FILE_IDS = ["0A", "0B", "1A", "1B"]
+# 2 = carries audio_cue.json, the portable (bank, cue) key beside each WAV's physical akey path.
+# Purely additive: a VERSION 1 pack still imports (no sidecar -> akeys used verbatim, as before),
+# and a VERSION 2 pack read by older code just ignores a member it does not know.
+VERSION = 2
+# (no FILE_IDS here — this module never enumerates containers. Every audio path below is driven off
+# `AS.load_manifest`, whose keys are "<fid>:0x<off>", so a fifth archive needs no change here. The
+# hardcoded four that used to sit on this line was dead code, and worse, it read as a promise that
+# packs were limited to them.)
 PACK_EXT = ".n2kpack"
 NAMES_EXT = ".n2knames.json"
 
@@ -123,6 +129,73 @@ ROSTER_GROUPS = {
 
 akey       = AS.akey
 parse_akey = AS.parse_akey
+
+
+# ── portable audio keys ───────────────────────────────────────────────────────
+# An akey is a PHYSICAL address ("1A:0x4B8EC000"), which is only meaningful on the install that
+# produced it. Grow a wave bank and the live TOC RELOCATES it (project_relocated_bank_keys), so a
+# pack built here names bytes that on the recipient's copy are a different clip or nothing at all
+# — silently, because the address still parses.
+#
+# (bank, cue index) does not move. `speech_line_tables.json` is SHIPPED data, identical for sender
+# and recipient, and `speech_lines.physical()` resolves a cue to whatever address it occupies on
+# THIS install (consulting the live TOC via wave_banks.moved()). So the pack carries a sidecar
+# `audio_cue.json` = {akey: "bank#cue"} beside the WAVs, and import prefers the cue key when it
+# resolves. The WAVs stay under their akey path so a VERSION 1 reader is unaffected.
+#
+# Not every stream has one: 10 of 19 banks have no decoded line table, and a cue ADDED past the
+# shipped table (the 440 new PxP takes) has no shipped index. Those fall back to the akey, which
+# is exactly as portable as it was before — no worse, and now the difference is visible.
+CUEMAP_ARC = "audio_cue.json"
+
+try:
+    from . import speech_lines as SL
+except ImportError:
+    try:
+        import speech_lines as SL
+    except Exception:
+        SL = None
+except Exception:
+    SL = None
+
+
+def cue_key(key):
+    """akey -> "bank#cue" for a stream the shipped line tables cover, else None."""
+    if SL is None:
+        return None
+    try:
+        fid, off = parse_akey(key)
+        bank, cue = SL.cue_index(fid, off)
+        return f"{bank}#{cue}" if bank and cue >= 0 else None
+    except Exception:
+        return None
+
+
+def cue_key_akey(ck):
+    """"bank#cue" -> this install's akey for that cue, or None if it cannot be placed."""
+    if SL is None or not ck or "#" not in ck:
+        return None
+    try:
+        bank, cue = ck.rsplit("#", 1)
+        rel = SL.cue_offset(bank, int(cue))
+        if rel is None:
+            return None
+        fid, off = SL.physical(bank, rel)
+        return akey(fid, off) if fid else None
+    except Exception:
+        return None
+
+
+def rekey_audio(key, cuemap):
+    """The akey to use locally for a packed stream: (key, note).
+
+    `note` is non-empty only when the cue key moved the answer — that is the case worth saying out
+    loud, because it means the sender's addresses were NOT this install's.
+    """
+    local = cue_key_akey((cuemap or {}).get(key))
+    if local and local != key:
+        return local, f"re-keyed {key} -> {local} via cue {cuemap[key]}"
+    return key, ""
 
 def _load_json(p):
     try:
@@ -775,6 +848,28 @@ def diff_expansion(in_exp, ros_path):
     return items
 
 
+def grow_audio_slots(game_dir, log=print):
+    """Add the expansion speech-DB / cue slots. Idempotent — it no-ops once the ids are there.
+
+    Split out of `apply_expansion` because of ORDER: the audio ids an expansion club hands out only
+    exist on an install whose speech DB has been grown, and growing a wave bank RELOCATES it, which
+    moves every physical address in it. Audio items are applied in the item loop, well before
+    `apply_expansion` runs, so the growth has to happen first or the WAVs are keyed and written
+    against a layout the import is about to invalidate.
+    """
+    try:
+        from . import expansion_audio as EA
+    except ImportError:
+        import expansion_audio as EA
+    try:
+        log("  " + EA.apply(game_dir, log=log))
+        return True
+    except Exception as ex:
+        log(f"  audio slots NOT added — {ex}")
+        log("  the club will still work, but it will borrow another team's name call")
+        return False
+
+
 def apply_expansion(ros_path, game_dir, teams, log=print):
     """Build each incoming club in the recipient's files: roster record (+ players) first, then
     the asset family its key names.  Returns {'teams': n, 'assets': n}.
@@ -789,15 +884,7 @@ def apply_expansion(ros_path, game_dir, teams, log=print):
     # speech DB has been grown, so grow the recipient's first.  It is a data edit through the
     # normal TOC path and it no-ops once the ids are there, so importing twice is harmless.
     if teams and game_dir and Path(game_dir).is_dir():
-        try:
-            from . import expansion_audio as EA
-        except ImportError:
-            import expansion_audio as EA
-        try:
-            log("  " + EA.apply(game_dir, log=log))
-        except Exception as ex:
-            log(f"  audio slots NOT added — {ex}")
-            log("  the club will still work, but it will borrow another team's name call")
+        grow_audio_slots(game_dir, log)      # no-ops if apply_items already ran it
 
     made = 0
     for akey in sorted(teams):
@@ -850,11 +937,11 @@ def apply_expansion(ros_path, game_dir, teams, log=print):
                 log(f"  {akey}: asset preparation FAILED — {ex}")
     elif made:
         log("  expansion assets skipped: no game files folder — the club exists in the roster but "
-            "owns no art yet (Teams tab → Prepare expansion team assets…)")
+            "owns no art yet (Roster Editor tab → Prepare expansion team assets…)")
     if made:
         # A freshly built club is its own farm club (+0xD4 points at itself) until the AHL table
         # is rebuilt — the one thing a recipe can't carry, since the affiliate is its own record.
-        log("  note: run Teams tab → rebuild AHL affiliates to give the new club(s) a farm team")
+        log("  note: run Roster Editor tab → rebuild AHL affiliates to give the new club(s) a farm team")
     return {"teams": made, "assets": assets}
 
 
@@ -1530,7 +1617,7 @@ def apply_heads(z, in_heads, decisions, game_dir, ros_path=None, log=print, targ
                                           e.get("first"), e.get("last"))
             if row is None:
                 log(f"  heads: {who} — {note}; installing the art into head {hid} anyway, "
-                    f"assign it in the Players tab")
+                    f"assign it in the Roster Editor tab")
             elif note:
                 log(f"  heads: {who} — {note}")
 
@@ -1604,6 +1691,7 @@ def read_pack_contents(pack_path):
             out["heads"] = sorted(int(e.get("head_id", k))
                                   for k, e in json.loads(z.read("heads.json")).items())
         out["portraits"] = PORTRAITS_ARC in names
+        cuemap = json.loads(z.read(CUEMAP_ARC)) if CUEMAP_ARC in names else {}
         if "scoreclock.json" in names:
             out["scoreclock"] = json.loads(z.read("scoreclock.json"))
         for n in sorted(names):
@@ -1613,9 +1701,11 @@ def read_pack_contents(pack_path):
                 parts = n.split("/")
                 if len(parts) == 3:
                     try:
-                        out["audio_keys"].append(akey(parts[1], int(parts[2][:-4], 16)))
+                        k = akey(parts[1], int(parts[2][:-4], 16))
                     except ValueError:
-                        pass
+                        continue
+                    # revert has to name the slots the APPLY touched, so re-key here too
+                    out["audio_keys"].append(rekey_audio(k, cuemap)[0])
     return out
 
 
@@ -1891,10 +1981,16 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
         }, indent=1))
         if meta:
             z.writestr("audio_meta.json", json.dumps(meta, indent=1))
+        cuemap = {}
         for key, p in wavs.items():
             if Path(p).exists():
                 fid, off = parse_akey(key)
                 z.write(p, f"audio_wav/{fid}/{off:08X}.wav")
+                ck = cue_key(key)
+                if ck:
+                    cuemap[key] = ck
+        if cuemap:
+            z.writestr(CUEMAP_ARC, json.dumps(cuemap, indent=1, sort_keys=True))
         for rel, p in texs.items():
             if Path(p).exists():
                 z.write(p, f"textures/{rel}")
@@ -1978,7 +2074,7 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
                 texs.update(extra)
             else:
                 log(f"  goalie masks: no extracted texture files found for {len(folders)} mask "
-                    f"asset(s) — extract them in the IFF tab if the paint should ride along")
+                    f"asset(s) — extract them in the Textures tab if the paint should ride along")
     sc = {}
     if ("scoreclock", SCORECLOCK_KEY) in sel and game_dir:
         log("  capturing scoreclock state (~2 min)…")
@@ -2013,7 +2109,7 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
                 texs.update(extra)
             else:
                 log(f"  expansion: no extracted texture files found for {len(exp)} club(s) — "
-                    f"extract/edit them in the IFF tab if the art should ride along")
+                    f"extract/edit them in the Textures tab if the art should ride along")
     heads = {}
     head_keys = {k for s, k in sel if s == HEADS_KEY}
     if head_keys and game_dir:
@@ -2028,9 +2124,12 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
 
 # ── diff (incoming vs local) ──────────────────────────────────────────────────
 
-def _meta_items(in_meta, local_meta, off2entry):
+def _meta_items(in_meta, local_meta, off2entry, cuemap=None):
     items = []
     for key, inc in in_meta.items():
+        # Audio meta is keyed by akey too, so it needs the same portability treatment as the WAVs
+        # — otherwise a re-keyed clip lands in the right slot carrying the wrong name.
+        key = rekey_audio(key, cuemap)[0]
         loc = local_meta.get(key)
         status = "new" if loc is None else ("same" if loc == inc else "conflict")
         e = off2entry.get(key, {})
@@ -2069,8 +2168,9 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
         in_sc = json.loads(z.read("scoreclock.json")) if "scoreclock.json" in names else {}
         in_exp = json.loads(z.read("expansion.json")) if "expansion.json" in names else {}
         in_heads = json.loads(z.read("heads.json")) if "heads.json" in names else {}
+        cuemap = json.loads(z.read(CUEMAP_ARC)) if CUEMAP_ARC in names else {}
 
-        items += _meta_items(in_meta, local_meta, off2entry)
+        items += _meta_items(in_meta, local_meta, off2entry, cuemap)
         items += diff_expansion(in_exp, ros_path)
         items += diff_heads(in_heads, game_dir, ros_path, z)
         items += diff_roster(in_roster, ros_path)
@@ -2088,6 +2188,10 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
                     key = akey(parts[1], int(parts[2][:-4], 16))
                 except ValueError:
                     continue
+                # Re-key BEFORE the local lookups: "does this conflict with what I already have"
+                # is a question about the recipient's slot, not the sender's address.
+                orig_key = key
+                key, note = rekey_audio(key, cuemap)
                 inc_h = _sha(z.read(n))
                 locp = local_wavs.get(key)
                 loc_h = _sha_file(locp) if locp else None
@@ -2096,7 +2200,12 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
                 items.append({
                     "section": "audio", "key": key, "status": status,
                     "arc": n, "zip": str(zip_path), "local": str(locp) if locp else None,
-                    "label": e.get("friendly_name") or e.get("stem") or key
+                    "label": e.get("friendly_name") or e.get("stem") or key,
+                    # `cue` is carried so apply can resolve it AGAIN: an import that also adds an
+                    # expansion club grows the speech DB and relocates banks between diff and
+                    # apply, and the address that was right when the pack was read is not the
+                    # address that is right when it is written.
+                    "cue": cuemap.get(orig_key), "rekeyed": note,
                 })
 
             elif n.startswith("textures/"):
@@ -2144,17 +2253,40 @@ def _apply_wav(z, item, root, off2entry, log):
     recipient hasn't extracted has no path to overwrite, so it lands in _imported/ and gets
     picked up once they extract that bank.
     """
+    # Resolve the portable key against the layout as it is NOW, not as it was at diff time —
+    # see the `cue` note in diff_pack. No cue key, or one that no longer places, keeps the diff's
+    # answer, which is the pre-existing behaviour.
+    key = cue_key_akey(item.get("cue")) or item["key"]
+    if key != item["key"]:
+        log(f"  audio  re-keyed again at apply: {item['key']} -> {key} ({item['cue']})")
+    item = dict(item, key=key)
+
     e = off2entry.get(item["key"])
     if e:
         dest = AS.wav_path(root, e)
+        unresolved = ""
     else:
         fid, off = parse_akey(item["key"])
         dest = AS.extracted_root(root) / "_imported" / f"{fid}_{off:08X}.wav"
+        # Two very different reasons land here, and only one of them resolves itself later:
+        #   * the recipient simply hasn't extracted that bank yet -> extracting picks this up.
+        #   * the akey names an offset their install does not have. An akey is a PHYSICAL address,
+        #     and a wave bank that has been grown gets RELOCATED (see project_relocated_bank_keys),
+        #     so a pack built here against lines_ts.bin in 1C addresses bytes that on a stock or
+        #     differently-patched copy are a different clip, or nothing at all. That WAV can never
+        #     be matched by extracting, so say so instead of leaving a file in _imported/ that
+        #     looks like it will sort itself out.
+        unresolved = ("  (their install has no stream at this address — if this came from a "
+                      "relocated bank it will NOT match after extracting)")
+        if not cue_key(item["key"]):
+            unresolved += " and it has no shipped cue index to re-key it by"
 
     dest.parent.mkdir(parents=True, exist_ok=True)
     with z.open(item["arc"]) as src, open(dest, "wb") as out:
         shutil.copyfileobj(src, out)
-    log(f"  audio  -> Audio/Extracted/{AS.rel_wav(root, dest)}")
+    if item.get("rekeyed"):
+        log(f"  audio  {item['rekeyed']}")
+    log(f"  audio  -> Audio/Extracted/{AS.rel_wav(root, dest)}{unresolved}")
 
 def _apply_tex(z, item, root, log):
     extracted_base = AT.extracted_root(root)
@@ -2176,9 +2308,27 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
     archive relocate, a few seconds). game_dir=None skips both with a log line, so a GUI can strip
     scoreclock rows out and replay them itself on a background thread."""
     root = Path(root)
-    _, off2entry = _catalog_index(root)
     counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "portraits": 0,
               "expansion": 0, "heads": 0, "skipped": 0}
+
+    # Cue slots BEFORE audio. Growing the speech DB relocates wave banks, and a relocated bank's
+    # streams change physical address — so both the catalog index the WAVs are written through and
+    # the live layout the (bank, cue) re-keying resolves against have to be read AFTER the growth,
+    # not before it. `apply_expansion` calls this again later; it no-ops.
+    if game_dir and Path(game_dir).is_dir() and any(
+            it["section"] == EXPANSION_KEY and it["status"] != "same" and _should_take(it, decisions)
+            for it in items):
+        if grow_audio_slots(game_dir, log):
+            try:
+                try:
+                    from . import wave_banks as WB
+                except ImportError:
+                    import wave_banks as WB
+                WB.set_live_layout(game_dir, log=log)
+            except Exception as ex:
+                log(f"  live wave-bank layout not re-read after growing slots ({ex})")
+
+    _, off2entry = _catalog_index(root)
     meta_writes = {}
     roster_groups = {}
     expansion_teams = {}
@@ -2205,7 +2355,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                 if ros_path and Path(ros_path).is_file():
                     expansion_teams[it["key"]] = it["incoming"]
                 else:
-                    log("  expansion team skipped: no Roster.ROS path set (Teams tab → Browse…)")
+                    log("  expansion team skipped: no Roster.ROS path set (Roster Editor tab → Browse…)")
                     counts["skipped"] += 1
             elif it["section"] == HEADS_KEY:
                 if game_dir and Path(game_dir).is_dir():
@@ -2218,7 +2368,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                     roster_groups[it["key"]] = it["incoming"]
                     counts["roster"] += 1
                 else:
-                    log("  roster skipped: no Roster.ROS path set (Teams tab → Browse…)")
+                    log("  roster skipped: no Roster.ROS path set (Roster Editor tab → Browse…)")
                     counts["skipped"] += 1
             elif it["section"] == "portraits" and z is not None:
                 if game_dir and Path(game_dir).is_dir():

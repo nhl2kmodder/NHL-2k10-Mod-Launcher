@@ -396,9 +396,9 @@ class JerseyConvertTab:
         ttk.Button(r, text="↻", width=3, command=self.refresh_targets).pack(side=LEFT, padx=4)
         ttk.Label(g2, foreground="#888", wraplength=380, justify=LEFT,
                   text="Picking a kit loads what it wears RIGHT NOW, including anything you have "
-                       "already modded, and every edit goes on top of that. It also supplies the "
-                       "layout for a conversion: new art is fitted to this jersey's own "
-                       "stamp/letter ink boxes, so per-team metrics come for free.").pack(
+                       "already modded, and every edit goes on top of that. Converted art is also "
+                       "fitted to this kit's own crest and lettering sizes, so it lands the way "
+                       "the team's real jersey does.").pack(
             fill=X, pady=(6, 0))
 
         g3 = ttk.LabelFrame(p_src, text="Options", padding=8)
@@ -436,15 +436,11 @@ class JerseyConvertTab:
                        "shoulder_right empty and the game puts the left mark on both shoulders. "
                        "Only fill it for a kit whose shoulders genuinely differ (Calgary's "
                        "Canada / Alberta flags are the shipped example).\n\n"
-                       "These boxes are the sheet side of a stamp — where its art is CUT FROM. "
-                       "Where it lands ON THE BODY is not authorable: it comes from the mesh's "
-                       "own UVs and the pixel shader's source rects, and the uniform .iff carries "
-                       "no placement table (its blob is the slot list, a kerning table, then "
-                       "26 KB of fill). Move a crest on the jersey by moving it inside its slot "
-                       "art.\n\n"
-                       "SIZE is how big the mark is drawn INSIDE its cell, in percent — the only "
-                       "size the format allows, for the same reason. Click any number to type a "
-                       "new one; click ON to turn a slot off.").pack(
+                       "These boxes are where a stamp's art is CUT FROM the sheet. Where it lands "
+                       "ON THE BODY is fixed by the game and can't be changed here — to move a "
+                       "crest on the jersey, move it inside its own slot art.\n\n"
+                       "SIZE is how big the mark is drawn inside its cell, in percent. Click any "
+                       "number to type a new one; click ON to turn a slot off.").pack(
             fill=X, pady=(0, 8))
         self.tree = ttk.Treeview(p_slot, columns=SLOT_COLS, show="tree headings", height=18,
                                  selectmode="browse")
@@ -550,11 +546,11 @@ class JerseyConvertTab:
                 ("twill_ang", "weave angle °", ""),
                 ("twill_prd", "weave period px", ""),
                 ("twill_h", "weave height", "keep this subtle"),
-                ("strength", "overall relief", "height → normal gain. 0 = match the stock kit's "
-                                               "own thread depth (measured)"),
+                ("strength", "overall relief", "how deep the relief reads overall. 0 = match the "
+                                               "stock kit's own thread depth"),
                 ("heal_blur", "heal radius px", "only used when healing"),
-                ("pre_blur", "art smoothing px", "blurs the colour before edge-finding, so DXT "
-                                                 "block ringing does not become relief"),
+                ("pre_blur", "art smoothing px", "smooths the colour art before edges are found, "
+                                                 "so compression noise does not become relief"),
                 ("relief_blur", "relief smoothing px", "takes the pixel staircase off the seams"))
         self.v_ns = {}
         grid = ttk.Frame(g2); grid.pack(fill=X)
@@ -614,8 +610,8 @@ class JerseyConvertTab:
             # Pinning the box to the base sheet's gain drove the embroidery sheets with it, and 0
             # already means "measure this sheet's own", which is what the game's art shows.
             v.set("0" if k == "strength" else f"{float(got[k]):g}")
-        self.v_ns_status.set("sampled ridge width, stitch spacing and weave period off the stock "
-                             "base normal — depth stays per-sheet (strength 0 = measured)")
+        self.v_ns_status.set("measured this kit's own seam width, stitch spacing and weave period "
+                             "— overall relief stays at 0 so each sheet keeps its own depth")
 
     def stitch_normals(self):
         """Regenerate the enabled sheets' normals from the CURRENT colour art."""
@@ -854,12 +850,11 @@ class JerseyConvertTab:
         miss = ", ".join(n.replace("_", " ") for n in JP.unplaced())
         ttk.Label(f, foreground="#888", wraplength=560, justify=LEFT, padding=(6, 2, 6, 6),
                   text="Drag to turn, wheel to zoom. The crest, captaincy letter, front and back "
-                       "numbers and both sleeve numbers are drawn with the game's own pixel-shader "
-                       "math — an affine on the base UV for the crest, the mesh's baked decal "
-                       "quads for the glyphs — so their position and size match the game exactly, "
-                       "with nothing stretched to fit. Front numbers have two placements, not two "
-                       "sizes: small sits high on the left chest, big in the centre; the uniform's "
-                       f"own setting picks which. Still approximate or not drawn: {miss}.").pack(
+                       "numbers and both sleeve numbers are placed exactly where the game puts "
+                       "them, at the size the game draws them. Front numbers have two placements, "
+                       "not two sizes: small sits high on the left chest, big in the centre — the "
+                       f"uniform's own setting picks which. Still approximate or not drawn: "
+                       f"{miss}.").pack(
         fill=X)
 
     def _model_view(self, yaw):
@@ -941,12 +936,10 @@ class JerseyConvertTab:
         self._helm_dirty = True
         self.view_helm = SheetView(f)
         ttk.Label(f, foreground="#888", wraplength=560, justify=LEFT, padding=(6, 2, 6, 6),
-                  text="The helmet draws from its OWN sheet — index 2 of the uniform .iff, 1024×256 "
-                       "— not from the stamps sheet, which is why the number and the team mark "
-                       "never showed up on the body. Shell colour comes from palette slot 47 and "
-                       "the digits from slots 57–59, both on the Colours tab; the number is the one "
-                       "on the Model tab. Everything here is placed by the game's measured decal "
-                       "quads.").pack(fill=X)
+                  text="The helmet has its OWN sheet, separate from the jersey's stamps — this is "
+                       "the flat view of it. Shell colour and digit colours come from the Colours "
+                       "tab; the number itself is the one set on the Model tab. Everything here "
+                       "sits where the game draws it.").pack(fill=X)
 
     def _helmet_maybe_render(self):
         if getattr(self, "view_helm", None) is None:

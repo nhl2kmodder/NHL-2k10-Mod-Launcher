@@ -85,6 +85,15 @@ def cue_index(fid: str, offset) -> tuple:
     ent = _load() and _by_bank.get(bank)
     if not ent:
         return "", -1
+    mv = wave_banks.moved().get(bank)
+    if mv:
+        # A relocated bank has no base in the shipped logical space at all, so there is nothing to
+        # fold: `resolve` gave its start inside its new file, and the manifest offset is in the
+        # same coordinate. Subtracting is the whole conversion.
+        rel = int(offset) - mv[1]
+        offs = ent["offsets"]
+        i = bisect.bisect_right(offs, rel) - 1
+        return (bank, i) if i >= 0 and offs[i] == rel else (bank, -1)
     base = _bank_base(fid, bank)
     if base is None:
         return bank, -1
@@ -141,6 +150,17 @@ def cues_of(bank: str, line_id: int, variation=None) -> list:
     return []
 
 
+def cue_offset(bank: str, cue: int):
+    """Bank-relative byte offset of one cue INDEX, or None.
+
+    The inverse direction of `cue_index`'s bisect, and the half of a portable (bank, cue) key that
+    turns back into an address: feed the result to `physical()` for this install's coordinates.
+    """
+    _load()
+    offs = _by_bank.get(bank, {}).get("offsets") or []
+    return offs[cue] if 0 <= int(cue) < len(offs) else None
+
+
 # ── bank geometry ─────────────────────────────────────────────────────────────
 # wave_banks owns the layout; these two reach into it rather than duplicating the JSON, so a
 # regenerated audio_wave_banks.json stays the single source of truth for where a bank starts.
@@ -169,7 +189,12 @@ def physical(bank: str, rel):
     second continuing at `vol`). Which of the two files a cue actually lands in therefore
     depends on the bank's base, not on the bank name -- paplyrs is based at 0x88C43000, past
     1A's 0x6B800000, so every paplyrs cue is physically in 1B.
+
+    A bank the live TOC has relocated skips all of that: its new start is already physical.
     """
+    mv = wave_banks.moved().get(bank)
+    if mv:
+        return mv[0], mv[1] + int(rel)
     for fid, (vol, spans, first) in wave_banks._load().items():
         base = next((lo for n, lo, _hi in spans if n == bank), None)
         if base is None:

@@ -453,7 +453,10 @@ def apply(game_dir, clean_dir=None, new_ids=None, donors=None, log=print, bank=B
 
     # Back up every archive either write can land in. The list used to be the hardcoded 0A/1B pair
     # that teams.bin needs; loadingaudio_teams.bin lives in 0B, which would have gone unbacked.
-    for a in ("0A", "0B", "1A", "1B"):
+    # `AT.ARCS` is the right list rather than "every container present": it is exactly the SHIPPED
+    # archives, and an added one (1C) is ours end to end, so it has no pristine state to preserve —
+    # `AT._appended_start` already treats a non-ARCS archive as ours in its entirety.
+    for a in AT.ARCS:
         if (game_dir / a).exists():
             AT._backup_once(game_dir / a, log)
     r1 = AT._relocate(CONTAINER_, bytes(new_res), cidx, game_dir, 0, 0, "RAW", log)

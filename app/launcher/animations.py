@@ -76,27 +76,28 @@ def _posture_label(i):
 KNOWN_TABLES = [
     dict(key="skate", va=0x82048370, count=128, label=_skate_label,
          name="Skating — directional matrix",
-         note="Entity_SelectDirectionalSkateAnim @0x83E00598 indexes this as "
-              "[normal|fast][16 compass dirs][4 cycle phases]. Every stock entry is a 0.53 s "
-              "stride loop. Dir bins 7=8 and 9=10=11=12 share clips (rear arc)."),
+         note="Every skating stride, picked by speed (normal or fast), one of 16 directions and "
+              "the phase of the stride cycle. Stock clips are all 0.53 s loops; the rearward "
+              "directions share clips with each other."),
     dict(key="loco_fwd", va=0x84A07D4C, count=10, label=_posture_label,
          name="Locomotion — forward",
-         note="Entity_UpdateLocomotionAndSelectAnim @0x83ECF578, indexed by posture category. "
-              "Only categories 3,4,5,7 are populated. Shared by skaters AND goalies."),
+         note="Skating forward, by posture. Only categories 3, 4, 5 and 7 are used. Shared by "
+              "skaters AND goalies."),
     dict(key="loco_back", va=0x84A07D74, count=10, label=_posture_label,
-         name="Locomotion — backward", note="As above; facing is offset by 0xC000."),
+         name="Locomotion — backward", note="As above, for skating backward."),
     dict(key="loco_lat_a", va=0x84A07D9C, count=10, label=_posture_label,
-         name="Locomotion — lateral A", note="Left/right picked by entity+0xEC bit 0x80000000."),
+         name="Locomotion — lateral A", note="Skating sideways; the game picks A or B by which "
+                                             "way the player is going."),
     dict(key="loco_lat_b", va=0x84A07DC4, count=10, label=_posture_label,
          name="Locomotion — lateral B", note="The mirrored half of the lateral pair."),
     dict(key="loco_fastlat_a", va=0x84A07DEC, count=10, label=_posture_label,
          name="Locomotion — fast lateral A",
-         note="Used above threshold DAT_84A07E8C (5.0) — the goalie shuffle→C-push. "
-              "Only categories 2, 8, 9 are populated."),
+         note="The fast version of the sideways set — the goalie shuffle and C-push. "
+              "Only categories 2, 8 and 9 are used."),
     dict(key="loco_fastlat_b", va=0x84A07E14, count=10, label=_posture_label,
          name="Locomotion — fast lateral B", note="Mirrored half of the fast-lateral pair."),
     dict(key="loco_turn_a", va=0x84A07E3C, count=10, label=_posture_label,
-         name="Locomotion — turn A", note="Chosen when |delta angle| >= DAT_84A07E94 (5.0)."),
+         name="Locomotion — turn A", note="Used on a sharp change of direction."),
     dict(key="loco_turn_b", va=0x84A07E64, count=10, label=_posture_label,
          name="Locomotion — turn B", note="Mirrored half of the turn pair."),
 ]
@@ -106,9 +107,9 @@ TABLES_BY_KEY = {t["key"]: t for t in KNOWN_TABLES}
 # patching code, but they can still be retimed — which for the dive is the interesting knob.
 NAMED_CLIPS = {
     0x82BC2728: ("g_AnimClip_GoalieDive",
-                 "The goalie lunge/dive. GoalieBehavior_Lunge_Update @0x83EFCA80 polls the anim "
-                 "controller until this clip is reached, so its duration IS the save reaction "
-                 "latency (doc 28 §4). Stock 2.7667 s."),
+                 "The goalie lunge/dive. The goalie waits for this clip to play out before he "
+                 "can react again, so its length IS his reaction time — shorten it and goalies "
+                 "get quicker. Stock 2.7667 s."),
 }
 
 # Words that must match before any write — catches a wrong/incompatible/relinked XEX. v1.1
@@ -157,8 +158,8 @@ def validate(xex_path):
     enc, comp = xex_patch.get_comp_type(xex_path)
     if comp != 1:
         raise ValueError(
-            f"default.xex is compressed (comp_type={comp}). Flatten it first — the Gameplay tab's "
-            "Apply does this automatically, or run XexTool -c u -e u.")
+            "default.xex is compressed and has to be decompressed before it can be edited. "
+            "Press Apply on the Gameplay Tuning tab once — it does this for you.")
     segs = _segments(xex_path)
     data = Path(xex_path).read_bytes()
     for va, want in SENTINELS:
@@ -168,9 +169,9 @@ def validate(xex_path):
         got = struct.unpack_from(">I", data, off)[0]
         if got != want:
             raise ValueError(
-                f"animation sentinel mismatch @VA 0x{va:X}: file has 0x{got:08X}, expected "
-                f"0x{want:08X}. This is not the v1.0 default.xex (Title Update #1 is a full "
-                f"relink — none of these addresses exist there).")
+                "This default.xex is not the original v1.0 game executable, so its animations "
+                "are not where the launcher expects them. Animation editing does not work on "
+                "Title Update #1 — use the launch version of the game.")
     return segs
 
 

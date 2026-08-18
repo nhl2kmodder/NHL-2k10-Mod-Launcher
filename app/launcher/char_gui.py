@@ -74,10 +74,10 @@ class CharTab:
         ttk.Label(head, textvariable=self.v_status, foreground="#999").pack(side=RIGHT)
 
         ttk.Label(root, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=1000,
-                  text="global.iff holds the skater, the goalie, the sticks and the puck. The "
-                       "Source picker also opens the 447 per-player face assets and the menu / "
-                       "ceremony scenes (trophies, zambonis). Named models are identified from "
-                       "captures; the rest are real geometry nobody has put a name to yet. "
+                  text="View and replace the game's character models — the skater, the goalie, "
+                       "the sticks and the puck. The Source picker also opens the 447 player "
+                       "faces and the menu / ceremony scenes (trophies, zambonis). Parts with no "
+                       "name are real geometry nobody has identified yet. "
                        "Drag to orbit, right-drag to pan, wheel to zoom."
                   ).pack(fill=X, padx=12)
 
@@ -167,8 +167,9 @@ class CharTab:
         self.v_room = StringVar(value="")
         ttk.Label(act, textvariable=self.v_room, foreground="#888", font=("Segoe UI", 7),
                   wraplength=210, justify=LEFT).pack(anchor=W, pady=(3, 0))
-        ttk.Label(act, text="Every edit here is written back into global.iff in place: nothing "
-                            "may grow, and one slot holds all 50 models.",
+        ttk.Label(act, text="All 50 character models share one slot in the game files, and that "
+                            "slot can't grow — an edit that doesn't fit is refused rather than "
+                            "half-written.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=210,
                   justify=LEFT).pack(anchor=W, pady=(3, 0))
 
@@ -621,7 +622,7 @@ class CharTab:
         if not root:
             return messagebox.showinfo("Players", "Set the game files folder in Settings first.")
         if not messagebox.askyesno("Restore", "Put the shipped character geometry back?\n\n"
-                                              "Every model in global.iff returns to stock."):
+                                              "Every character model returns to stock."):
             return
         self._busy("restoring …")
 
@@ -649,7 +650,7 @@ class CharTab:
             try:
                 h = CM.headroom(asset=asset)
                 if not h:
-                    raise ValueError("global.iff: no pristine copy to measure against")
+                    raise ValueError("no clean copy of the game files to measure against")
                 txt = (f"{h['packed']:,} of {h['slot']:,} bytes used — {h['free']:,} free. "
                        "An edit has to re-compress into that; a whole-model reshape typically "
                        "costs a couple of kilobytes.")

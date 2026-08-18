@@ -689,9 +689,9 @@ class LiveScoreclockFrame(ttk.Frame):
         ttk.Button(ctl, text="Bake current layout to file…",
                    command=self._bake).pack(fill=tk.X)
         ttk.Label(ctl, foreground="#888", font=("Segoe UI", 8), wraplength=220, justify=tk.LEFT,
-                  text="Bake writes into overlay_static.iff (permanent, shows next launch): "
-                       "identified joint POSITION moves, and SOG position+size. Joint scale "
-                       "is live-only.").pack(anchor=tk.W, pady=(2, 0))
+                  text="Bake makes the layout permanent — it shows on the next launch. Element "
+                       "positions and the shots-on-goal size are saved; scale changes stay "
+                       "live-only.").pack(anchor=tk.W, pady=(2, 0))
 
     def _slider(self, parent, label, lo, hi, cmd, resolution=1.0, init=0.0):
         """A TYPEABLE numeric control (spinbox: type a value or nudge with the arrows), to
@@ -922,7 +922,7 @@ class LiveScoreclockFrame(ttk.Frame):
                     messagebox.showerror("Bake to file", f"{e}\n\n" + "\n".join(logs)); return
                 logs.append(f"  matrix skipped: {e}")
         messagebox.showinfo("Bake to file",
-                            "Baked into overlay_static.iff — shows on the next game launch.\n\n"
+                            "Layout saved — it shows on the next game launch.\n\n"
                             + "\n".join(logs))
 
     # ── poll: refresh live pos + surface a safety halt ────────────────────────

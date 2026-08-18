@@ -44,6 +44,7 @@ from . import arena_preview as AP
 from . import face_builder as FB
 from . import face_shape as FS
 from . import facial_hair as FH
+from . import uiscroll
 from .player_assign import EYE_COLORS
 
 try:
@@ -58,6 +59,10 @@ FRONT = 3.14                                           # camera yaw that looks a
 SLIDERS = [
     ("Shape strength", "strength", 0.0, 1.5, 1.0,
      "how far the geometry moves from the artist's head toward the photographs"),
+    ("Slim: taper", "taper", 0.0, 3.0, 0.0,
+     "narrows the face toward the chin — what a frontal landmark fit can't see. ~1.5 for a lean face"),
+    ("Slim: hollow", "hollow", 0.0, 3.0, 0.0,
+     "sinks cheek and jaw volume in depth. ~1.5-2 for a hollow-cheeked player, 0 leaves the artist's"),
     ("Photo sharpness", "sharp", 0.5, 5.0, 2.0,
      "higher = each texel comes from fewer photos: crisper, harder joins"),
     ("Flatten shading", "flatten", 0.0, 1.0, 0.85,
@@ -91,7 +96,10 @@ class HeadEditor(tk.Toplevel):
         fn, ln = table.name(row)
         self.player = (fn + " " + ln).strip() or f"row {row}"
         self.title(f"NHL 2K10 — head editor: {self.player}")
-        self.geometry("1180x760")
+        # 760 px of height is more than a 768 px laptop has once the taskbar and the title bar are
+        # paid for, so ask for the desktop's WORK AREA rather than for a number. The left column
+        # scrolls (see _build_ui), which is what makes it safe to be given less than it wanted.
+        uiscroll.fit_to_screen(self, 1180, 760, minimum=(820, 420))
         try:
             self.transient(master.winfo_toplevel())
         except Exception:
@@ -100,6 +108,7 @@ class HeadEditor(tk.Toplevel):
         self.refs = []                                 # Path list
         self.built = None                              # build_multi result, not yet installed
         self._hair_over = {}                           # {submesh record: mesh} for the beard shells
+        self._tex_over = {}                            # {label: filename} maps imported by hand
         self.newP = None                               # fitted positions, not yet installed
         self._fit = None                               # (blob, model, M) that newP belongs to
         self.scene = None
@@ -118,8 +127,14 @@ class HeadEditor(tk.Toplevel):
     def _build_ui(self):
         pane = ttk.Panedwindow(self, orient=tk.HORIZONTAL)
         pane.pack(fill=tk.BOTH, expand=True)
-        left = ttk.Frame(pane, padding=6)
-        pane.add(left, weight=0)
+        # The left column is seven stacked panels — references, slot, eight build sliders, facial
+        # hair, textures, buttons — and on anything shorter than about 900 px the buttons at the
+        # bottom were simply off the window with nothing to say so. It scrolls now, and only when
+        # it has to: on a tall screen the bar is not there at all.
+        lhost = uiscroll.ScrollHost(pane, padding=6, fit_width=True)
+        pane.add(lhost, weight=0)
+        left = lhost.body
+        self._left_scroll = lhost
         right = ttk.Frame(pane)
         pane.add(right, weight=1)
 
@@ -208,6 +223,30 @@ class HeadEditor(tk.Toplevel):
         self._fh_list.bind("<<ListboxSelect>>", lambda _e: self._fh_changed())
         self._fh_rows, self._fh_for = [], None     # the list is per destination head — see _fh_fill_list
 
+        # ── the three maps, out and back in again ──
+        # The builder will not be right for every head, and when it is wrong the fix is usually a
+        # few minutes in an image editor rather than another slider. Export gives whatever the
+        # preview is showing right now — the built maps if that is what is on screen, otherwise what
+        # is actually in the game files — and Import puts an edited one straight back on the model,
+        # so a change can be judged in the preview before anything is written.
+        tf = ttk.LabelFrame(left, text="Textures", padding=6)
+        tf.pack(fill=tk.X, pady=(8, 0))
+        self._tex_lbl = {}
+        for key, txt in (("color", "Colour"), ("normal", "Normal"), ("occlusion", "AO")):
+            r = ttk.Frame(tf)
+            r.pack(fill=tk.X, pady=1)
+            ttk.Label(r, text=txt, width=7).pack(side=tk.LEFT)
+            ttk.Button(r, text="Export…", width=9,
+                       command=lambda k=key: self._tex_export(k)).pack(side=tk.LEFT)
+            ttk.Button(r, text="Import…", width=9,
+                       command=lambda k=key: self._tex_import(k)).pack(side=tk.LEFT, padx=3)
+            self._tex_lbl[key] = ttk.Label(r, text="", foreground="#3a8", width=9)
+            self._tex_lbl[key].pack(side=tk.LEFT)
+        ttk.Button(tf, text="Apply textures to game files",
+                   command=self._do_install_maps).pack(fill=tk.X, pady=(4, 0))
+        ttk.Label(tf, text="exports what the preview is showing; an import goes straight onto the "
+                           "model", wraplength=300, foreground="#888").pack(anchor="w")
+
         ab = ttk.Frame(left)
         ab.pack(fill=tk.X, pady=(8, 0))
         self._build_btn = ttk.Button(ab, text="Build from photos", style="Accent.TButton",
@@ -236,6 +275,14 @@ class HeadEditor(tk.Toplevel):
                          ("Back", 0.0)):
             ttk.Button(vb, text=txt, width=6,
                        command=lambda y=yaw: self._set_yaw(y)).pack(side=tk.LEFT, padx=2)
+        # Which light to judge under. "Game" is measured off the front-end's own render of the
+        # stock head and is what the player will see; "Studio" rakes the key across the face, which
+        # shows shape but is twice the contrast and half the brightness of anything in the game.
+        # See char_model.HEAD_MODES.
+        self._lightvar = tk.StringVar(value="Game light")
+        ttk.Combobox(vb, textvariable=self._lightvar, state="readonly", width=12,
+                     values=("Game light", "Studio rake")).pack(side=tk.LEFT, padx=(10, 0))
+        self._lightvar.trace_add("write", lambda *_a: self._relight())
         self._view = tk.StringVar(value="installed")
         ttk.Radiobutton(vb, text="Built", variable=self._view, value="built",
                         command=self._switch_view).pack(side=tk.RIGHT)
@@ -430,13 +477,12 @@ class HeadEditor(tk.Toplevel):
             return messagebox.showwarning(
                 "Head slot",
                 "Every head asset in the game is pointed at by at least one player.\n\n"
-                "Free one by moving another player onto a shared head, or add a new head asset "
-                "(not wired up yet).", parent=self)
+                "Free one up by moving another player onto a head he can share.", parent=self)
         hid = free[0]
         if not messagebox.askyesno(
                 "Head slot", f"Give {self.player} head slot {hid}?\n\n"
                              f"{len(free)} unused head assets exist; this takes the lowest. "
-                             f"Nothing is written until you save the roster in the Players tab.",
+                             f"Nothing is written until you save the roster on the Roster Editor tab.",
                 parent=self):
             return
         self.table.set_head(self.row, hid, game_dir=self.game_root)
@@ -460,6 +506,7 @@ class HeadEditor(tk.Toplevel):
         self.log(f"eye colour -> {self._eye.get()} (roster edit, unsaved)")
         if self.on_change:
             self.on_change()
+        self._reload_scene()          # the preview draws the eyes now, so it has to follow the pick
 
     # ── references ───────────────────────────────────────────────────────────
     def _add_refs(self):
@@ -550,10 +597,13 @@ class HeadEditor(tk.Toplevel):
                     _M = C.read_model(b, m)
                 also = {p["rec"] for bit, p in FH.hair_slots(_M).items()
                         if bit in FH.FACIAL_BITS}
-                sc = C.build_scene(b, m, asset=nm, game_dir=self.game_root, also=also)
+                # Draw this player's actual eyes. Without it the eyeballs are cut with the rest of
+                # the non-skin submeshes and the preview looks through the socket into the skull.
+                sc = C.build_scene(b, m, asset=nm, game_dir=self.game_root, also=also,
+                                   eyes=self.table.eye_color(self.row))
                 if sc is None:
                     raise ValueError(f"{nm}: nothing to draw")
-                C.head_light(sc)          # rake it across the face; see char_model.HEAD_LIGHT
+                C.head_light(sc, self._light_mode())   # see char_model.HEAD_MODES
                 if use_built:
                     self._apply_built(sc)
                 err = None
@@ -578,8 +628,8 @@ class HeadEditor(tk.Toplevel):
         """Swap the fitted geometry and the uninstalled maps into a scene built from disk.
 
         The maps go on exactly as `char_model._asset_maps` would have loaded them — occlusion
-        multiplied into the albedo — so the built preview and the installed preview are shaded
-        by the same rules and are honestly comparable."""
+        applied through the same `apply_ao` — so the built preview and the installed preview are
+        shaded by the same rules and are honestly comparable."""
         if self.newP is not None and len(self.newP) == len(sc["pos"]):
             P = np.asarray(self.newP, np.float32).copy()
             # …but not over the hair shells. `newP` is the fitted FACE, and the shells were
@@ -597,20 +647,39 @@ class HeadEditor(tk.Toplevel):
             sc["nrm"] = C._vertex_normals(sc["pos"].astype(np.float64),
                                           sc["tri"]).astype(np.float32)
             sc["vcol"] = C.lambert(sc["nrm"], len(sc["pos"]))
+            # The fitted positions overwrite the eyeballs build_scene had already seated into the
+            # lids, so seat them again against THIS geometry — the fit moves the lids too, and it
+            # also bends the globe out of round, which seat_eyes now corrects for.
+            C.seat_eyes(sc)
+            C.light_eyes(sc)          # the lambert above wiped the globes' ambient; put it back
         col = np.asarray(self.built["color"].convert("RGB"), np.float32)
         ao = self.built.get("occlusion")
         if ao is not None:
             a = np.asarray(ao.convert("L").resize(self.built["color"].size), np.float32)
-            col = col * (a[..., None] / 255.0)
+            col = C.apply_ao(col, a / 255.0)
         col = np.clip(col, 0, 255).astype(np.uint8)
         nrm = self.built.get("normal")
         nrm = np.asarray(nrm.convert("RGB"), np.uint8) if nrm is not None else None
+        # Every material except the eyeballs. Theirs is a global.iff sheet over the eyeball's own
+        # unwrap; painting the face map over it prints a patch of cheek onto both eyes.
         for mid in list(sc["tex"]):
+            if mid == sc.get("eye_mat"):
+                continue
             sc["tex"][mid] = col
             if nrm is not None:
                 sc["ntex"][mid] = nrm
         if nrm is not None:
             sc["tan"] = C.tangents(sc["pos"], sc["uv"], sc["tri"], sc["nrm"])
+
+    def _light_mode(self):
+        return "studio" if self._lightvar.get().startswith("Studio") else "game"
+
+    def _relight(self):
+        """Swap the preview light without rebuilding the scene. Nothing baked changes."""
+        if self.scene is not None:
+            C.head_light(self.scene, self._light_mode())
+            C.light_eyes(self.scene)
+            self._redraw()
 
     def _redraw(self):
         if self.scene is None or ImageTk is None:
@@ -667,7 +736,9 @@ class HeadEditor(tk.Toplevel):
             out = err = None
             try:
                 b, m, M, newP, info = FS.fit(hid, refs, game_dir=G,
-                                             strength=args["strength"], log=self.log)
+                                             strength=args["strength"],
+                                             taper=args.get("taper", 0.0),
+                                             hollow=args.get("hollow", 0.0), log=self.log)
                 self.log(f"  ears held to {info['ear_moved']:.3f} cm "
                          f"while the face moved {info['moved']:.2f} cm")
                 maps = FB.build_multi(refs, hid, game_dir=G, positions=newP,
@@ -675,6 +746,10 @@ class HeadEditor(tk.Toplevel):
                                       flatten=args["flatten"], chroma=args["chroma"],
                                       bump=args["bump"], ao=args.get("ao", 1.0),
                                       fill_hair=hair, log=self.log)
+                # the build can move the mesh as well as paint it — it closes the eye aperture
+                # against the portrait, which is geometry and cannot be done in a map. If it did,
+                # these are the positions to write.
+                newP = maps.get("positions", newP)
                 out = (b, m, M, newP, maps)
             except Exception as e:
                 err = str(e)
@@ -717,6 +792,122 @@ class HeadEditor(tk.Toplevel):
                 self.log(f"normal map re-baked at intensity {bump:.2f}")
                 if self._view.get() == "built":
                     self._reload_scene(from_disk=False)
+            try:
+                self.after(0, done)
+            except tk.TclError:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    # ── the three maps, out and back in again ────────────────────────────────
+    def _live_maps(self):
+        """The colour/normal/occlusion the game would load for this head RIGHT NOW.
+
+        `FB.base_maps` is the wrong reader here — it always goes to the pristine `.orig`, so it
+        would hand back the artist's face even for a head that was installed five minutes ago, and
+        exporting that could not round-trip an edit. `live=True` reads the archives as they stand.
+        """
+        nm = C.HEAD_FMT.format(self.head_id)
+        recs = {r["label"]: r for r in AT.list_textures(nm, self.game_root)}
+        return {k: AT.decode_record(nm, recs[k], self.game_root, live=True).convert(
+            "L" if k == "occlusion" else "RGB") for k in ("color", "normal", "occlusion")
+            if k in recs}
+
+    def _tex_current(self, label):
+        """Whatever the preview is showing for `label` — the built map if that is what is on
+        screen, otherwise what is in the game files."""
+        if self._view.get() == "built" and self.built and self.built.get(label) is not None:
+            return self.built[label], "built"
+        return self._live_maps().get(label), "installed"
+
+    def _tex_export(self, label):
+        try:
+            img, where = self._tex_current(label)
+        except Exception as e:
+            return messagebox.showerror("Export", str(e), parent=self)
+        if img is None:
+            return messagebox.showwarning("Export", f"This head has no {label} map.", parent=self)
+        p = filedialog.asksaveasfilename(
+            parent=self, defaultextension=".png", filetypes=[("PNG image", "*.png")],
+            initialfile=f"head_{self.head_id:04d}_{label}.png")
+        if not p:
+            return
+        img.save(p)
+        self.log(f"{label}: exported the {where} map, {img.size[0]}x{img.size[1]} -> {p}")
+
+    def _tex_import(self, label):
+        p = filedialog.askopenfilename(parent=self, filetypes=[("Images", "*.png *.tga *.bmp"),
+                                                               ("All files", "*.*")])
+        if not p:
+            return
+        try:
+            img = Image.open(p)
+            img.load()
+            live = self._live_maps()
+            # The three surfaces exactly fill the head's 983,040-byte VRAM blob, so the install is
+            # a same-size, same-format overwrite by construction. An off-size import has no honest
+            # place to go: resampling a normal map silently is worse than refusing it.
+            ref = (self.built or {}).get(label) or live.get(label)
+            if ref is not None and img.size != ref.size:
+                return messagebox.showerror(
+                    "Import", f"That image is {img.size[0]}x{img.size[1]}; this head's {label} map "
+                              f"is {ref.size[0]}x{ref.size[1]}. Resize it and try again.",
+                    parent=self)
+            img = img.convert("L" if label == "occlusion" else "RGB")
+            if self.built is None:
+                # No build in this session: seed the working set from what is installed, so the
+                # other two maps come through the preview and the apply unchanged.
+                self.built = dict(live)
+            self.built[label] = img
+        except Exception as e:
+            self.log(traceback.format_exc())
+            return messagebox.showerror("Import", str(e), parent=self)
+        self._tex_over[label] = Path(p).name
+        self._tex_lbl[label].config(text="imported")
+        self.log(f"{label}: imported {Path(p).name}, {img.size[0]}x{img.size[1]}")
+        self._view.set("built")
+        self._reload_scene(from_disk=False)
+
+    def _do_install_maps(self):
+        """Write ONLY the maps — no geometry. This is the path for a texture the user painted on
+        top of an installed head, where the shape is already right and re-writing it would only
+        re-quantise the positions."""
+        if not self.built:
+            return messagebox.showwarning("Apply", "Import a map first.", parent=self)
+        only = tuple(k for k in ("color", "normal", "occlusion") if k in self._tex_over) \
+            or ("color", "normal", "occlusion")
+        others = self._shared_rows()
+        if others:
+            return messagebox.showwarning(
+                "Apply", f"Head {self.head_id} is shared with {len(others)} other player(s) — "
+                         f"applying would give every one of them these textures.\n\n"
+                         f"Use \"Give this player his own head slot\" first.", parent=self)
+        hid = self.head_id
+        if not messagebox.askyesno(
+                "Apply", f"Write the {', '.join(only)} map(s) into "
+                         f"player_head_id_{hid:04d}.iff?\n\nThe geometry is left alone.",
+                parent=self):
+            return
+        maps, G = dict(self.built), self.game_root
+        self._lock(True)
+
+        def work():
+            err = None
+            try:
+                self.log(FB.install(hid, maps, G, log=self.log, only=only))
+            except Exception as e:
+                err = str(e)
+                self.log(traceback.format_exc())
+
+            def done():
+                self._lock(False)
+                if err:
+                    return messagebox.showerror("Apply", err, parent=self)
+                self._tex_over.clear()
+                for lb in self._tex_lbl.values():
+                    lb.config(text="")
+                self.log(f"head {hid}: textures applied")
+                self._view.set("installed")
+                self._reload_scene(from_disk=True)
             try:
                 self.after(0, done)
             except tk.TclError:

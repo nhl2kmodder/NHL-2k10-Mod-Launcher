@@ -84,13 +84,11 @@ def _lis_word(rd: int, imm: int) -> int:
 
 def read_cap(xex_path) -> int | None:
     """The image size the executable currently enforces, or None if the sites don't decode."""
-    data = Path(xex_path).read_bytes()
     vals = set()
     for va, rd, _what in SITES:
-        off = XP.va_to_offset(xex_path, va)
-        if off is None:
+        w = XP.read_u32(xex_path, va)
+        if w is None:
             return None
-        w = struct.unpack_from(">I", data, off)[0]
         if (w >> 26) != 15 or ((w >> 21) & 31) != rd or ((w >> 16) & 31) != 0:
             return None                      # not a `lis rD,imm` — unexpected build
         vals.add(((w & 0xFFFF) << 16) | LO)

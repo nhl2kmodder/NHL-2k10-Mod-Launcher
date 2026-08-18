@@ -41,6 +41,10 @@ from pathlib import Path
 
 SCHEMA = 3          # 3: sample_rate comes from the wave bank, not from re-reading our own WAV
 
+# The shipped four, and ONLY used to find legacy per-file "<fid>_Audio_Catalog.json" sidecars to
+# migrate. Those only ever existed for the disc containers, so this list must NOT grow to track
+# added archives (1C) — nothing was ever written for them. Live extraction is manifest-driven and
+# takes its fids from the archive header; see `nhl2k10_launcher.FILE_IDS` for that list.
 FILE_IDS = ["0A", "0B", "1A", "1B"]
 
 _MANIFEST_NAME = ".extract_manifest.json"
@@ -128,6 +132,44 @@ def is_edited(root: Path, entry: dict, wav: Path | None = None) -> bool:
     return sha1_file(wav) != base
 
 
+def mark_patched(entry: dict, wav: Path) -> None:
+    """Record the WAV exactly as it stood when it was written into the archive."""
+    try:
+        st = wav.stat()
+    except OSError:
+        return
+    entry["patched_sha1"]  = sha1_file(wav)
+    entry["patched_size"]  = st.st_size
+    entry["patched_mtime"] = st.st_mtime
+
+
+def needs_patch(root: Path, entry: dict, wav: Path | None = None) -> bool:
+    """True when the WAV differs from what was last written into its archive slot.
+
+    This is a different question from `is_edited()`, and Patch Game wants this one.
+    `is_edited()` asks "does this differ from the pristine extract", which is the right
+    question for the ✓ Modified column, for Revert, and for deciding what goes into a mod
+    pack — an installed edit is still an edit. But as Patch Game's filter it never
+    terminates: a WAV that has already been written stays "edited" for ever, so the button
+    re-encodes work it has already done, and because XMA2 is lossy every extra pass spends
+    another generation of quality on audio that was already correct in the game.
+
+    Falls back to `is_edited()` whenever nothing has been stamped, so an entry that predates
+    this behaves exactly as it did before.
+
+    Reverting does not clear the stamp, and must not: it rewrites the WAV, not the archive, so
+    the stamp still describes the slot truthfully and is precisely what makes a reverted entry
+    read as needing a patch again.
+    """
+    wav = wav or wav_path(root, entry)
+    if not wav.exists():
+        return False
+    base = entry.get("patched_sha1")
+    if not base:
+        return is_edited(root, entry, wav)
+    return sha1_file(wav) != base
+
+
 # ── manifest ──────────────────────────────────────────────────────────────────
 
 def load_manifest(root: Path) -> dict:
@@ -162,7 +204,9 @@ def save_manifest(root: Path, entries: dict) -> None:
         "_schema": SCHEMA,
         "_comment": "Extracted audio index. Key = <archive>:<byte offset>. "
                     "'wav' is relative to this folder; 'sha1' is the pristine extract, so a "
-                    "differing file is a user edit and gets written back by Patch Game.",
+                    "differing file is a user edit. 'patched_sha1' is the WAV as of the last "
+                    "successful write into the archive — Patch Game writes what differs from "
+                    "THAT, so pressing it twice is a no-op the second time.",
         "entries": entries,
     }
     tmp = p.with_suffix(".tmp")

@@ -285,8 +285,8 @@ def add_toc_alias(game_dir, new_name: str, donor_name: str, log=print) -> str:
 
     lowest = min(e[3] for e in entries) * 0x800
     if end + 16 > lowest:
-        raise RuntimeError(f"TOC is full ({(lowest - end) // 16} free slots) — relocate the first "
-                           f"blob to the archive tail to make room")
+        raise RuntimeError(f"this archive has no room left for new assets "
+                           f"({(lowest - end) // 16} slots free) — no more can be added")
 
     pos = next((i for i, e in enumerate(entries) if e[2] > crc), cnt)
     entries.insert(pos, (flags, size, crc, f3))

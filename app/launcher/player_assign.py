@@ -28,8 +28,15 @@ NAMES ARE SOLVED ON DISK (2026-08-06) — this file used to say they weren't. Th
 
 The target lands either in the shared name pool (chunk 0xEB69DFB9) for stock names, or INSIDE the
 player's own 420-byte record for created/edited players, which store the string inline — scanning
-only the pool is what made this look unsolvable. 2,676 of 2,715 rows resolve on the live 2026 save.
+only the pool is what made this look unsolvable.
 Use name(row) / find_rows_by_name() to address a player; portrait key and goalie order still work.
+
+⚠ THE OFFSET IS SIGNED (fixed 2026-08-08). Read as unsigned it looks like a wild pointer far past
+the end of the file and the name came back empty — which is why "2,676 of 2,715 rows resolve" was
+ever a number worth quoting. The rows that didn't were not corrupt: their string simply sits EARLIER
+in the file than the record, and that set is almost entirely the created/expansion players. Read
+signed, row 2343 is Matty Beniers (SEA) and row 2371 is Pavel Dorofeyev (VGK) — exactly the
+Seattle/Vegas rosters this project built. Every offline tool that lists players was blind to them.
 
 Verified against the live Roster.ROS (player chunk 0x1E159C31, 2714 records x 420B, big-endian):
   +0x1C  u16  portrait key   98.6% of values are keys that actually exist as blobs in
@@ -161,7 +168,7 @@ class PlayerTable:
     def _str_at(self, ptr_foff) -> str:
         """The UTF-16BE string a self-relative pointer field at `ptr_foff` targets, or ''."""
         d = self.ros.data
-        v = struct.unpack_from(">I", d, ptr_foff)[0]
+        v = struct.unpack_from(">i", d, ptr_foff)[0]  # SIGNED — see below
         if not v:
             return ""
         t = ptr_foff + v - 1                          # same rule as the team-name pointers
@@ -191,7 +198,7 @@ class PlayerTable:
         thousand rows that are not NHL players."""
         d = self.ros.data
         po = self._off(row, OFF_TEAM)
-        v = struct.unpack_from(">I", d, po)[0]
+        v = struct.unpack_from(">i", d, po)[0]        # signed, like every pointer in this format
         if not v:
             return ("", "", "")
         t = po + v - 1
@@ -406,6 +413,54 @@ def valid_portrait_keys():
 # same order — so the live `index` IS the file row. That is asserted rather than assumed: the array
 # length must equal the file's record count, and each row's portrait key must still match the live
 # record's. Anything that fails is reported and skipped, never written blind.
+
+def enumerate_players(ros_path, skip_unnamed=True, goalies_only=False):
+    """[{index, addr, first, last, name, key, portrait, shell, pattern, num, bio, pid,
+    roster_count}] read straight out of a Roster.ROS — the OFFLINE twin of
+    portrait_assign.enumerate_players() AND goalie_equipment.enumerate_goalies().
+
+    It is one function because those two differ only in a filter and a couple of fields, so every
+    key either of them produces is present here: `key` (the portrait, as the Portraits tab calls it)
+    and `portrait` (the same value, as the Goalie tab calls it), plus `shell`/`pattern`. `addr` is
+    None because there is no live record to poke. `index` IS the file row, which makes the
+    rows_for_live mapping an identity.
+
+    This exists because names DO resolve on disk (see the module header — the +0x00/+0x04 pointers
+    are self-relative and SIGNED), so listing players no longer needs the game running. Rows whose
+    name pointers resolve to nothing are dropped by default, matching the live enumerators, which
+    only ever saw named records.
+    """
+    try:
+        from . import player_ids as _pid
+    except ImportError:
+        import player_ids as _pid
+
+    t = PlayerTable(ros_path)
+    d = t.ros.data
+    out = []
+    for row in range(t.nrec):
+        if goalies_only and not t.is_goalie(row):
+            continue
+        base = t.base + row * STRIDE
+        first, last = t.name(row)
+        if skip_unnamed and not (first or last):
+            continue
+        num, bio = _pid.bio_fields(d, base)
+        shell, pattern = t.mask(row)
+        key = t.portrait(row)
+        out.append({"index": row, "addr": None, "first": first, "last": last,
+                    "name": (first + " " + last).strip(),
+                    "key": key, "portrait": key, "shell": shell, "pattern": pattern,
+                    "num": num, "bio": bio, "roster_count": t.nrec})
+    _pid.assign_player_ids(out)
+    return out
+
+
+def enumerate_goalies(ros_path):
+    """The goalie subset of enumerate_players(), by the same (+0x40 >> 3) & 7 == 0 test the live
+    enumerator uses. Separate name so the Goalie tab reads as it always did."""
+    return enumerate_players(ros_path, goalies_only=True)
+
 
 class RowMapError(Exception):
     """The live roster and this Roster.ROS are not the same table — refuse to write by row."""

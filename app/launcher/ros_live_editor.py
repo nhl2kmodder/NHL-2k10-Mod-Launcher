@@ -61,11 +61,17 @@ KNOWN_FIELDS = [
     {"name": "Captaincy", "off": 0x20, "type": "enum", "lo": 0, "w": 2, "map": CAP_MAP, "group": "Bio"},
     {"name": "Shoots", "off": 0x34, "type": "enum", "lo": 15, "w": 1, "map": SHOOTS_MAP, "group": "Bio"},
     {"name": "Height (in)", "off": 0x0C, "type": "scaled", "lo": 15, "w": 8, "mul": 0.2, "add": 50, "group": "Bio"},
-    {"name": "Weight (lb)", "off": 0x11, "type": "scaled", "lo": 26, "w": 6, "mul": 4, "add": 133, "group": "Bio"},
+    # add was 133 (fit from two players, Kane 178 / Chara 256) and read 3 lb heavy for everyone
+    # else; refit 2026-08-08 against 632 players name-matched to NHL.com — the median real weight of
+    # every raw bucket v=8..31 lands on 4*v + 130. See roster_verify.WEIGHT_ADD.
+    {"name": "Weight (lb)", "off": 0x11, "type": "scaled", "lo": 26, "w": 6, "mul": 4, "add": 130, "group": "Bio"},
     {"name": "Country", "off": 0x28, "type": "enum", "lo": 4, "w": 7, "map": COUNTRY_MAP, "group": "Bio"},
     {"name": "Overall", "off": 0x34, "type": "bits", "lo": 0, "w": 7, "readonly": True, "group": "Bio"},
     {"name": "Type", "off": 0x34, "type": "enum", "lo": 10, "w": 3, "map": TYPE_MAP, "group": "Bio"},
-    {"name": "Salary ($)", "off": 0x38, "type": "bits", "lo": 3, "w": 24, "group": "Bio"},
+    # 29 bits, not 24 — confirmed in game with $18,000,000 on one record (a 24-bit read would have
+    # shown $1.22M). Bits 31..27 read zero on every shipped roster only because no 2009 salary was
+    # anywhere near $16.8M.
+    {"name": "Salary ($)", "off": 0x38, "type": "bits", "lo": 3, "w": 29, "group": "Bio"},
     {"name": "Contract (yrs)", "off": 0x39, "type": "bits", "lo": 0, "w": 3, "group": "Bio"},
     {"name": "Birth year", "off": 0x1C, "type": "bits", "lo": 4, "w": 12, "group": "Bio"},
     {"name": "Birth month", "off": 0x1C, "type": "bits", "lo": 0, "w": 4, "group": "Bio"},

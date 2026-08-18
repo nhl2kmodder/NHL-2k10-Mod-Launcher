@@ -35,7 +35,7 @@ class TeamFieldsEditor:
 
         bar = ttk.Frame(w, padding=(6, 6, 6, 2)); bar.pack(fill=X)
         ttk.Button(bar, text="Reload defs", command=self.reload).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Edit field names (JSON)…",
+        ttk.Button(bar, text="Edit field names…",
                    command=self.open_defs).pack(side=LEFT, padx=2)
         ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
         self.v_led = BooleanVar(value=False)
@@ -47,7 +47,7 @@ class TeamFieldsEditor:
         self.b_save = ttk.Button(bar, text="Save to Roster.ROS", style="Accent.TButton",
                                  command=self.save)
         self.b_save.pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Revert all (.colorbak)", command=self.revert).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Revert all", command=self.revert).pack(side=LEFT, padx=2)
 
         self.v_status = StringVar(value="")
         ttk.Label(w, textvariable=self.v_status, foreground="#999",
@@ -55,8 +55,8 @@ class TeamFieldsEditor:
         ttk.Label(w, foreground="#999", font=("Segoe UI", 8), justify=LEFT,
                   text="Double-click a cell to edit (rgb opens a colour picker). Edited cells turn "
                        "yellow; nothing is written until you Save. Colours/fields are cached at load, "
-                       "so restart the game to see a change.\nIdentified an unidentified_N column? "
-                       "Hit 'Edit field names (JSON)…', rename it, then 'Reload defs'."
+                       "so restart the game to see a change.\nWorked out what an \"unidentified\" "
+                       "column does? Hit 'Edit field names…', rename it, then 'Reload defs'."
                   ).pack(fill=X, padx=8, pady=(0, 4))
 
         wrap = ttk.Frame(w); wrap.pack(fill=BOTH, expand=True, padx=6, pady=4)

@@ -6,6 +6,8 @@ The flat XEX uses XEX2 BASIC compression (file_format_info key 0x3FF, comp_type 
 a list of (data_size, zero_size) blocks. Each block stores data_size bytes in the file then
 zero_size zero-bytes that exist only in memory (BSS compaction) — so VA->offset is NOT linear.
 """
+import functools
+import os
 import shutil
 import struct
 import subprocess
@@ -15,19 +17,70 @@ from pathlib import Path
 IMAGE_BASE_DEFAULT = 0x82000000
 
 
+# ── header parsing ──────────────────────────────────────────────────────────────
+#
+# Everything here used to start with `Path(xex_path).read_bytes()` — a 39 MB read to look at a
+# ~96-byte header — and va_to_offset() did it on EVERY lookup. Reading three patch states at
+# startup cost ~280 ms of pure I/O (game_date.read alone resolves 9 VAs = 350 MB). The XEX2
+# header count/keys and the file_format_info struct all live below `header_size` (the offset
+# where the image itself begins), so the headers can be read on their own, and the parse cached
+# on (path, size, mtime_ns) — which self-invalidates the moment anything writes to the file.
+
+def _read_headers(path) -> bytes:
+    """Just the XEX2 header block (everything before the image). Raises on a non-XEX2 file."""
+    with open(path, "rb") as f:
+        head = f.read(0x2000)
+        if len(head) < 0x18 or head[:4] != b"XEX2":
+            raise ValueError("not an XEX2 file")
+        header_size = struct.unpack_from(">I", head, 0x08)[0]   # = where the image starts
+        if header_size > len(head):
+            f.seek(0)
+            head = f.read(header_size)                          # read() caps at the real EOF
+    return head
+
+
+@functools.lru_cache(maxsize=16)
+def _parse_headers(path: str, _size: int, _mtime_ns: int):
+    """(header_size, image_base, enc_type, comp_type, blocks). `blocks` is the basic-compression
+    block list, or None when comp_type != 1 (the ffi struct means something else then).
+    Cached — _size/_mtime_ns are the cache key, not used in the body."""
+    data = _read_headers(path)
+    header_size = struct.unpack_from(">I", data, 0x08)[0]
+    count = struct.unpack_from(">I", data, 0x14)[0]
+    image_base = IMAGE_BASE_DEFAULT
+    ffi_off = None
+    for i in range(count):
+        key, val = struct.unpack_from(">II", data, 0x18 + i*8)
+        if key == 0x00010201:          # image base (inline)
+            image_base = val
+        elif key == 0x000003FF:        # file format info (offset to struct)
+            ffi_off = val
+    if ffi_off is None:
+        raise ValueError("no file_format_info (0x3FF) header")
+    info_size, enc_type, comp_type = struct.unpack_from(">IHH", data, ffi_off)
+    blocks = None
+    if comp_type == 1:
+        nblocks = (info_size - 8) // 8
+        blocks = tuple(struct.unpack_from(">II", data, ffi_off + 8 + j*8) for j in range(nblocks))
+    return header_size, image_base, enc_type, comp_type, blocks
+
+
+def _headers(xex_path):
+    st = os.stat(xex_path)
+    return _parse_headers(str(xex_path), st.st_size, st.st_mtime_ns)
+
+
+def invalidate(xex_path=None):
+    """Drop the cached header parse. Writes are keyed on mtime so this is belt-and-braces —
+    call it after replacing a XEX wholesale (ensure_flat) where mtime granularity could bite."""
+    _parse_headers.cache_clear()
+
+
 def get_comp_type(xex_path):
     """(enc_type, comp_type) from the file_format_info header. comp_type 1 = basic (flat, what
     every VA patcher here needs); 2 = LZX-compressed (the stock disc/retail form)."""
-    data = Path(xex_path).read_bytes()
-    if data[:4] != b"XEX2":
-        raise ValueError("not an XEX2 file")
-    count = struct.unpack_from(">I", data, 0x14)[0]
-    for i in range(count):
-        key, val = struct.unpack_from(">II", data, 0x18 + i*8)
-        if key == 0x000003FF:
-            _sz, enc_type, comp_type = struct.unpack_from(">IHH", data, val)
-            return enc_type, comp_type
-    raise ValueError("no file_format_info (0x3FF) header")
+    _hs, _ib, enc_type, comp_type, _blocks = _headers(xex_path)
+    return enc_type, comp_type
 
 
 def find_xextool(game_dir=None):
@@ -80,6 +133,7 @@ def ensure_flat(xex_path, game_dir=None, log=print):
             raise ValueError(f"XexTool output still comp_type={comp2} — aborting")
         parse_basic_blocks(tmp)                       # full sanity: block list parses
         shutil.move(str(tmp), str(xex_path))
+        invalidate()                                  # the file is a different image now
     finally:
         if tmp.exists():
             try: tmp.unlink()
@@ -91,27 +145,10 @@ def ensure_flat(xex_path, game_dir=None, log=print):
 
 def parse_basic_blocks(xex_path):
     """Return (data_start, image_base, [(data_size, zero_size), ...]) or raise."""
-    data = Path(xex_path).read_bytes()
-    if data[:4] != b"XEX2":
-        raise ValueError("not an XEX2 file")
-    header_size = struct.unpack_from(">I", data, 0x08)[0]      # = file offset where image begins
-    count = struct.unpack_from(">I", data, 0x14)[0]
-    image_base = IMAGE_BASE_DEFAULT
-    ffi_off = None
-    for i in range(count):
-        key, val = struct.unpack_from(">II", data, 0x18 + i*8)
-        if key == 0x00010201:          # image base (inline)
-            image_base = val
-        elif key == 0x000003FF:        # file format info (offset to struct)
-            ffi_off = val
-    if ffi_off is None:
-        raise ValueError("no file_format_info (0x3FF) header")
-    info_size, enc_type, comp_type = struct.unpack_from(">IHH", data, ffi_off)
+    header_size, image_base, _enc, comp_type, blocks = _headers(xex_path)
     if comp_type != 1:
         raise ValueError(f"comp_type={comp_type} (expected 1=basic). Re-export flat with XexTool -c u -e u")
-    nblocks = (info_size - 8) // 8
-    blocks = [struct.unpack_from(">II", data, ffi_off + 8 + j*8) for j in range(nblocks)]
-    return header_size, image_base, blocks
+    return header_size, image_base, list(blocks)
 
 
 def va_to_offset(xex_path, va):
@@ -129,6 +166,24 @@ def va_to_offset(xex_path, va):
         mem += data_size + zero_size
         file += data_size
     return None
+
+
+def read_va(xex_path, va, n=4):
+    """`n` bytes at `va`, or None if the VA isn't in the file. Seeks — never reads the whole XEX,
+    so callers can resolve a dozen sites for free instead of a dozen 39 MB reads."""
+    off = va_to_offset(xex_path, va)
+    if off is None:
+        return None
+    with open(xex_path, "rb") as f:
+        f.seek(off)
+        b = f.read(n)
+    return b if len(b) == n else None
+
+
+def read_u32(xex_path, va):
+    """The big-endian u32 at `va`, or None if the VA isn't in the file."""
+    b = read_va(xex_path, va, 4)
+    return None if b is None else struct.unpack(">I", b)[0]
 
 
 def patch_va(xex_path, va, new_bytes, expect=None, log=print):

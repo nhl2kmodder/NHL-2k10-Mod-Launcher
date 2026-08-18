@@ -767,14 +767,14 @@ def add_uniform(ros, team_id: int, name: str, uniform_slot: int = 2,
         spares = spare_rows(ros)
         if not spares:
             raise UniformError(
-                "no spare uniform rows left in this roster. The table is a fixed 407 rows and the "
-                "file size can never change, so the 13 blank rows are the whole budget.")
+                "no spare uniform rows left in this roster. The save holds a fixed number of "
+                "jerseys and every spare one is now in use — remove a jersey to free one up.")
         row = spares[0]
     if mine and row < max(mine):
         raise UniformError(
             f"row {row} sits before team {team_id}'s existing rows (highest is {max(mine)}). "
-            "Team_GetNthUniform walks the table in order and the team record's home/away indices "
-            "point into that list, so an earlier row would shift them onto the wrong jersey.")
+            "A new jersey has to go after the team's existing ones, or the team's Home and Away "
+            "picks would land on the wrong kits.")
 
     c = chunk(ros)
     ros.set_bytes(c, row, 0, ros.record(c, donor_row))       # whole record, palette included

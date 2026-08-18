@@ -104,8 +104,7 @@ class DiskRoster:
     def set(self, i, f, text):
         t = f["type"]
         if t == "name":
-            return ("player names are pointers into a shared string pool — editing them needs the "
-                    "pool repointed, which isn't wired up yet")
+            return "player names can't be edited here yet"
         if f.get("readonly"):
             return "this field is read-only (the game computes it)"
         try:

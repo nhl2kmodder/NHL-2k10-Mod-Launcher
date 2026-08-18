@@ -31,6 +31,10 @@ except ImportError:                                     # flat import when run u
 
 _layout: dict | None = None
 
+# Banks that have MOVED out of the shipped layout: {bank: (fid, offset, end)} in that file's own
+# PHYSICAL offsets. See `set_live_layout`.
+_moved: dict = {}
+
 
 def _load() -> dict:
     """{first_fid: (vol, [(name, base, end), ...])} keyed by BOTH files of each pair"""
@@ -64,22 +68,95 @@ def _load() -> dict:
     return _layout
 
 
+def set_live_layout(game_dir, log=None) -> dict:
+    """Note any wave bank the LIVE archive TOC no longer has where the shipped layout says.
+
+    The layout this module ships describes the disc: two pairs, each one logical byte space, every
+    bank at a fixed base inside it. That is exact until a bank is GROWN -- growing one past its
+    neighbour is impossible in place, so it gets relocated to the end of the archive set, which on
+    this install means a fifth container (1C). A relocated bank is then in no shipped span at all,
+    so `bank_for` returns "" for every one of its streams and they extract as Unknown/ with no
+    bank, no line table and the default sample rate.
+
+    The TOC is the authority on where a bank actually is, so ask it, and record only the banks whose
+    answer differs from the shipped layout. Physical offsets, no logical fold: `resolve` already
+    reports (archive, offset within that archive), which is the same coordinate the audio manifest
+    stores, so there is nothing to convert and no `vol` to get wrong.
+
+    Idempotent, and safe to call with no game dir or a stock install -- both leave `_moved` empty
+    and every lookup falls through to the shipped layout exactly as before.
+    """
+    global _moved
+    _moved = {}
+    try:
+        try:
+            from . import archive_textures as AT
+        except ImportError:
+            import archive_textures as AT
+        from pathlib import Path
+        game_dir = Path(game_dir)
+        if not (game_dir / "0A").is_file():
+            return _moved
+        lay = _load()
+        seen = set()
+        for fid, (vol, spans, first) in list(lay.items()):
+            if fid != first:
+                continue                          # spans are per PAIR, not per file
+            for name, lo, _hi in spans:
+                if name in seen:
+                    continue
+                seen.add(name)
+                try:
+                    arc, off, size = AT.resolve(name, game_dir)[:3]
+                except Exception:
+                    continue
+                arc, off = arc.upper(), int(off)
+                # fold the answer back into this pair's logical space to compare like with like:
+                # the shipped base is logical, `resolve` is physical within one file.
+                if arc in lay and lay[arc][2] == first:
+                    if (off if arc == first else off + vol) == lo:
+                        continue                  # still where the shipped layout says
+                _moved[name] = (arc, off, off + int(size))
+    except Exception as e:
+        if log:
+            log(f"[audio] live wave-bank layout not read ({e}); using the shipped layout")
+        _moved = {}
+    if _moved and log:
+        for n, (a, o, e) in sorted(_moved.items()):
+            log(f"[audio] {n} has been relocated to {a} @0x{o:08X} ({e - o:,} B)")
+    return _moved
+
+
+def moved() -> dict:
+    """{bank: (fid, offset, end)} for banks the live TOC has moved. Empty on a stock install."""
+    return _moved
+
+
 def bank_for(fid: str, offset) -> str:
     """Display name of the .bin owning this stream, or "" when unknown.
 
     `offset` is the physical offset within `fid`; it is converted to the pair's logical space
     before lookup, which is why the second file of a pair needs `vol` added back.
+
+    Relocated banks are checked FIRST and in physical coordinates, because a bank that has moved
+    no longer has a meaningful base in the shipped logical space -- and because the bytes it left
+    behind are still sitting in the old span, so the shipped answer there is not merely stale, it
+    names a bank that has since been replaced.
     """
     if offset is None:
         return ""
-    lay = _load().get((fid or "").upper())
+    up, off = (fid or "").upper(), int(offset)
+    for name, (mfid, lo, hi) in _moved.items():
+        if up == mfid and lo <= off < hi:
+            return name
+    lay = _load().get(up)
     if not lay:
         return ""
     vol, spans, first = lay
-    logical = int(offset) if (fid or "").upper() == first else int(offset) + vol
+    logical = off if up == first else off + vol
     for name, lo, hi in spans:
         if lo <= logical < hi:
-            return name
+            return name if name not in _moved else ""
     return ""
 
 

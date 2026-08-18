@@ -52,6 +52,19 @@ if _gone:
           "Restore them to launcher/data/ and rebuild. Keep this list in sync with "
           "launcher/resources.py REQUIRED."
     )
+# The ReShade payload is a DIRECTORY, so the files-only _required check above cannot see it.
+# Without it the Settings tab's "Enable ReShade" button is present but fails at click time —
+# the same silent-drop failure mode this whole block exists to prevent.
+_rs = data_src / 'reshade'
+_rs_need = [_rs / 'ReShade64.dll', _rs / 'NHL2K10.ini', _rs / 'reshade-shaders' / 'Shaders']
+_rs_gone = [p for p in _rs_need if not p.exists()]
+if _rs_gone:
+    raise SystemExit(
+        "BUILD ABORTED — the ReShade payload is incomplete in launcher/data/reshade/:\n"
+        + "".join(f"  - {p.relative_to(data_src)}\n" for p in _rs_gone)
+        + "\nWithout these, Settings > Enable ReShade fails at click time."
+    )
+
 # Editing tools drop rescue copies next to the real file (speech_seed_names.json.prereferee.bak,
 # named_assets.csv.bak, …). A bare glob swept them into the ONEFILE exe — ~40 MB of snapshots the
 # app never opens, decompressed to _MEIPASS on every launch. Keep them on disk, out of the build.

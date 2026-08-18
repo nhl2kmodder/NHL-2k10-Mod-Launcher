@@ -63,16 +63,16 @@ class MatchupError(RuntimeError):
 
 # ── xex side ────────────────────────────────────────────────────────────────────
 
-def _word(data: bytes, xex_path, va: int) -> int:
-    off = xex_patch.va_to_offset(xex_path, va)
-    if off is None or off + 4 > len(data):
+def _word(xex_path, va: int) -> int:
+    w = xex_patch.read_u32(xex_path, va)
+    if w is None:
         raise MatchupError(f"VA {va:#x} is not present in this XEX")
-    return struct.unpack_from(">I", data, off)[0]
+    return w
 
 
-def _check_version(data: bytes, xex_path) -> None:
+def _check_version(xex_path) -> None:
     for va, want in _GUARD.items():
-        got = _word(data, xex_path, va)
+        got = _word(xex_path, va)
         if got != want:
             raise MatchupError(
                 f"this XEX doesn't look like NHL 2K10 v1.0 (at {va:#x} expected {want:08x}, "
@@ -83,11 +83,10 @@ def _check_version(data: bytes, xex_path) -> None:
 def read(xex_path) -> tuple[int, int]:
     """Return (home_id, away_id) currently baked into the XEX."""
     xex_path = str(xex_path)
-    data = Path(xex_path).read_bytes()
-    _check_version(data, xex_path)
+    _check_version(xex_path)
     out = []
     for va in (HOME_VA, AWAY_VA):
-        w = _word(data, xex_path, va)
+        w = _word(xex_path, va)
         if (w & _LI_MASK) != _LI_R3:
             raise MatchupError(f"{va:#x} is not `li r3,imm` (found {w:08x})")
         out.append(w & 0xFFFF)
@@ -100,10 +99,9 @@ def write(xex_path, home_id: int, away_id: int, log=print) -> None:
     for nm, v in (("home", home_id), ("away", away_id)):
         if not 0 <= int(v) <= 0x7FFF:
             raise MatchupError(f"{nm} id {v} out of range for `li r3,imm`")
-    data = Path(xex_path).read_bytes()
-    _check_version(data, xex_path)
+    _check_version(xex_path)
     for va, new_id in ((HOME_VA, int(home_id)), (AWAY_VA, int(away_id))):
-        cur = _word(data, xex_path, va)
+        cur = _word(xex_path, va)
         if (cur & _LI_MASK) != _LI_R3:
             raise MatchupError(f"{va:#x} is not `li r3,imm` (found {cur:08x}) — refusing to write")
         xex_patch.patch_va(xex_path, va,

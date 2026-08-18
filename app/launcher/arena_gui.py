@@ -171,8 +171,8 @@ class ArenaTab:
             v = StringVar(value="1.00")
             ttk.Label(row, textvariable=v, width=5, foreground="#aaa").pack(side=LEFT)
             var.trace_add("write", lambda *_a, vv=v, vr=var: vv.set(f"{vr.get():.2f}"))
-        ttk.Label(lg, text="Multiplies the light already baked into every vertex. Ambient is a "
-                           "separate stored term and is not shown in the preview.",
+        ttk.Label(lg, text="Brightens or dims the lighting the arena already has baked into it. "
+                           "The preview does not show the arena's ambient light.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=196,
                   justify=LEFT).pack(anchor=W, pady=(3, 0))
         pr = ttk.Frame(lg); pr.pack(fill=X, pady=(4, 0))
@@ -708,9 +708,8 @@ class ArenaTab:
         if rt is not None:
             self.v_sel.set(
                 f"material {mat} — {rt['label']}. The game rewrites these pixels every frame "
-                f"and the mesh only supplies a 0→1 UV quad, so there is no texture here to "
-                f"replace. Keep this part on material {mat} with 0→1 UVs and a new model keeps "
-                "the live feed; the artwork it is built from lives in led_<team>.iff.")
+                f"so there is no texture here to replace. A replacement model keeps the live "
+                f"feed as long as this part stays on material {mat}.")
             self.thumb.configure(image=""); self.thumb.image = None
             return
         if ti == "":

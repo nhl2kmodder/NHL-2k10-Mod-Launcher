@@ -15,6 +15,7 @@ import subprocess
 import sys
 import tempfile
 import threading
+import time
 import winsound
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -28,6 +29,7 @@ _HERE = Path(__file__).parent
 sys.path.insert(0, str(_HERE))
 sys.path.insert(0, str(_HERE / "launcher"))
 
+from launcher import uiscroll
 from launcher import roster_editor as rost
 from launcher import team_colors as tcol
 from launcher import archive_textures as archtex
@@ -44,8 +46,11 @@ from launcher import modpack as mp
 from launcher import resources as lres
 from launcher import scorebug_anchors as sbanchor
 from launcher import default_matchup as dmatch
+from launcher import game_date as gdate
+from launcher import reshade
 from launcher import uniform_colors as ucol
 from launcher import arena_colors as acol
+from launcher import xex_baseline as xbase
 
 try:
     from PIL import Image, ImageTk
@@ -133,9 +138,9 @@ def check_and_update_xenia_resolution(xenia_exe_path, config_settings=None, pare
         dialog.geometry(f"{dialog_width}x{dialog_height}")
 
     msg = (
-        "Xenia is only rendering at 1x resolution.\n\n"
-        "Texture replacements that have mipmaps will show artifacts if it is lower than 2.\n\n"
-        "Would you like to update your resolution to 2?"
+        "Xenia is set to 1x resolution.\n\n"
+        "Replaced textures can look blocky or flicker at this setting. 2x renders them cleanly.\n\n"
+        "Switch to 2x now?"
     )
     label = tk.Label(dialog, text=msg, justify="left", wraplength=420, padx=15, pady=15)
     label.pack(side="top", fill="both", expand=True)
@@ -212,7 +217,14 @@ PACKET_SIZE     = 2048
 SAMPLE_RATE     = 48000
 SECS_PER_PACKET = 7.07 / 39
 
-FILE_IDS = ["0A", "0B", "1A", "1B"]
+# The disc ships four raw containers; the 0A header's archive table is DATA, so an install that
+# has outgrown them can carry more. This one does: growing a wave bank past its neighbour is
+# impossible in place, so relocations spill into 1C, and lines_ts.bin now lives there entirely.
+# Leaving 1C off this list is not a cosmetic gap — the extract dialog cannot offer it, Patch Game
+# cannot write an edit back to it, and `_seed_names()` skips its whole name block, so every stream
+# in a relocated bank is invisible to the Audio tab. `archive_path` is `root.parent / fid`, so a
+# container that is not present simply reports "not found" and is disabled, exactly like today.
+FILE_IDS = ["0A", "0B", "1A", "1B", "1C"]
 
 CATEGORY_FOLDER: dict = {
     "Goal_Horns":          "Goal_Horns",
@@ -295,18 +307,12 @@ AUDIO_FILL_CHUNK = 400
 
 STEM_RE = re.compile(r"^([0-9A-Fa-f]{8})_(\d+)ch_(\d+)p$")
 
-TEAMS = [
-    "Anaheim Ducks", "Atlanta Thrashers", "Boston Bruins", "Buffalo Sabres",
-    "Calgary Flames", "Carolina Hurricanes", "Chicago Blackhawks",
-    "Colorado Avalanche", "Columbus Blue Jackets", "Dallas Stars",
-    "Detroit Red Wings", "Edmonton Oilers", "Florida Panthers",
-    "Los Angeles Kings", "Minnesota Wild", "Montreal Canadiens",
-    "Nashville Predators", "New Jersey Devils", "NY Islanders", "NY Rangers",
-    "Ottawa Senators", "Philadelphia Flyers", "Phoenix Coyotes",
-    "Pittsburgh Penguins", "San Jose Sharks", "St. Louis Blues",
-    "Tampa Bay Lightning", "Toronto Maple Leafs", "Vancouver Canucks",
-    "Washington Capitals",
-]
+# THE SAME LIST OBJECT as team_tag.TEAMS, not a copy. The Team filter matches by equality
+# against whatever team_tag.canon() produced for a row, so the two lists drifting apart shows up
+# as a filter entry that can never match anything -- and they used to be two hand-kept copies.
+# Sharing the object also means team_tag.register_from_roster(), which appends expansion clubs in
+# place at startup, is visible here without any further plumbing.
+TEAMS = team_tag.TEAMS
 
 ARENA_EVENTS = [
     ("intro",       "Intro / Skate-Out"),
@@ -341,6 +347,29 @@ DEFAULT_CONFIG: dict = {
     "xma2encode":       bundled_tool("xma2encode.exe"),
     "ffmpeg":           bundled_tool("ffmpeg/ffmpeg.exe"),
     "arena_music":      {},
+    # Two front ends over the same engine. OFF is the shipping default: someone who just wants to
+    # play a mod pack should never meet the sixteen-tab authoring UI. The flag is persisted so the
+    # choice survives a restart -- see App._switch_mode.
+    "dev_mode":         False,
+    # How long each dev tab took to build last time, in ms, keyed by tab label. Written by
+    # _ensure_tab and read by it on the next run to decide which tabs are slow enough to deserve
+    # a progress dialog instead of just a wait cursor.
+    "tab_build_ms":     {},
+    # default.xex baseline (launcher/xex_baseline.py), re-checked on every startup.
+    # season_start_year: the calendar the game boots on — Oct 1 of this year through Apr 13 of
+    #   the next. Applied automatically; the shipped game is 2009. "auto" tracks the real-world
+    #   season off the system clock (rolling over each July 1), so an install left alone until
+    #   2027 updates itself rather than reporting every player a year young. Set a year to pin it.
+    # default_matchup: [home_id, away_id], written whenever Settings' Default Matchup is applied.
+    #   Empty = the user has no preference and the XEX's own value is left alone.
+    # xex_icon_stamp: (size, mtime, source hash) of the last title-icon write, so the one
+    #   expensive check (decoding a PNG out of the 39 MB image) is skipped when nothing moved.
+    "season_start_year": "auto",
+    "default_matchup":  [],
+    "xex_icon_stamp":   {},
+    # Where "Get Mod Packs" sends people. Empty = the button is shown disabled rather than hidden,
+    # so the feature is discoverable before the site exists. TODO: fill in the real URL.
+    "modpack_url":      "",
 }
 
 def load_config() -> dict:
@@ -357,6 +386,13 @@ def load_config() -> dict:
             b = bundled_tool(rel)
             if b:
                 cfg[key] = b
+    # season_start_year used to default to the literal 2026, and save_config persists the whole
+    # merged dict — so every config written before the "auto" default contains a 2026 that no user
+    # ever chose, and would pin the calendar there forever. There has never been UI for this key,
+    # so a bare 2026 is always the old default rather than a real preference: migrate it. (Someone
+    # who hand-edited the JSON to 2026 gets auto instead, which computes to 2026 until July 2027.)
+    if cfg.get("season_start_year") == 2026:
+        cfg["season_start_year"] = xbase.AUTO
     return cfg
 
 def save_config(cfg: dict) -> None:
@@ -401,7 +437,17 @@ def category_audio_dir(root: Path, category: str) -> Path:
 #:        team word was an ASR mishear corrected against that position (PxP_TheirZone_
 #:        Boynton -> _Boston). Tagging from the NAME is gone, which is what produced
 #:        "PxP_StarsWereCertainlyAligned" = Dallas.
-SEED_VERSION = 6
+#:   7 -> the last 187 PA names transcribed. The shipped file was bumped to 7 but THIS constant
+#:        was not, so that refresh never reached anyone who already had an Audio_Names.json — the
+#:        gate is `user_version < SEED_VERSION`, and 7 < 6 is false. It rides along with 8.
+#:   8 -> lines_ts.bin re-keyed onto the LIVE bank. Growing it past its neighbour is impossible in
+#:        place, so it was relocated to the fifth container, which moved every one of its 6,920
+#:        shipped cues and left every "1A:<old offset>" seed key naming bytes that now belong to a
+#:        different clip. The 1A block keeps lines.bin/lines_ps.bin and everything above the
+#:        relocated span, untouched; the lines_ts names move to a new 1C block. Also NAMES AND TAGS
+#:        the 440 SEA/VGK play-by-play cues that were added, which had no seed entry at all and so
+#:        were nameless, teamless and unfilterable.
+SEED_VERSION = 8
 
 #: Leading tokens the voice-attribution pass added to lines.bin names. Two names that are equal
 #: after stripping these are the SAME line, reclassified by us -- not a user rename.
@@ -659,6 +705,26 @@ def _maybe_edited(entry: dict, wav: Path) -> bool:
     if entry.get("mtime") is None:
         return True
     return _looks_edited(entry, st.st_size, st.st_mtime)
+
+
+def _maybe_needs_patch(entry: dict, wav: Path) -> bool:
+    """Could this WAV differ from what was last written into the archive? Cheap pre-filter.
+
+    The same size/mtime shortcut `_maybe_edited` uses, but against the install stamp rather
+    than the pristine extract. Entries with no stamp defer to `_maybe_edited`, so nothing that
+    used to be found stops being found."""
+    if entry.get("patched_sha1") is None:
+        return _maybe_edited(entry, wav)
+    try:
+        st = wav.stat()
+    except OSError:
+        return False
+    if st.st_size != entry.get("patched_size"):
+        return True
+    base = entry.get("patched_mtime")
+    if base is None:
+        return True
+    return abs(st.st_mtime - base) > _MTIME_EPS
 
 
 def load_all_audio(root: Path) -> list:
@@ -1067,15 +1133,18 @@ def op_extract(root: Path, file_ids: list, xma2encode: str, log,
 
 def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 force_truncate: bool, log) -> tuple:
-    """Write every EDITED WAV under Audio/Extracted/ back into its archive.
+    """Write every WAV under Audio/Extracted/ that is not already installed back into its archive.
 
-    "Edited" is settled by comparing each file against the pristine SHA-1 the extract recorded,
-    which is what lets the Original/ + Modified/ split go away: the file you edit is the file that
-    was extracted, and the manifest remembers what it looked like before you touched it.
+    The test is `astore.needs_patch()` — "does this differ from what was last written into the
+    slot" — not `is_edited()`, which asks whether it differs from the pristine extract. The
+    difference matters because XMA2 is lossy: with `is_edited()` an installed edit stayed
+    pending for ever, so pressing this twice re-encoded the same audio a second time and spent
+    a generation of quality doing it. Each successful write stamps the entry, so the second
+    press has nothing to do.
 
-    The hash only runs on files that could plausibly have changed — size or mtime moved, or the
-    entry predates mtime tracking and so can't rule itself out. Everything else is skipped
-    without being read, which is what keeps this off a 24 GB sweep."""
+    The hash only runs on files that could plausibly have changed — size or mtime moved against
+    the stamp, or there is no stamp to compare to. Everything else is skipped without being
+    read, which is what keeps this off a 24 GB sweep."""
     man = astore.load_manifest(root)
     if not man:
         log("Nothing extracted yet — run Extract first.")
@@ -1086,11 +1155,11 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
         if fid not in FILE_IDS:
             continue
         wav = astore.wav_path(root, entry)
-        if _maybe_edited(entry, wav) and astore.is_edited(root, entry, wav):
+        if _maybe_needs_patch(entry, wav) and astore.needs_patch(root, entry, wav):
             pending[fid].append((wav, entry))
     total_edits = sum(len(v) for v in pending.values())
     if not total_edits:
-        log("No edited WAVs under Audio/Extracted/ — nothing to patch.")
+        log("Every edited WAV is already installed — nothing to patch.")
         return 0, 0, 0
     for fid in FILE_IDS:
         n = len(pending[fid])
@@ -1136,7 +1205,12 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                     raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
                     log(f"    Padded {-excess} spare packets")
                 f.seek(off); f.write(raw_new)
+                # Stamped only after the write succeeded, so an encode that failed or a slot
+                # that was skipped for overrunning stays pending and gets picked up next time.
+                astore.mark_patched(entry, wp)
                 log(f"    Written {n_new} pkts"); patched += 1
+    if patched:
+        astore.save_manifest(root, man)
     return patched, skipped_trunc, 0
 
 
@@ -1213,6 +1287,10 @@ def op_revert_audio(root: Path, keys: list, xma2encode: str, log) -> int:
         entry["size"] = wav.stat().st_size
         entry["mtime"] = wav.stat().st_mtime
         entry.pop("dirty", None)          # this IS the pristine extract again
+        # `patched_sha1` is deliberately LEFT ALONE. It records what the archive holds, and a
+        # revert rewrites the WAV, not the archive — so the stamp is still true, and it is what
+        # now makes this entry read as needing a patch: the pristine WAV no longer matches the
+        # edit sitting in the slot, so Patch Game will put the original audio back.
         ok += 1
         log(f"  reverted {entry.get('name')}")
     if ok:
@@ -1300,6 +1378,13 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
         log(f"  Padded {-excess} pkts")
     with open(arc, "r+b") as f:
         f.seek(off); f.write(raw_new)
+    # Record the install against the manifest's own copy of the entry, not the one passed in:
+    # the caller hands us a row's entry, which may not be the dict `load_manifest` returns.
+    man = astore.load_manifest(root)
+    live = man.get(astore.akey(fid, off))
+    if live is not None:
+        astore.mark_patched(live, wav_path)
+        astore.save_manifest(root, man)
     log(f"  Written {n_new} pkts → OK"); return True
 
 
@@ -1325,24 +1410,93 @@ class App(tk.Tk):
         self._preview_img      = None
         self._cancel_event     = threading.Event()
         self._op_done_callback = None
+        self._iff_catalog: list = []        # asset catalog; shared by Textures, Apply All, import
+        self._tab_builders: dict = {}       # tab widget-name -> builder callable (dev mode)
+        self._tab_pages:    dict = {}       # tab BODY widget-name -> its scrolling page host
+        self._built_tabs:   set  = set()    # tab widget-names already built
+
+        # ── Vars that outlive any one tab ────────────────────────────────────
+        # Both of these are read by code that has no idea which tabs exist: _get_root() by every
+        # operation, _v_roster by the mod-pack importer. They used to be created inside the tab
+        # that displays them, which was already fragile and is untenable now that a tab may never
+        # be built at all (Simple mode) or not yet (lazy dev tabs).
+        self._v_root   = StringVar(value=self.cfg.get("root_path", ""))
+        self._v_roster = StringVar(value=self.cfg.get("roster_path", ""))
+        self._v_status = StringVar(value="Ready")
+        # Texture-replacement quality. No longer a visible toggle (see _build_iff_tab), but every
+        # apply path reads it — including the mod-pack import, which has no Textures tab.
+        self._v_iff_lossless = BooleanVar(value=True)
 
         self.title(APP_TITLE)
-        self.geometry("1620x900")
-        self.minsize(1300, 680)
         self._set_app_icon()
-
         self._apply_style()
-        self._build_ui()
+        # Before the UI, because the Team comboboxes snapshot TEAMS when they are created and
+        # an expansion club registered afterwards would be taggable but not selectable. Reads the
+        # config/auto-discovered roster directly rather than _current_roster_path(), which needs
+        # the Teams tab widget that does not exist yet.
+        self._register_expansion_clubs()
+
+        self._dev = bool(self.cfg.get("dev_mode"))
+        self._build_shell()
+
         self.after(100, self._poll_log)
         self.protocol("WM_DELETE_WINDOW", self._on_close)
-        self.after(400, self._sync_game_icon_async)   # keep the game's Xenia window icon = our art
+        self.after(400, self._sync_xex_baseline_async)  # roster cap / calendar / matchup / icon / eye shader
         self.after(10, self._check_bundled_data)      # a broken install must say so up front
 
-        if self.cfg.get("root_path") and Path(self.cfg["root_path"]).is_dir():
-            self.after(50, self._reload_all)
+    # ── Shell: Simple vs Developer ────────────────────────────────────────────
+    # The launcher has two front ends over one engine. Simple mode is what someone who just wants
+    # to play a mod pack sees: launch, install/revert a pack, and the handful of paths that makes
+    # those two things work. Developer mode is the full authoring notebook. Everything below the
+    # UI layer -- the ops, the threading, the log -- is shared, so a mode is only ever a choice of
+    # what to draw.
+
+    def _build_shell(self):
+        """Draw the front end for the current mode and kick off whatever it needs loaded."""
+        # Before the widgets: the first tab builds itself on the way up and may read the archives.
+        self._apply_game_paths()
+        # Ask for the desktop's WORK AREA rather than for a flat number: 1620x900 is bigger than a
+        # 1366x768 laptop screen, so the window opened with its bottom edge under the taskbar and
+        # the row of controls down there was unreachable. The minsize is what it takes for the
+        # window to still be usable, not what the content would like — every tab scrolls now.
+        if self._dev:
+            uiscroll.fit_to_screen(self, 1620, 900, minimum=(900, 520))
+            self._build_ui()
         else:
-            self._log("Welcome!  Set the game folder in the Settings tab to get started.")
-            self._nb.select(self._tab_settings)
+            uiscroll.fit_to_screen(self, 880, 620, minimum=(720, 480))
+            self._build_simple_ui()
+
+        if not (self.cfg.get("root_path") and Path(self.cfg["root_path"]).is_dir()):
+            self._log("Welcome!  Set the game folder in Settings to get started.")
+            self._open_settings()
+        elif self._dev:
+            # Catalog loads are deferred to the tab that needs them (see _ensure_tab) -- at
+            # startup only the first visible tab pays. Apply All / mod-pack import call
+            # _ensure_iff_catalog() themselves, so nothing depends on this having run.
+            self._v_status.set("Ready")
+
+    @property
+    def _sblay(self):
+        """launcher.scorebug_layout, imported on first use.
+
+        A property rather than an attribute the Scoreclock tab sets, because the texture-apply
+        path snapshots and restores the scoreclock layout through this module — and that path runs
+        for a mod-pack import in Simple mode, and in dev sessions where the Scoreclock tab has
+        never been opened. Bound to the instance dict so the import happens once.
+        """
+        mod = self.__dict__.get("_sblay_mod")
+        if mod is None:
+            from launcher import scorebug_layout as mod
+            self.__dict__["_sblay_mod"] = mod
+        return mod
+
+    def _open_settings(self):
+        """Show Settings, whichever shell is up."""
+        if self._dev:
+            self._ensure_tab(self._tab_settings)
+            self._nb.select(self._tab_page(self._tab_settings))
+        else:
+            self._simple_show("settings")
 
     def _check_bundled_data(self):
         """Report a broken install immediately instead of letting it surface as a mystery.
@@ -1370,20 +1524,26 @@ class App(tk.Tk):
 
     # ── Style ─────────────────────────────────────────────────────────────────
 
-    def _sync_game_icon_async(self):
-        """On startup, ensure the game's Xenia window/taskbar icon is our bundled NHL 2K27 art
-        (writes into the configured game XEX only if it isn't already that icon). Silent/background."""
-        game_path = self.cfg.get("game_path", "").strip()
-        icon = _RES / "NHL 2k27 Game Icon.png"
-        if not game_path or not icon.exists():
+    def _sync_xex_baseline_async(self):
+        """On startup, bring the game's default.xex up to the launcher baseline: roster size cap,
+        game calendar, the boot matchup the user picked, our NHL 2K27 window/taskbar icon, and
+        the eye-shader corneal specular retune (shader_tuning.py).
+
+        Background and silent when there is nothing to do, which is the normal case — the whole
+        verify is a few 4-byte seeks (~3 ms) plus a stamped skip for the icon. The scoreclock XEX
+        patches are NOT synced here; they belong to the scoreclock mod pack. See xex_baseline."""
+        xex = self._sb_xex()
+        if not xex:
             return
+        icon = _RES / "NHL 2k27 Game Icon.png"
         def work():
             try:
-                st = archtex.ensure_game_icon(game_path, str(icon), self._log_q.put)
-                if st:
-                    self._log_q.put(st)
+                r = xbase.sync(xex, self.cfg, icon_src=icon if icon.exists() else None,
+                               log=self._log_q.put)
+                if r["cfg_dirty"]:
+                    save_config(self.cfg)
             except Exception as e:
-                self._log_q.put(f"(game icon sync skipped: {e})")
+                self._log_q.put(f"(XEX baseline sync skipped: {e})")
         threading.Thread(target=work, daemon=True).start()
 
     def _set_app_icon(self):
@@ -1495,27 +1655,115 @@ class App(tk.Tk):
 
     # ── Top-level layout ──────────────────────────────────────────────────────
 
+    # ── Simple mode ───────────────────────────────────────────────────────────
+
+    def _build_simple_ui(self):
+        """The whole launcher for someone who is not authoring mods: play, install a pack, and
+        the settings those two things need. Everything else is behind the Dev Mode toggle."""
+        head = ttk.Frame(self, padding=(18, 14, 18, 8)); head.pack(fill=X)
+        self._brand_label(head, height=52)
+        ttk.Label(head, text=APP_TITLE, font=("Segoe UI", 15, "bold")).pack(side=LEFT)
+        self._btn_simple_settings = ttk.Button(head, text="Settings",
+                                               command=lambda: self._simple_show("settings"))
+        self._btn_simple_settings.pack(side=RIGHT)
+        self._btn_simple_back = ttk.Button(head, text="‹  Back",
+                                           command=lambda: self._simple_show("home"))
+
+        ttk.Separator(self).pack(fill=X, padx=18)
+
+        self._simple_body = ttk.Frame(self)
+        self._simple_body.pack(fill=BOTH, expand=True)
+
+        ttk.Label(self, textvariable=self._v_status, anchor=W, style="Status.TLabel",
+                  relief=FLAT, padding=(8, 3)).pack(fill=X, side=BOTTOM)
+        self._build_log_frame(self, height=4).pack(fill=X, side=BOTTOM, padx=10, pady=(0, 6))
+
+        self._simple_show("home")
+
+    def _simple_show(self, view: str):
+        """Swap the simple shell's body between the two views it has. Settings is a view rather
+        than a dialog so the Default Matchup / ReShade sections have somewhere to breathe."""
+        if not self._widget_alive("_simple_body"):
+            return
+        for w in self._simple_body.winfo_children():
+            w.destroy()
+        self._simple_view = view
+        if view == "settings":
+            self._btn_simple_settings.pack_forget()
+            self._btn_simple_back.pack(side=RIGHT)
+            self._settings_body(self._simple_body, dev=False)
+        else:
+            self._btn_simple_back.pack_forget()
+            self._btn_simple_settings.pack(side=RIGHT)
+            self._simple_home(self._simple_body)
+
+    def _widget_alive(self, name) -> bool:
+        """True if `self.<name>` is a widget that still exists — the mode switch destroys
+        whole trees, and a queued callback can arrive after its window is gone."""
+        w = self.__dict__.get(name)
+        try:
+            return bool(w) and bool(w.winfo_exists())
+        except Exception:
+            return False
+
+    def _simple_home(self, parent):
+        col = ttk.Frame(parent, padding=(0, 26, 0, 10))
+        col.pack(expand=True)
+
+        def action(text, cmd, blurb, accent=False, state=NORMAL):
+            b = ttk.Button(col, text=text, command=cmd, width=34,
+                           style="Accent.TButton" if accent else "TButton")
+            b.pack(pady=(0, 2))
+            b.state(["!disabled"] if state == NORMAL else ["disabled"])
+            ttk.Label(col, text=blurb, foreground=self._COL["muted"],
+                      font=("Segoe UI", 8), justify=CENTER).pack(pady=(0, 16))
+            return b
+
+        action("▶   Launch Game", self._launch_and_apply,
+               "Starts NHL 2K10 in Xenia with your mods applied.", accent=True)
+        action("Install Mod Pack…", self._import_modpack,
+               "Pick a .n2kpack file. You choose what to bring in;\n"
+               "textures and audio are applied for you.")
+        action("Revert Mod Pack…", self._revert_modpack,
+               "Puts everything a pack touched back to stock.")
+
+        url = (self.cfg.get("modpack_url") or "").strip()
+        self._btn_pack_link = action(
+            "Get Mod Packs", self._open_modpack_url,
+            "Opens the mod pack download page in your browser."
+            if url else "No link set yet — add one in Settings.",
+            state=NORMAL if url else DISABLED)
+
+    def _open_modpack_url(self):
+        url = (self.cfg.get("modpack_url") or "").strip()
+        if not url:
+            messagebox.showinfo("Mod Packs",
+                "No mod pack link is set yet.\n\nAdd one in Settings once the download page "
+                "exists."); return
+        import webbrowser
+        webbrowser.open(url)
+
+    def _brand_label(self, parent, height=46):
+        """The NHL 2K logo, down-scaled with PIL. Silent no-op when the art is missing."""
+        for brand in ("NHL_2k_Launcher_Icon.png", "NHL 2k27 Game Icon.png"):
+            lp = _RES / brand
+            if not lp.exists():
+                continue
+            try:
+                im = Image.open(lp).convert("RGBA")
+                w = max(1, int(im.width * height / im.height))
+                im = im.resize((w, height), Image.LANCZOS)
+                self._brand_img = ImageTk.PhotoImage(im)
+                Label(parent, image=self._brand_img, bd=0,
+                      bg=self._COL["bg1"]).pack(side=LEFT, padx=(0, 14))
+                return
+            except Exception:
+                pass
+
     def _build_ui(self):
         top = ttk.Frame(self, padding=(8, 6, 8, 4))
         top.pack(fill=X)
-        # Header brand — the NHL 2K Mod Launcher logo (crisp PIL down-scale), tinted to blend
-        # with the dark bar. Falls back silently if the asset is missing.
-        for _brand in ("NHL_2k_Launcher_Icon.png", "NHL 2k27 Game Icon.png"):
-            _lp = _RES / _brand
-            if not _lp.exists():
-                continue
-            try:
-                im = Image.open(_lp).convert("RGBA")
-                h = 46; w = max(1, int(im.width * h / im.height))
-                im = im.resize((w, h), Image.LANCZOS)
-                self._brand_img = ImageTk.PhotoImage(im)
-                Label(top, image=self._brand_img, bd=0,
-                      bg=self._COL["bg1"]).pack(side=LEFT, padx=(0, 14))
-                break
-            except Exception:
-                pass
-        # Canonical game-folder var — the field itself lives in Settings (single source of truth).
-        self._v_root = StringVar(value=self.cfg.get("root_path", ""))
+        self._brand_label(top, height=46)
         # Top bar = the four primary actions.
         ttk.Button(top, text="Reload All", command=self._reload_all).pack(side=LEFT, padx=3)
         ttk.Button(top, text="Apply All Mods", style="Accent.TButton",
@@ -1527,8 +1775,10 @@ class App(tk.Tk):
                                       style="Accent.TButton",
                                       command=self._launch_and_apply)
         self._btn_launch.pack(side=LEFT, padx=3)
+        ttk.Separator(top, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=8)
+        ttk.Button(top, text="Exit Dev Mode",
+                   command=lambda: self._switch_mode(False)).pack(side=LEFT, padx=3)
 
-        self._v_status = StringVar(value="Ready")
         ttk.Label(self, textvariable=self._v_status, anchor=W, style="Status.TLabel",
                   relief=FLAT, padding=(8, 3)).pack(fill=X, side=BOTTOM)
 
@@ -1541,65 +1791,80 @@ class App(tk.Tk):
         self._nb = ttk.Notebook(nb_frame)
         self._nb.pack(fill=BOTH, expand=True)
 
-        self._tab_audio    = ttk.Frame(self._nb)
-        self._tab_speech   = ttk.Frame(self._nb)
-        self._tab_iff      = ttk.Frame(self._nb)
-        self._tab_banks    = ttk.Frame(self._nb)
-        self._tab_arena    = ttk.Frame(self._nb)     # "Arena Music" (WIP, hidden)
-        self._tab_arenaed  = ttk.Frame(self._nb)     # Arena — models/textures/lighting
-        self._tab_players  = ttk.Frame(self._nb)     # Players — character models (global.iff)
-        self._tab_jersey   = ttk.Frame(self._nb)     # Jersey Conversion — NHL 23 kit -> 2K10
-        self._tab_teams    = ttk.Frame(self._nb)
-        self._tab_goalie   = ttk.Frame(self._nb)
-        self._tab_portrait = ttk.Frame(self._nb)
-        self._tab_scorebug = ttk.Frame(self._nb)
-        self._tab_gameplay = ttk.Frame(self._nb)
-        self._tab_anim     = ttk.Frame(self._nb)
-        self._tab_settings = ttk.Frame(self._nb)
+        # ── Every tab scrolls when, and only when, it does not fit ───────────
+        # A tab laid out for a big monitor just gets CLIPPED on a smaller one: no error, no bar,
+        # the bottom row of controls simply is not there. So each tab is a uiscroll.ScrollHost,
+        # which measures what the content asked for against what it got and shows a scrollbar
+        # only on the difference. Tabs that fit are untouched — the host stretches its body to
+        # the viewport, so `expand=True` still fills exactly as it did before the wrap.
+        #
+        # `self._tab_*` is the BODY (what builders parent into); the notebook's child is the host
+        # around it. Anything handing a tab back to the notebook goes through `_tab_page`.
+        self._tab_audio    = self._new_tab()
+        self._tab_speech   = self._new_tab()
+        self._tab_iff      = self._new_tab()
+        self._tab_banks    = self._new_tab()
+        self._tab_arena    = self._new_tab()         # "Arena Music" (WIP, hidden)
+        self._tab_arenaed  = self._new_tab()         # Arena — models/textures/lighting
+        self._tab_players  = self._new_tab()         # Players — character models (global.iff)
+        self._tab_jersey   = self._new_tab()         # Jersey Conversion — NHL 23 kit -> 2K10
+        self._tab_teams    = self._new_tab()
+        self._tab_goalie   = self._new_tab()
+        self._tab_portrait = self._new_tab()
+        self._tab_scorebug = self._new_tab()
+        self._tab_gameplay = self._new_tab()
+        self._tab_anim     = self._new_tab()
+        self._tab_settings = self._new_tab()
 
-        self._nb.add(self._tab_teams,    text="  Roster Editor  ")
-        self._nb.add(self._tab_iff,      text="  Textures  ")
-        self._nb.add(self._tab_audio,    text="  Audio  ")
-        self._nb.add(self._tab_speech,   text="  Speech  ")
-        self._nb.add(self._tab_goalie,   text="  Goalie Masks  ")
-        self._nb.add(self._tab_portrait, text="  Portraits  ")
-        self._nb.add(self._tab_scorebug, text="  Scoreclock  ")
-        # WIP — Audio Banks & Arena Music tabs are HIDDEN for the 1.0 release (not yet finished).
-        # The frames are still created and built below so nothing else breaks; re-add these two
-        # lines to bring the tabs back once they're ready. TODO: finish Audio Banks + Arena Music.
-        # self._nb.add(self._tab_banks,    text="  Audio Banks  ")
-        # self._nb.add(self._tab_arena,    text="  Arena Music  ")
-        self._nb.add(self._tab_arenaed,  text="  Arena Models / Lighting  ")
-        self._nb.add(self._tab_players,  text="  Models  ")
-        self._nb.add(self._tab_jersey,   text="  Jersey Conversion  ")
-        self._nb.add(self._tab_anim,     text="  Animations  ")
-        self._nb.add(self._tab_gameplay, text="  Gameplay Tuners  ")
-        self._nb.add(self._tab_settings, text="  Settings  ")
+        # ── Lazy tabs ────────────────────────────────────────────────────────
+        # Every tab used to be BUILT at startup: fifteen widget trees, several of which parse a
+        # roster, decompress an archive or walk the asset catalog while they lay themselves out.
+        # That is what made the launcher slow to open, and most of it was for tabs the session
+        # never touched. Now a tab is an empty frame with a builder attached, and the builder runs
+        # the first time the tab is actually selected. Built tabs stay built for the session.
+        #
+        # WIP — Audio Banks & Arena Music are HIDDEN for the 1.0 release (not yet finished).
+        # Their frames + builders are still registered so nothing else breaks; uncomment their
+        # rows to bring the tabs back. TODO: finish Audio Banks + Arena Music.
+        for frame, label, builder in (
+            (self._tab_teams,    "  Roster Editor  ",           self._build_teams_tab),
+            (self._tab_iff,      "  Textures  ",                self._build_iff_tab),
+            (self._tab_audio,    "  Audio  ",                   self._build_audio_tab),
+            (self._tab_speech,   "  Speech  ",                  self._build_speech_tab),
+            (self._tab_goalie,   "  Goalie Masks  ",            self._build_goalie_tab),
+            (self._tab_portrait, "  Portraits  ",               self._build_portrait_tab),
+            (self._tab_scorebug, "  Scoreclock  ",              self._build_scorebug_tab),
+            (self._tab_banks,    None,                          self._build_banks_tab),
+            (self._tab_arena,    None,                          self._build_arena_tab),
+            (self._tab_arenaed,  "  Arena Models / Lighting  ", self._build_arena_editor_tab),
+            (self._tab_players,  "  Models  ",                  self._build_players_tab),
+            (self._tab_jersey,   "  Jersey Conversion  ",       self._build_jersey_convert_tab),
+            (self._tab_anim,     "  Animations  ",              self._build_anim_tab),
+            (self._tab_gameplay, "  Gameplay Tuners  ",         self._build_gameplay_tab),
+            (self._tab_settings, "  Settings  ",                self._build_settings_tab),
+        ):
+            self._tab_builders[str(frame)] = builder
+            if label is not None:
+                self._nb.add(self._tab_page(frame), text=label)
+        self._nb.bind("<<NotebookTabChanged>>", self._on_tab_changed)
 
-        self._build_audio_tab()
-        self._build_speech_tab()
-        self._build_iff_tab()
-        self._build_banks_tab()
-        self._build_arena_tab()
-        self._build_arena_editor_tab()
-        self._build_players_tab()
-        self._build_jersey_convert_tab()
-        self._build_teams_tab()
-        self._build_goalie_tab()
-        self._build_portrait_tab()
-        self._build_scorebug_tab()
-        self._build_gameplay_tab()
-        self._build_anim_tab()
-        self._build_settings_tab()
-
-        log_frame = ttk.LabelFrame(pane, text="Operation Log", padding=4)
+        log_frame = self._build_log_frame(pane)
         pane.add(log_frame, weight=1)
+
+        # The log box exists now, so the first tab can be built without its messages
+        # having to go through the early-log buffer.
+        self._on_tab_changed()
+
+    def _build_log_frame(self, parent, height=5):
+        """The Operation Log + progress bar. Both shells show it: a mod-pack install runs for
+        minutes and the log is the only place that says what it is doing."""
+        log_frame = ttk.LabelFrame(parent, text="Operation Log", padding=4)
 
         self._progress = ttk.Progressbar(log_frame, mode="indeterminate", length=180)
         self._progress.pack(side=LEFT, padx=(0, 6))
 
         self._log_box = Text(
-            log_frame, height=5, state=DISABLED, wrap=WORD,
+            log_frame, height=height, state=DISABLED, wrap=WORD,
             font=("Consolas", 8), bg=self._COL["bg2"], fg="#c9ccd1",
             insertbackground=self._COL["fg"], relief=FLAT, bd=0,
             selectbackground=self._COL["red"], selectforeground="#ffffff")
@@ -1607,12 +1872,109 @@ class App(tk.Tk):
         self._log_box.configure(yscrollcommand=sb.set)
         sb.pack(side=RIGHT, fill=Y)
         self._log_box.pack(fill=BOTH, expand=True)
-        self._flush_early_log()          # anything the tabs logged while being built
+        self._flush_early_log()          # anything logged before this existed
         self._log_ctx = Menu(self._log_box, tearoff=0)
         self._log_ctx.add_command(label="Clear Log", command=self._clear_log)
         self._log_box.bind("<Button-3>", lambda e: (
             self._log_ctx.tk_popup(e.x_root, e.y_root),
             self._log_ctx.grab_release()))
+        return log_frame
+
+    # ── Lazy tab construction ─────────────────────────────────────────────────
+
+    def _new_tab(self):
+        """A notebook page that scrolls if it has to. -> the frame builders should fill.
+
+        Returns the BODY, not the page, so every builder keeps parenting into `self._tab_*`
+        exactly as it did when these were plain frames. `_tab_page` inverts it for the two
+        operations that need the notebook's own child: `add` and `select`.
+        """
+        host = uiscroll.ScrollHost(self._nb)
+        self._tab_pages[str(host.body)] = host
+        return host.body
+
+    def _tab_page(self, frame):
+        """The notebook child for a tab body (itself, if it was never wrapped)."""
+        return self._tab_pages.get(str(frame), frame)
+
+    def _on_tab_changed(self, _event=None):
+        try:
+            cur = self._nb.nametowidget(self._nb.select())
+        except Exception:
+            return
+        self._ensure_tab(getattr(cur, "body", cur))     # the page is the host; builders key on body
+
+    def _ensure_tab(self, frame):
+        """Build `frame`'s contents if this is the first time it has been shown.
+
+        Building can take a moment (a roster parse, an archive walk), so the window says what it
+        is doing and shows a wait cursor rather than appearing to hang. A builder that raises is
+        logged and the tab left empty: one broken tab must not take the launcher down with it.
+
+        Most tabs build in well under a tenth of a second, where a modal would only flash. A few
+        are far slower — Jersey Conversion decodes seven textures in pure Python — and there a
+        wait cursor alone still reads as a hang. Rather than hard-code which is which (a list
+        that rots as tabs change), each build is timed into the config and the dialog is shown
+        for any tab that was slow LAST time. Only the very first build of a slow tab, on a fresh
+        config, goes uncovered.
+        """
+        key = str(frame)
+        if key in self._built_tabs:
+            return
+        builder = self._tab_builders.get(key)
+        if builder is None:
+            return
+        self._built_tabs.add(key)            # before the call: a builder that raises must not retry
+        label = ""
+        try:
+            label = self._nb.tab(self._tab_page(frame), "text").strip()
+        except Exception:
+            pass
+        self._v_status.set(f"Loading {label}…" if label else "Loading…")
+        try:
+            self.configure(cursor="watch"); self.update_idletasks()
+        except Exception:
+            pass
+
+        timings = self.cfg.setdefault("tab_build_ms", {})
+        busy = bar = None
+        if timings.get(label, 0) >= 1500:
+            busy, bar = self._busy_dialog(f"Loading {label}…",
+                                          "Reading and decoding game data — this takes a moment.")
+        t0 = time.perf_counter()
+        try:
+            builder()
+        except Exception as e:
+            self._log(f"[ui] the {label or 'tab'} tab failed to build: {e}")
+        finally:
+            ms = int((time.perf_counter() - t0) * 1000)
+            if label and abs(timings.get(label, -1) - ms) > 250:
+                timings[label] = ms
+                try:
+                    save_config(self.cfg)
+                except Exception:
+                    pass
+            if busy is not None:
+                try:
+                    bar.stop()
+                except Exception:
+                    pass
+                busy.destroy()
+            try:
+                self.configure(cursor="")
+            except Exception:
+                pass
+            # The tab just filled with content, and nothing in Tk announces that: the page pins
+            # its body's size, so packing widgets into it fires no <Configure>. Tell the page to
+            # re-measure now rather than leaving it to the sweep, or the scrollbar a long tab
+            # needs turns up a fraction of a second after the tab does.
+            page = self._tab_page(frame)
+            if hasattr(page, "resync"):
+                try:
+                    page.resync()
+                except Exception:
+                    pass
+        self._v_status.set("Ready")
 
     # ── Audio + Speech tabs ───────────────────────────────────────────────────
     # Both tabs are instances of the same track-browser pane over self.audio_rows:
@@ -1638,6 +2000,7 @@ class App(tk.Tk):
         t = self._tab_audio
         self._build_audio_ops_bar(t)
         self._make_audio_pane(t, "audio", folders=None, with_category=True)
+        self._ensure_audio_rows()
 
     def _build_speech_tab(self):
         t = self._tab_speech
@@ -1651,6 +2014,30 @@ class App(tk.Tk):
             nb.add(f, text=title)
             self._speech_pane_tabs[key] = f
             self._make_audio_pane(f, key, folders=folders, with_category=False)
+        self._ensure_audio_rows()
+
+    def _root_ready(self) -> bool:
+        """Is there a usable game folder? Checked WITHOUT the complaint dialog _get_root raises,
+        for loads the user did not ask for — a tab building itself on first click. Before lazy
+        tabs those ran once at startup; now each un-configured tab click would pop its own modal
+        on top of the welcome message that already sent the user to Settings."""
+        r = self._v_root.get().strip() or self.cfg.get("root_path", "")
+        return bool(r) and Path(r).is_dir()
+
+    def _ensure_audio_rows(self):
+        """Fill a just-built audio pane. ~80k rows and the slowest load in the app, so it happens
+        when a tab that shows audio is first opened, not at startup. Already loaded (the other
+        audio tab got there first) => just repopulate; the catalog is read once per session."""
+        if self.audio_rows:
+            self._reload_audio_done(self.audio_rows)
+        elif self._root_ready():
+            self._reload_audio()
+
+    def _ensure_iff_catalog(self):
+        """The asset catalog as DATA, without needing the Textures tab to have been opened.
+        Apply All Mods and the mod-pack importer both walk it."""
+        if not self._iff_catalog and self._root_ready():
+            self._iff_load_catalog()
 
     def _build_audio_ops_bar(self, t):
         """Global audio operations row — identical on the Audio and Speech tabs."""
@@ -1993,11 +2380,11 @@ class App(tk.Tk):
             for key, _title, folders in self.SPEECH_PANES:
                 if folder in folders:
                     pane = self._audio_panes.get(key, pane)
-                    self._nb.select(self._tab_speech)
+                    self._nb.select(self._tab_page(self._tab_speech))
                     self._speech_nb.select(self._speech_pane_tabs[key])
                     break
         else:
-            self._nb.select(self._tab_audio)
+            self._nb.select(self._tab_page(self._tab_audio))
         if pane is None: return
         pane["v_cat"].set("All"); pane["v_team"].set("Any")
         pane["v_search"].set(row["name"])
@@ -2018,22 +2405,23 @@ class App(tk.Tk):
         Path(p).write_bytes(dec)
         self._log(f"Exported {name} ({len(dec)} bytes) -> {p}")
 
-    # ── Goalie Equipment tab (live in-memory mask assignment — Option B) ────────
-    # Masks are assigned by patching the running game's memory (player+0xB4 shell / +0xB8 pattern);
-    # the roster/game files are NOT modified (that field is scrambled on disk). So this works only
-    # with the launcher attached to Xenia, and re-applies on each launch. See launcher/goalie_equipment.py.
+    # ── Goalie Equipment tab (mask assignment, file-based) ──────────────────────
+    # A goalie's mask is player+0xB4 shell / +0xB8 pattern, at the same offsets on disk as in memory
+    # (the old "that field is scrambled on disk" note was wrong — see player_assign). Both halves of
+    # the tab are now file-based: goalies are listed out of the selected Roster.ROS and the mask is
+    # written into that same save, so neither needs Xenia running. The live-memory walk in
+    # launcher/goalie_equipment.py is only the fallback for when no roster file is set.
     def _build_goalie_tab(self):
         t = self._tab_goalie
         self._goalie_rows = []; self._ga_mask_map = {}
         self._ga_prev_cache = {}; self._ga_prev_imgs = []
         outer = ttk.Frame(t, padding=(12, 8)); outer.pack(fill=BOTH, expand=True)
-        ttk.Label(outer, text="Goalie Equipment", font=("Segoe UI", 13, "bold")).pack(anchor=W)
+        ttk.Label(outer, text="Goalie Masks", font=("Segoe UI", 13, "bold")).pack(anchor=W)
         ttk.Label(outer, text=(
             "Repaint an existing goalie-mask slot with your own design, then assign it to goalies. "
             "(The game's mask set is a fixed grid — new slots can't be added, so custom masks repaint "
-            "shipped patterns in place.) Assignments are SAVED in the launcher and re-applied every time "
-            "you press Launch. Assigning needs the game running only while you set it up (the roster's "
-            "mask field is scrambled on disk, so the launcher writes the live copy instead)."),
+            "shipped patterns in place.) Set your Roster.ROS on the Roster Editor tab first, then press "
+            "“Refresh goalies”. Assignments are saved and re-applied every time you press Launch."),
             foreground="#bdbdbd", wraplength=800, justify=LEFT).pack(anchor=W, pady=(2, 10))
 
         # 1 ── Create ───────────────────────────────────────────────────────────
@@ -2059,10 +2447,9 @@ class App(tk.Tk):
         ttk.Entry(r2, textvariable=self._v_gm_img, width=52).pack(side=LEFT, padx=(0, 4))
         ttk.Button(r2, text="Image…", command=self._goalie_pick_image).pack(side=LEFT)
         ttk.Button(cm, text="Repaint Slot", style="Accent.TButton", command=self._goalie_create_mask).pack(anchor=W, pady=(8, 0))
-        ttk.Label(cm, text="Overwrites that pattern's design — pick one no goalie wears. Styles: g01/g04, g02/g03, "
-                           "g05/g06 are the 3 mask shapes (g01 matches the Substance project). Stored uncompressed "
-                           "(crisp edges, no DXT blockiness) — 8888 is pristine, 4444 is half the file size with faint "
-                           "gradient banding. Any detail/resolution is fine — it grows as needed.",
+        ttk.Label(cm, text="Overwrites that pattern's design — pick one no goalie wears. Styles g01/g04, g02/g03 and "
+                           "g05/g06 are the three mask shapes. 8888 is the best quality; 4444 is half the file size "
+                           "with faint gradient banding. Any image size works.",
                   foreground="#888", font=("Segoe UI", 8), wraplength=800, justify=LEFT).pack(anchor=W, pady=(4, 0))
 
         # 2 ── Assign ───────────────────────────────────────────────────────────
@@ -2104,10 +2491,13 @@ class App(tk.Tk):
                    command=self._goalie_apply_saved).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear selected", command=self._goalie_clear_selected).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear ALL saved", command=self._goalie_clear_saved).pack(side=LEFT, padx=(8, 0))
-        self._goalie_status = ttk.Label(asg, text="Press “Refresh goalies” with the game running to list goalies.",
+        self._goalie_status = ttk.Label(asg, text="Press “Refresh goalies” to list the goalies in your "
+                                                  "Roster.ROS.",
                                         foreground="#888", font=("Consolas", 8))
         self._goalie_status.pack(anchor=W, pady=(4, 0))
         self._goalie_refresh_masklist()
+        if self._current_roster_path():       # reading the save is a ~30 ms file parse — just do it
+            self.after(0, self._goalie_refresh)
 
     # ── mask list / free-slot helpers ───────────────────────────────────────────
     def _goalie_mask_choices(self):
@@ -2288,23 +2678,38 @@ class App(tk.Tk):
                             f"below — check goalies, then Assign.")
 
     def _goalie_refresh(self):
-        self._goalie_status.config(text="Reading roster from the running game…")
+        """List goalies for the tab — from the selected Roster.ROS, or the running game if none.
+
+        Same reasoning as _portrait_refresh: the file is where the mask is WRITTEN, names resolve on
+        disk, and the row index is the file row, so listing from the save keeps the two halves of
+        the tab looking at one table. Xenia only has to be running when there is no roster file."""
+        ros = self._current_roster_path()
+        src = Path(ros).name if ros else "the running game"
+        self._goalie_status.config(text=f"Reading roster from {src}…")
         import threading
         def work():
             try:
                 from launcher import goalie_equipment as ge
             except ImportError:
                 import goalie_equipment as ge
-            gs, err = ge.list_goalies()
-            self.after(0, lambda: self._goalie_loaded(gs, err))
+            gs, err = ge.list_goalies(ros_path=ros or None)
+            if err and ros:                      # a bad/unreadable save shouldn't dead-end the tab
+                gs2, err2 = ge.list_goalies()
+                if gs2:
+                    gs, err = gs2, None
+                    self._log_q.put(f"[goalie] {err} — listed the running game instead ({err2 or 'ok'})")
+            self.after(0, lambda: self._goalie_loaded(gs, err, ros))
         threading.Thread(target=work, daemon=True).start()
 
-    def _goalie_loaded(self, gs, err):
+    def _goalie_loaded(self, gs, err, ros=""):
         self._goalie_rows = gs or []
         if err:
             self._goalie_status.config(text=err)
         else:
-            self._goalie_status.config(text=f"{len(gs)} goalies in the loaded roster.")
+            pid = self._pids()
+            uniq = len({pid.player_id(g) for g in gs})
+            src = f"in {Path(ros).name}" if ros else "in the loaded roster (running game)"
+            self._goalie_status.config(text=f"{uniq} goalies {src}.")
         self._goalie_populate()
 
     def _goalie_populate(self):
@@ -2315,18 +2720,19 @@ class App(tk.Tk):
         tv.delete(*tv.get_children())
         q = self._v_gm_filter.get().strip().lower()
         saved = self.cfg.get("goalie_masks", {})
+        pid = self._pids()
         seen = set()
         for g in self._goalie_rows:
-            key = f"{g['first']}|{g['last']}"
-            if key in seen:                          # one row per goalie (names repeat across pools)
+            key = pid.player_id(g)                   # one row per PERSON (pool copies collapse,
+            if key in seen:                          # namesakes stay separate — see player_ids)
                 continue
             if q and q not in g["name"].lower():
                 continue
             seen.add(key)
             mask = f"g{g['shell'] + 1:02d}  pattern {g['pattern']:02d}"
-            sv = saved.get(key)
+            _k, sv = pid.resolve_saved(saved, g)
             svtxt = f"→ g{sv[0] + 1:02d} slot {sv[1]}" if sv else ""
-            tv.insert("", END, iid=key, values=(g["name"] or "(unnamed)", mask, svtxt),
+            tv.insert("", END, iid=key, values=(pid.label(g) or "(unnamed)", mask, svtxt),
                       tags=("assigned",) if sv else ())
         restore = [k for k in prev if tv.exists(k)]
         if restore:
@@ -2353,8 +2759,7 @@ class App(tk.Tk):
         save_config(self.cfg)
         if not self._goalie_rows:
             self._goalie_status.config(text="Saved, but nothing was written: press “Refresh goalies” "
-                                            "with the game running once so names can be matched to "
-                                            "rows in your save.")
+                                            "once so names can be matched to rows in your save.")
             self._goalie_populate(); return
         # Only the goalies just selected — re-writing every saved assignment on each Assign would
         # stomp masks the user has since changed by hand in Creation Zone.
@@ -2379,7 +2784,7 @@ class App(tk.Tk):
         if not sel:
             messagebox.showinfo("Clear", "Select the goalies whose assignment you want to remove."); return
         saved = dict(self.cfg.get("goalie_masks", {}))
-        removed = sum(1 for k in sel if saved.pop(k, None) is not None)
+        removed = sum(1 for k in sel if self._forget_assignment(saved, k))
         self.cfg["goalie_masks"] = saved
         save_config(self.cfg)
         self._goalie_status.config(text=f"Removed {removed} saved assignment(s). "
@@ -2400,14 +2805,14 @@ class App(tk.Tk):
 
         The offline counterpart of the old post-launch memory patch: point the launcher at a
         different save (or one the game has since rewritten) and press this to put your masks back.
-        Still needs the game running ONCE, for the name->row listing."""
+        Fully offline now that the name->row listing comes from the save itself."""
         saved = self.cfg.get("goalie_masks", {})
         if not saved:
             messagebox.showinfo("Apply saved", "There are no saved mask assignments yet."); return
         if not self._goalie_rows:
             messagebox.showinfo("Apply saved",
-                                "Press “Refresh goalies” with the game running once first — the "
-                                "launcher needs the roster to match names to rows in your save."); return
+                                "Press “Refresh goalies” once first — the launcher needs the roster "
+                                "to match names to rows in your save."); return
         looks = {}
         for key, v in saved.items():
             look = {"shell": v[0], "pattern": v[1]}
@@ -2425,10 +2830,11 @@ class App(tk.Tk):
     # ── Player Portraits tab (live in-memory portrait assignment) ───────────────
     # A player's UI portrait (shoulders-up headshot) is chosen by the u16 at player+0x1C ('portrait
     # key'): the game loads crc32('%04d_image' % key) and each portrait blob's header carries that crc,
-    # so a player shows portrait key_blob[key]. We reassign by writing that key in the running game
-    # (Roster.ROS stores players in a different, mostly-empty on-disk layout where the key isn't plainly
-    # at +0x1C), saved and re-applied on every Launch — same model as Goalie Equipment. RE:
-    # Function_83D32188 / FUN_840a69e0. Mapping: archive_textures.portrait_key_blob_map().
+    # so a player shows portrait key_blob[key]. Both halves are now FILE-based: players are listed out
+    # of the selected Roster.ROS (names resolve on disk — player_assign) and the key is written into
+    # that same save, so neither listing nor assigning needs Xenia running. The old live-memory path
+    # survives only as the fallback when no roster file is set. RE: Function_83D32188 / FUN_840a69e0.
+    # Mapping: archive_textures.portrait_key_blob_map().
     def _build_portrait_tab(self):
         t = self._tab_portrait
         self._portrait_rows = []             # live roster players
@@ -2440,9 +2846,8 @@ class App(tk.Tk):
         ttk.Label(outer, text=(
             "Give any player a different UI portrait (the shoulders-up headshot on roster / player "
             "screens). Pick target players on the left, pick the portrait to give them on the right, "
-            "then Assign. Assignments are SAVED and re-applied every time you press Launch. Assigning "
-            "needs the game running only while you set it up — the launcher writes the live roster "
-            "(the portrait field is stored differently on disk, so it can't be edited in the file)."),
+            "then Assign. Set your Roster.ROS on the Roster Editor tab first, then press “Refresh players”. "
+            "Assignments are saved and re-applied every time you press Launch."),
             foreground="#bdbdbd", wraplength=820, justify=LEFT).pack(anchor=W, pady=(2, 10))
 
         bar = ttk.Frame(outer); bar.pack(fill=X)
@@ -2456,8 +2861,8 @@ class App(tk.Tk):
 
         # Reserve the Assign row + status at the very BOTTOM (packed before the body) so the two lists /
         # previews can never push them off-view; the body fills the middle above them.
-        self._portrait_status = ttk.Label(outer, text="Press “Refresh players” with the game running "
-                                                      "(at a roster / menu screen) to list players.",
+        self._portrait_status = ttk.Label(outer, text="Press “Refresh players” to list the players in "
+                                                      "your Roster.ROS.",
                                            foreground="#888", font=("Consolas", 8))
         self._portrait_status.pack(side=BOTTOM, anchor=W, pady=(4, 0))
         ab = ttk.Frame(outer); ab.pack(side=BOTTOM, fill=X, pady=(10, 2))
@@ -2504,8 +2909,10 @@ class App(tk.Tk):
         self._pa_target_thumb = ttk.Label(tfoot); self._pa_target_thumb.pack(side=LEFT)
         self._pa_target_lbl = ttk.Label(tfoot, text="select a player →", foreground="#888")
         self._pa_target_lbl.pack(side=LEFT, padx=8)
-        ptv = ttk.Treeview(left, columns=("name", "cur", "saved"), show="headings", height=13, selectmode="extended")
-        for c, w, txt in (("name", 180, "Player"), ("cur", 120, "Current portrait"), ("saved", 120, "Assigned")):
+        ptv = ttk.Treeview(left, columns=("name", "num", "cur", "saved"), show="headings", height=13,
+                           selectmode="extended")
+        for c, w, txt in (("name", 160, "Player"), ("num", 34, "#"),
+                          ("cur", 120, "Current portrait"), ("saved", 120, "Assigned")):
             ptv.heading(c, text=txt); ptv.column(c, width=w, anchor=W)
         ptv.tag_configure("assigned", foreground="#4ec26b")
         psb = ttk.Scrollbar(left, command=ptv.yview); ptv.configure(yscrollcommand=psb.set)
@@ -2522,10 +2929,10 @@ class App(tk.Tk):
         self._v_pa_src_filter = StringVar()
         self._v_pa_src_filter.trace_add("write", lambda *a: self._portrait_populate_sources())
         ttk.Entry(sbar, textvariable=self._v_pa_src_filter, width=18).pack(side=LEFT, padx=(4, 0))
-        ttk.Label(right, text="Previews show what's CURRENTLY in the game files (mods included). Extract saves "
-                              "the selected portrait as a PNG; Import replaces its pixels in the game files (any "
-                              "size — resized to 256×256 DXT4_5). Shows in-game after the portrait pack reloads "
-                              "(restart / reopen the screen).",
+        ttk.Label(right, text="Previews show what's currently in the game (your edits included). Extract saves "
+                              "the selected portrait as a PNG; Import replaces it with an image of any size — "
+                              "square photos crop best. Restart the game, or leave and re-enter the screen, "
+                              "to see the change.",
                   foreground="#888", font=("Segoe UI", 8), wraplength=260, justify=LEFT).pack(side=BOTTOM, anchor=W, pady=(4, 0))
         sbtn = ttk.Frame(right); sbtn.pack(side=BOTTOM, fill=X, pady=(6, 0))
         ttk.Button(sbtn, text="Extract PNG…", command=self._portrait_extract).pack(side=LEFT)
@@ -2542,6 +2949,8 @@ class App(tk.Tk):
         stv.bind("<<TreeviewSelect>>", lambda e: self._portrait_show_source_thumb())
         self._portrait_src_tv = stv
         self._portrait_load_sources_async()   # build the portrait list (map load is instant via bundled JSON)
+        if self._current_roster_path():       # reading the save is a ~30 ms file parse — just do it
+            self.after(0, self._portrait_refresh)
 
     def _pa_map(self):
         try:
@@ -2594,18 +3003,31 @@ class App(tk.Tk):
             stv.insert("", END, iid=str(k), values=(nm, k))
 
     def _portrait_refresh(self):
-        self._portrait_status.config(text="Reading roster from the running game…")
+        """List players for the tab — from the selected Roster.ROS, or the running game if none.
+
+        The file is preferred because it is where the assignment is WRITTEN: names resolve on disk
+        (player_assign), the row index is the file row, and a save that has drifted from a loaded
+        game would otherwise be listed with the game's portrait keys. Xenia only has to be running
+        when there is no roster file to read."""
+        ros = self._current_roster_path()
+        src = Path(ros).name if ros else "the running game"
+        self._portrait_status.config(text=f"Reading roster from {src}…")
         import threading
         def work():
             try:
                 from launcher import portrait_assign as pa
             except ImportError:
                 import portrait_assign as pa
-            ps, err = pa.list_players()
-            self.after(0, lambda: self._portrait_loaded(ps, err))
+            ps, err = pa.list_players(ros_path=ros or None)
+            if err and ros:                      # a bad/unreadable save shouldn't dead-end the tab
+                ps2, err2 = pa.list_players()
+                if ps2:
+                    ps, err = ps2, None
+                    self._log_q.put(f"[portrait] {err} — listed the running game instead ({err2 or 'ok'})")
+            self.after(0, lambda: self._portrait_loaded(ps, err, ros))
         threading.Thread(target=work, daemon=True).start()
 
-    def _portrait_loaded(self, ps, err):
+    def _portrait_loaded(self, ps, err, ros=""):
         self._portrait_rows = ps or []
         m = {}                                 # portrait key -> player name (for labels)
         for p in self._portrait_rows:
@@ -2615,8 +3037,10 @@ class App(tk.Tk):
         if err:
             self._portrait_status.config(text=err)
         else:
-            uniq = len({(p["first"], p["last"]) for p in ps})
-            self._portrait_status.config(text=f"{uniq} players in the loaded roster.")
+            pid = self._pids()
+            uniq = len({pid.player_id(p) for p in ps})
+            src = f"in {Path(ros).name}" if ros else "in the loaded roster (running game)"
+            self._portrait_status.config(text=f"{uniq} players {src}.")
         if self._pa_sources:                   # relabel portraits with the newly-known names
             self._pa_sources = [(k, b, m.get(k, f"(portrait {k})")) for k, b, _ in self._pa_sources]
             self._portrait_populate_sources()
@@ -2631,19 +3055,22 @@ class App(tk.Tk):
         q = self._v_pa_filter.get().strip().lower()
         saved = self.cfg.get("player_portraits", {})
         m = self._pa_map()
+        pid = self._pids()
         seen = set()
         for p in self._portrait_rows:
-            key = f"{p['first']}|{p['last']}"
-            if key in seen:                    # one row per player (names repeat across pools)
+            key = pid.player_id(p)             # one row per PERSON: the several pool records of one
+            if key in seen:                    # player collapse, two players sharing a name do not
                 continue
             if q and q not in p["name"].lower():
                 continue
             seen.add(key)
             cur = p["key"]
             cur_txt = (self._pa_key_name.get(cur, f"#{cur}") if cur in m else f"#{cur} (no photo)")
-            sv = saved.get(key)
+            _k, sv = pid.resolve_saved(saved, p)
             sv_txt = f"→ {self._pa_key_name.get(sv, '#'+str(sv))}" if sv is not None else ""
-            tv.insert("", END, iid=key, values=(p["name"] or "(unnamed)", cur_txt, sv_txt),
+            num = p.get("num")
+            tv.insert("", END, iid=key,
+                      values=(p["name"] or "(unnamed)", "" if num is None else num, cur_txt, sv_txt),
                       tags=("assigned",) if sv is not None else ())
         restore = [k for k in prev if tv.exists(k)]
         if restore:
@@ -2654,10 +3081,12 @@ class App(tk.Tk):
         if not sel:
             return
         key = sel[-1]
-        p = next((x for x in self._portrait_rows if f"{x['first']}|{x['last']}" == key), None)
+        pid = self._pids()
+        p = next((x for x in self._portrait_rows if pid.player_id(x) == key), None)
         if not p:
             return
-        pk = self.cfg.get("player_portraits", {}).get(key, p["key"])   # saved assignment wins
+        _k, sv = pid.resolve_saved(self.cfg.get("player_portraits", {}), p)
+        pk = p["key"] if sv is None else sv                            # saved assignment wins
         blob = self._pa_map().get(pk)
         pi = self._portrait_thumb(blob)
         self._pa_target_thumb.config(image=pi or ""); self._pa_target_thumb.image = pi
@@ -2772,7 +3201,7 @@ class App(tk.Tk):
         if not sel:
             messagebox.showinfo("Clear", "Select the players whose assignment you want to remove."); return
         saved = dict(self.cfg.get("player_portraits", {}))
-        removed = sum(1 for k in sel if saved.pop(k, None) is not None)
+        removed = sum(1 for k in sel if self._forget_assignment(saved, k))
         self.cfg["player_portraits"] = saved
         save_config(self.cfg)
         self._portrait_status.config(text=f"Removed {removed} saved assignment(s). The live portrait stays until reload.")
@@ -2814,17 +3243,19 @@ class App(tk.Tk):
             return None
 
     def _portrait_unique_rows(self):
-        """One row per unique roster player (name), each with the portrait blob it currently points
-        at ({key,name,first,last,blob}); blob is None when the player has no photo slot."""
+        """One row per unique roster PLAYER, each with the portrait blob it currently points at
+        ({key,name,first,last,num,blob}); blob is None when the player has no photo slot.
+        `key` is the player id, so it matches the tree iids in _portrait_populate."""
         m = self._pa_map()
+        pid = self._pids()
         seen, rows = set(), []
         for p in self._portrait_rows:
-            key = f"{p['first']}|{p['last']}"
+            key = pid.player_id(p)
             if key in seen or not p["name"]:
                 continue
             seen.add(key)
             rows.append({"key": key, "name": p["name"], "first": p["first"],
-                         "last": p["last"], "blob": m.get(p["key"])})
+                         "last": p["last"], "num": p.get("num"), "blob": m.get(p["key"])})
         return rows
 
     def _portrait_free_slots(self):
@@ -2837,16 +3268,41 @@ class App(tk.Tk):
 
     # ── writing player assignments into Roster.ROS (not live memory) ────────────
     #
-    # The Goalie and Portraits tabs LIST players out of the running game because that is the only
-    # place names resolve. The WRITE, though, goes to the save file: a live-memory patch dies with
-    # the Xenia process and can never reach a console, whereas Roster.ROS travels with the game
-    # files. player_assign.rows_for_live is the bridge (and does the safety checks).
+    # The Goalie and Portraits tabs LIST players out of the selected Roster.ROS — the same file the
+    # WRITE goes to, so index IS the row and rows_for_live is an identity map. (They used to list
+    # out of the running game, on the belief that names only resolved there; player_assign solved
+    # the on-disk name pointers, and the live walk is now just the no-roster-file fallback.) The
+    # write has always gone to the file: a live-memory patch dies with the Xenia process and can
+    # never reach a console. player_assign.rows_for_live is the bridge (and does the safety checks).
     def _pa(self):
         try:
             from launcher import player_assign as pa
         except ImportError:
             import player_assign as pa
         return pa
+
+    @staticmethod
+    def _forget_assignment(saved, pid):
+        """Drop a player's saved assignment from `saved` (mutates). Returns True if anything went.
+
+        A pid can be 'First|Last#40' while the stored entry predates player ids and is the bare
+        'First|Last' — that older entry was written when both namesakes were one row, so clearing
+        either of them clears it."""
+        gone = saved.pop(pid, None) is not None
+        bare = pid.split("#", 1)[0]
+        if bare != pid:
+            gone = saved.pop(bare, None) is not None or gone
+        return gone
+
+    def _pids(self):
+        """player_ids — the per-PERSON id used as the tree iid, the saved-assignment key and the
+        Roster.ROS match key on the Goalie / Portraits tabs. It collapses the several pool records
+        of one player while keeping two players who share a name apart."""
+        try:
+            from launcher import player_ids as pi
+        except ImportError:
+            import player_ids as pi
+        return pi
 
     def _wrote_phrase(self, n):
         """Status wording for a Roster.ROS write count. 0 means the save already held those values
@@ -2857,11 +3313,14 @@ class App(tk.Tk):
     def _ros_write_by_name(self, live_recs, by_name, kind, log=None):
         """Write per-player values into Roster.ROS, addressing rows via the live roster.
 
-        `by_name` = {'First|Last': value}; `kind` picks what the value means:
+        `by_name` = {player_id: value}; `kind` picks what the value means:
           "portrait" -> an int portrait key      "mask" -> a goalie_look dict.
-        A name can occupy SEVERAL records (active roster + free-agent / all-star pools) and the game
-        may draw any of them, so every matching record is written — the same rule the old live path
-        used. Returns (n_rows_written, n_players, error_or_None).
+        A player occupies SEVERAL records (active roster + free-agent / all-star pools) and the game
+        may draw any of them, so every record of that player is written — the same rule the old live
+        path used. Matching is by player id (player_ids), which is the plain name for a unique name
+        and name+number for a shared one, so a value meant for one namesake no longer lands on both;
+        an id saved before this existed is still accepted by name. Returns (n_rows_written,
+        n_players, error_or_None).
         """
         log = log or self._log
         ros = self._current_roster_path()
@@ -2880,11 +3339,12 @@ class App(tk.Tk):
         if len(notes) > 8:
             log(f"[roster] …and {len(notes) - 8} more")
 
+        pid = self._pids()
         writes, players = {}, set()
         for row, rec in mapped:
-            key = f"{rec['first']}|{rec['last']}"
-            if key in by_name:
-                writes[row] = by_name[key]
+            key, val = pid.resolve_saved(by_name, rec)
+            if key is not None:
+                writes[row] = val
                 players.add(key)
         if not writes:
             missing = sorted(set(by_name) - players)
@@ -2919,8 +3379,8 @@ class App(tk.Tk):
         save_config(self.cfg)
         live = getattr(self, "_portrait_rows", None) or []
         if not live:
-            return 0, ("no roster is loaded — press “Refresh players” with the game running once, "
-                       "so the launcher can match names to rows in your save")
+            return 0, ("no roster is loaded — press “Refresh players” once, so the launcher can "
+                       "match names to rows in your save")
         n, _np, err = self._ros_write_by_name(live, {k: int(v) for k, v in assignments.items()},
                                               "portrait", log=log)
         return n, err
@@ -3022,13 +3482,21 @@ class App(tk.Tk):
                 w.destroy()
             for w in btns.winfo_children():
                 w.destroy()
-            info.config(text="Multiple players share this name — pick the right one:")
+            # Preselect the one wearing this roster player's number — that is the disambiguation the
+            # user would make by hand, and it is right far more often than "the first result".
+            num = row.get("num")
+            pick = next((i for i, c in enumerate(cands)
+                         if num and c.get("sweaterNumber") == num), None)
+            info.config(text="Multiple players share this name — pick the right one"
+                             + (f" (preselected #{num}, this player's roster number):"
+                                if pick is not None else ":"))
+            pick = 0 if pick is None else pick
             lb = Listbox(side, height=min(6, len(cands)), width=42,
                          bg=self._COL["bg2"], fg=self._COL["fg"], selectmode="browse",
                          exportselection=False)
             for c in cands:
                 lb.insert(END, pd.describe(c))
-            lb.selection_set(0); lb.pack(fill=X)
+            lb.selection_set(pick); lb.see(pick); lb.pack(fill=X)
             def use_it():
                 i = (lb.curselection() or [0])[0]
                 resolve_async(cand=cands[i])
@@ -3158,7 +3626,7 @@ class App(tk.Tk):
         rows = self._portrait_unique_rows()
         if not rows:
             messagebox.showinfo("Auto-fill portraits",
-                "No roster players are loaded. Press “Refresh players” with the game running first."); return
+                "No roster players are loaded. Press “Refresh players” first."); return
         noblob = sum(1 for r in rows if r["blob"] is None)
         if not messagebox.askyesno("Auto-fill ALL portraits",
                 f"Download official NHL portraits for {len(rows)} roster player(s) and write them into the "
@@ -3173,9 +3641,23 @@ class App(tk.Tk):
         self._portrait_nhl_bulk(rows, game_dir, scope="whole roster")
 
     @staticmethod
-    def _pd_autopick(cands):
-        """Pick a candidate for an ambiguous name in bulk: prefer an active player, else the first."""
-        return next((c for c in cands if c.get("active")), cands[0]) if cands else None
+    def _pd_autopick(cands, row=None):
+        """Pick a candidate for an ambiguous name in bulk.
+
+        The NHL search returns every real player with that name — two Elias Petterssons, say — and
+        picking "the first active one" is a coin flip that puts one man's face on the other. The
+        roster row knows the player's JERSEY NUMBER, and the search records carry `sweaterNumber`,
+        so match on that first: it is the field that actually separates namesakes on a real roster.
+        Falls back to the old rule (first active, else first) when there is no number to match or
+        nothing matches it."""
+        if not cands:
+            return None
+        num = (row or {}).get("num")
+        if num:                                   # 0 = no number set on the roster record
+            exact = [c for c in cands if c.get("sweaterNumber") == num]
+            if exact:
+                return next((c for c in exact if c.get("active")), exact[0])
+        return next((c for c in cands if c.get("active")), cands[0])
 
     def _portrait_nhl_bulk(self, rows, game_dir, scope="", unplaced=0):
         pd = self._pd()
@@ -3198,7 +3680,7 @@ class App(tk.Tk):
         items = list(by_blob.values()) + noblob
         rep = {"matched": 0, "retired": 0, "silhouette": 0, "composited": 0, "ambiguous": [], "errors": [],
                "collisions": collisions, "applied": 0, "assigned_slots": 0, "freed": 0,
-               "shared_silhouette": 0, "unplaced": 0, "cancelled": False}
+               "shared_silhouette": 0, "unplaced": 0, "cancelled": False, "by_number": []}
 
         def work():
             tmpdir = tempfile.mkdtemp(prefix="nhlport_")
@@ -3223,7 +3705,12 @@ class App(tk.Tk):
                     if stt == "error":
                         rep["errors"].append(f"{r['name']}: {res.get('error')}")
                     if res.get("ambiguous"):
-                        rep["ambiguous"].append(r["name"])
+                        # Resolved by jersey number = a real match, not a coin flip — don't ask the
+                        # user to review it; only the remaining guesses need eyes on them.
+                        if res.get("picked_by") == "number":
+                            rep["by_number"].append(r["name"])
+                        else:
+                            rep["ambiguous"].append(r["name"])
                     resolved.append((r, res))
                     done += 1
                     self._log_q.put(f"__PROGRESS__{done / total}|{r['name']} · {stt}")
@@ -3322,12 +3809,18 @@ class App(tk.Tk):
     @staticmethod
     def _pd_resolve_row(pd, row, season):
         """Resolve one roster row to a reframed image (worker-thread safe). Auto-picks duplicate
-        names and flags them via res['ambiguous']."""
+        names — by the roster player's jersey number where it identifies one — and flags them via
+        res['ambiguous'] / res['picked_by']."""
         res = pd.resolve_image(row["name"], season=season)
         if res["status"] == "ambiguous":
-            cand = App._pd_autopick(res["candidates"])
+            cands = res["candidates"]
+            cand = App._pd_autopick(cands, row)
+            by_num = bool(row.get("num")) and cand is not None and \
+                cand.get("sweaterNumber") == row.get("num") and \
+                sum(1 for c in cands if c.get("sweaterNumber") == row.get("num")) == 1
             res = pd.resolve_image(row["name"], season=season, cand=cand)
             res["ambiguous"] = True
+            res["picked_by"] = "number" if by_num else "guess"
         return res
 
     def _portrait_nhl_bulk_done(self):
@@ -3349,9 +3842,14 @@ class App(tk.Tk):
             lines.append(f"Matched → freed slot   : {rep['assigned_slots']} (had no photo; given a recycled slot)")
         if rep.get("unplaced"):
             lines.append(f"Couldn't be placed     : {rep['unplaced']} (no free portrait slot left)")
+        if rep.get("by_number"):
+            lines += ["", f"Duplicate names settled by jersey number ({len(rep['by_number'])}):",
+                      "  " + ", ".join(rep["by_number"][:40])
+                      + (" …" if len(rep["by_number"]) > 40 else "")]
         if rep["ambiguous"]:
-            lines += ["", f"Auto-picked duplicate names ({len(rep['ambiguous'])}) — review with a single "
-                          "Fetch if wrong:", "  " + ", ".join(rep["ambiguous"][:40])
+            lines += ["", f"Auto-picked duplicate names ({len(rep['ambiguous'])}) — no jersey number "
+                          "settled these; review with a single Fetch if wrong:",
+                      "  " + ", ".join(rep["ambiguous"][:40])
                       + (" …" if len(rep["ambiguous"]) > 40 else "")]
         if rep["collisions"]:
             lines += ["", f"Skipped (share a portrait slot): {', '.join(rep['collisions'][:30])}"
@@ -3394,8 +3892,6 @@ class App(tk.Tk):
         """Primary content = the per-element layout/scale/color editor with a live preview.
         Whole-scoreclock screen placement (the XEX anchor) is a secondary dialog."""
         t = self._tab_scorebug
-        from launcher import scorebug_layout as sblay
-        self._sblay = sblay
         self._sbl_rows = []                 # last-read element rows (current on-disk state)
         self._sbl_pending = {}              # {name: {dx,dy,sx,sy,size,color}}
         self._sbl_factory = False           # staged "reset to default" (preview only until Apply)
@@ -3420,8 +3916,8 @@ class App(tk.Tk):
         self._sbl_sog_btn.pack(side=RIGHT, padx=(0, 6))
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
                   text="Move, resize and recolour each part of the in-game scoreclock. Pick an "
-                       "element in the list or preview, queue changes, then Apply — writes "
-                       "overlay_static.iff; shows on the NEXT game launch. Axes: +X right, +Y up. "
+                       "element in the list or preview, queue changes, then Apply — the change "
+                       "shows on the NEXT game launch. Axes: +X right, +Y up. "
                        "“1st” and clock digit 4 are re-anchored by the game and may ignore moves."
                   ).pack(fill=X, padx=12)
 
@@ -3527,9 +4023,9 @@ class App(tk.Tk):
         ttk.Combobox(ffr, textvariable=self._sbl_font, state="readonly", width=24,
                      values=list(self._sblay.FONTS.keys())).pack(side=LEFT, padx=3)
         ttk.Button(ffr, text="Set", width=5, command=self._sbl_set_font).pack(side=LEFT)
-        ttk.Label(fs, text="Per-element font, from the game's font registry (english.iff — each "
-                           "entry = typeface × scale, so the font choice is also the size "
-                           "choice). Apply + relaunch to see it.",
+        ttk.Label(fs, text="Font for the selected element. Each choice is a typeface at a fixed "
+                           "size, so picking the font also picks the size. Apply, then relaunch "
+                           "to see it.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=210,
                   justify=LEFT).pack(anchor=W, pady=(3, 0))
         frow = ttk.Frame(fs); frow.pack(fill=X, pady=(5, 0))
@@ -3564,7 +4060,7 @@ class App(tk.Tk):
         ttk.Separator(ctl, orient=HORIZONTAL).pack(fill=X, pady=8)
         ttk.Button(ctl, text="Edit Textures (logos, bars…)",
                    command=self._sbl_edit_textures).pack(fill=X)
-        ttk.Label(ctl, text="Opens the IFF Textures tab for the scoreclock art.",
+        ttk.Label(ctl, text="Opens the Textures tab for the scoreclock art.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=210).pack(anchor=W)
 
         # Preset bar — full editor edit-set, saved to APPDATA. "Default" = factory/stock.
@@ -3878,7 +4374,7 @@ class App(tk.Tk):
         xex = self._sb_xex()
         if not xex:
             messagebox.showerror("Scoreclock",
-                "Game XEX not found — set the Game path in Settings."); return
+                "Game file not found — set the Game path in Settings."); return
         try:
             n = sbanchor.write_modes(xex, edits, self._log_q.put)
         except (ValueError, OSError) as e:
@@ -4023,14 +4519,14 @@ class App(tk.Tk):
         if not game_dir:
             messagebox.showerror("Scoreclock", "Set the game files folder in Settings."); return
         win = Toplevel(self)
-        win.title("Scoreclock Textures — overlay_static.iff")
+        win.title("Scoreclock Textures")
         win.geometry("860x600"); win.configure(bg=self._COL["bg1"])
         win.transient(self)
         ttk.Label(win, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=820,
                   text="The scoreclock's textures (bars, glints, panels, 2K/SN logos, glow). "
                        "Replace one with a PNG/DDS — your layout edits in this file are preserved. "
-                       "Team logos are per-matchup (logo_<team>.iff), not here. ★ = appears on the "
-                       "scoreclock strip.").pack(fill=X, padx=10, pady=(10, 4))
+                       "Team logos are not here — edit those on the Textures tab. ★ = appears "
+                       "on the scoreclock strip.").pack(fill=X, padx=10, pady=(10, 4))
         only_sc = BooleanVar(value=True)
         ttk.Checkbutton(win, text="Show only scoreclock textures", variable=only_sc,
                         command=lambda: fill()).pack(anchor=W, padx=10)
@@ -4743,9 +5239,9 @@ class App(tk.Tk):
         ttk.Label(pad, text="Whole-Scoreclock Screen Position",
                   font=("Segoe UI", 12, "bold")).pack(anchor=W)
         ttk.Label(pad, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=560,
-                  text="Moves the entire scoreclock by patching its screen anchor in the game XEX "
-                       "(stock = Bottom-Left). Applies immediately (game must be closed); shows on "
-                       "next launch. The instant-replay watermark shares this anchor.").pack(
+                  text="Moves the entire scoreclock to a different corner of the screen (stock = "
+                       "Bottom-Left). Apply with the game closed; the move shows on the next "
+                       "launch. The instant-replay watermark moves with it.").pack(
             anchor=W, pady=(2, 8))
 
         bar = ttk.Frame(pad); bar.pack(anchor=W, pady=(0, 8))
@@ -4883,10 +5379,10 @@ class App(tk.Tk):
         self._gpt_xexlbl = StringVar(value="")
         ttk.Label(head, textvariable=self._gpt_xexlbl, foreground="#999").pack(side=RIGHT)
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
-                  text="Engine tuning constants recovered by diffing the official Title Update #1 "
-                       "against the retail game. Queue values (or load a preset), then Apply — "
-                       "writes default.xex; takes effect on the NEXT game launch. "
-                       "“2K Official Patch (v1.1)” = the values 2K shipped in the title update: "
+                  text="Engine tuning constants for skating, checking, shooting and rebounds. "
+                       "Queue values (or load a preset), then Apply — the change takes effect on "
+                       "the NEXT game launch. "
+                       "“2K Official Patch (v1.1)” = the values 2K shipped in their title update: "
                        "faster acceleration, easier pinning, retuned shot velocity and rebounds."
                   ).pack(fill=X, padx=12)
 
@@ -4994,8 +5490,7 @@ class App(tk.Tk):
         if not sel:
             self._gpt_note.set("(select a tuner)"); return
         t = self._gpt.BY_KEY[sel[0]]
-        self._gpt_note.set(f"{t['note']}\n\nVA 0x{t['va']:X} — also live-pokeable via Cheat "
-                           f"Engine while the game runs (float, big-endian).")
+        self._gpt_note.set(t["note"])
 
     def _gpt_queue_value(self):
         sel = self._gpt_tv.selection()
@@ -5091,14 +5586,13 @@ class App(tk.Tk):
         self._anim_xexlbl = StringVar(value="")
         ttk.Label(head, textvariable=self._anim_xexlbl, foreground="#999").pack(side=RIGHT)
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8), justify=LEFT, wraplength=940,
-                  text="All 3,280 animation clips live inside default.xex, not in any .iff — which "
-                       "is why they never showed up in the asset inventory. Their original names "
-                       "were stripped by the build, so name them yourself (names are stored "
-                       "separately and can be shared). You can retime a clip, retime the gameplay "
-                       "events inside it, and repoint any selection-table slot at a different clip. "
-                       "Editing the motion itself is not possible yet — the keyframe format is "
-                       "still undecoded. Writes go to default.xex (v1.0) and take effect on the "
-                       "next launch."
+                  text="Name, retime and repoint the game's 3,280 animation clips. The shipped "
+                       "names were stripped out of the game, so name them yourself (your names "
+                       "are stored separately and can be shared). You can retime a clip, move the "
+                       "gameplay events inside it, and point any selection-table slot at a "
+                       "different clip; editing the motion itself is not supported yet. Needs the "
+                       "original v1.0 game executable (not Title Update #1); changes take effect "
+                       "on the next launch."
                   ).pack(fill=X, padx=12)
 
         filt = ttk.Frame(t, padding=(12, 6, 12, 0)); filt.pack(fill=X)
@@ -5148,7 +5642,7 @@ class App(tk.Tk):
         self._anim_dur = StringVar()
         ttk.Entry(row, textvariable=self._anim_dur, width=8).pack(side=LEFT, padx=4)
         ttk.Label(row, text="s").pack(side=LEFT)
-        ttk.Button(rt, text="Write length to XEX",
+        ttk.Button(rt, text="Save new length",
                    command=self._anim_set_duration).pack(fill=X, pady=(4, 0))
         ttk.Label(rt, text="Behaviours poll the animation rather than a timer, so a clip's length "
                            "IS its reaction time — shortening the goalie dive makes goalies "
@@ -5158,8 +5652,8 @@ class App(tk.Tk):
 
         ttk.Button(ctl, text="Repoint a table slot…", command=self._anim_repoint_dialog
                    ).pack(fill=X, pady=(8, 0))
-        ttk.Label(ctl, text="Reassignment = pick which clip a slot plays. It is exact: clips are "
-                            "reached only by pointer.",
+        ttk.Label(ctl, text="Repointing swaps which clip an action plays — give the wrist shot the "
+                            "slap-shot animation, for example.",
                   foreground="#888", font=("Segoe UI", 7), wraplength=200,
                   justify=LEFT).pack(anchor=W, pady=(3, 0))
 
@@ -5204,9 +5698,9 @@ class App(tk.Tk):
                    command=self._anim_preview).pack(side=LEFT, padx=(0, 6))
         ttk.Button(sk, text="Export posed clip…", command=self._anim_export_pose
                    ).pack(side=LEFT)
-        ttk.Label(sk, text="The rig the clips drive — 73 bones (skater) / 78 (goalie), read "
-                           "from global.iff. Playback can skin the rig's own mesh onto it, so "
-                           "you watch the player move, not just the joints.",
+        ttk.Label(sk, text="The skeleton the clips drive — 73 bones for skaters, 78 for goalies. "
+                           "Playback can put the player model on it, so you watch him move "
+                           "rather than just the joints.",
                   foreground="#888", font=("Segoe UI", 7)).pack(side=LEFT, padx=(10, 0))
 
         self.after(1200, self._anim_load)
@@ -5275,7 +5769,7 @@ class App(tk.Tk):
             b = CM.blob()
             m = CM.rig_model(CM.scan_models(b), rig)
             if m is None:
-                raise ValueError("global.iff holds no %s mesh" % rig)
+                raise ValueError("the game files hold no %s model" % rig)
             sn = CM.skin(b, m)
             if sn is None:
                 raise ValueError("the %s mesh carries no usable bone palette" % rig)
@@ -5836,7 +6330,7 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror("Animations", f"Could not export:\n{e}"); return
         self._log_q.put(f"[anim] backed up 0x{va:08X} ({n} bytes) to {p}")
-        self._anim_status.set(f"backed up 0x{va:08X} ({n} bytes) — restorable to this XEX only")
+        self._anim_status.set(f"backed up 0x{va:08X} ({n} bytes) — restores onto this copy of the game only")
 
     def _anim_restore_region(self):
         xex = self._sb_xex()
@@ -5882,92 +6376,127 @@ class App(tk.Tk):
     # ── Settings tab ──────────────────────────────────────────────────────────
 
     def _build_settings_tab(self):
-        outer = ttk.Frame(self._tab_settings, padding=28)
-        outer.pack(fill=BOTH, expand=True)
+        self._settings_body(self._tab_settings, dev=True)
 
-        ttk.Label(outer, text="Settings",
-                  font=("Segoe UI", 13, "bold")).grid(
-            row=0, column=0, columnspan=3, sticky=W, pady=(0, 18))
+    def _scrollable(self, parent, padding=28):
+        """A padded frame inside a vertical scroller. Settings is taller than the Simple-mode
+        window, and taller than the dev tab on a laptop screen, so neither can assume it fits."""
+        canvas = Canvas(parent, bg=self._COL["bg1"], highlightthickness=0, bd=0)
+        sb = ttk.Scrollbar(parent, orient=VERTICAL, command=canvas.yview)
+        canvas.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y)
+        canvas.pack(side=LEFT, fill=BOTH, expand=True)
+        inner = ttk.Frame(canvas, padding=padding)
+        win = canvas.create_window((0, 0), window=inner, anchor="nw")
+        # Keep the content the full width of the viewport (so grid columnconfigure weights read
+        # against the window, not the natural width) and the scroll region the height of the form.
+        canvas.bind("<Configure>", lambda e: canvas.itemconfigure(win, width=e.width))
+        inner.bind("<Configure>", lambda _e: canvas.configure(scrollregion=canvas.bbox("all")))
+        # Wheel only while the pointer is over this canvas — a global binding would steal the
+        # wheel from every tree and list in the app.
+        canvas.bind("<Enter>", lambda _e: canvas.bind_all(
+            "<MouseWheel>", lambda ev: canvas.yview_scroll(int(-ev.delta / 120), "units")))
+        canvas.bind("<Leave>", lambda _e: canvas.unbind_all("<MouseWheel>"))
+        return inner
 
-        def path_row(r, label, key, is_dir=False):
+    # ── Settings (shared by both shells) ──────────────────────────────────────
+    # ONE settings form, drawn into whichever container the current shell provides. `dev` selects
+    # scope, not layout: Simple mode gets exactly the settings that installing a pack and booting
+    # the game require, and nothing that only matters when authoring. The audio tools are absent
+    # from BOTH lists on purpose — ffmpeg and xma2encode ship inside the launcher and are resolved
+    # automatically (see load_config), so the dev rows exist only to override a bundled copy.
+
+    def _settings_body(self, parent, dev: bool):
+        outer = self._scrollable(parent)
+        outer.columnconfigure(1, weight=1)
+        row = {"i": 0}
+        def nxt():
+            row["i"] += 1
+            return row["i"] - 1
+
+        def heading(text, gap=(18, 6)):
+            ttk.Separator(outer).grid(row=nxt(), column=0, columnspan=3, sticky=EW, pady=(gap[0], 0))
+            ttk.Label(outer, text=text, font=("Segoe UI", 11, "bold")).grid(
+                row=nxt(), column=0, columnspan=3, sticky=W, pady=(gap[0] // 2, gap[1]))
+
+        def blurb(text):
+            ttk.Label(outer, text=text, foreground="#888888", font=("Segoe UI", 8),
+                      justify=LEFT).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(0, 8))
+
+        ttk.Label(outer, text="Settings", font=("Segoe UI", 13, "bold")).grid(
+            row=nxt(), column=0, columnspan=3, sticky=W, pady=(0, 16))
+
+        # ── Paths ────────────────────────────────────────────────────────────
+        def path_row(label, key, kind="dir"):
+            r = nxt()
             ttk.Label(outer, text=label).grid(row=r, column=0, sticky=W, pady=5)
             var = StringVar(value=self.cfg.get(key, ""))
             setattr(self, f"_sv_{key}", var)
-            ttk.Entry(outer, textvariable=var, width=60).grid(
-                row=r, column=1, padx=(8, 4), sticky=EW)
-            def browse(v=var, d=is_dir):
-                p = filedialog.askdirectory() if d else filedialog.askopenfilename(
-                    filetypes=[("Executable", "*.exe"), ("All files", "*.*")])
-                if p: v.set(p)
-            ttk.Button(outer, text="Browse…", command=browse).grid(
-                row=r, column=2, padx=(0, 2))
+            ttk.Entry(outer, textvariable=var, width=60).grid(row=r, column=1, padx=(8, 4), sticky=EW)
+            def browse():
+                if kind == "dir":
+                    p = filedialog.askdirectory()
+                elif kind == "game":
+                    # .xex, .iso or an extracted folder — all three are things Xenia will boot.
+                    p = filedialog.askopenfilename(
+                        title="Select game file or folder",
+                        filetypes=[("Xbox 360 executable", "*.xex"),
+                                   ("ISO image", "*.iso *.xiso"),
+                                   ("All files", "*.*")]) or \
+                        filedialog.askdirectory(title="Or select game folder")
+                else:
+                    p = filedialog.askopenfilename(
+                        filetypes=[("Executable", "*.exe"), ("All files", "*.*")])
+                if p:
+                    var.set(p)
+            ttk.Button(outer, text="Browse…", command=browse).grid(row=r, column=2, padx=(0, 2))
+            return key
 
-        path_row(1, "NHL 2k10 game files folder:",  "root_path",  is_dir=True)
-        path_row(2, "Xenia executable (.exe):",        "xenia_path", is_dir=False)
+        keys = [path_row("NHL 2k10 game files folder:", "root_path",  "dir"),
+                path_row("Xenia executable (.exe):",    "xenia_path", "file"),
+                path_row("Game (.xex, .iso, or folder):", "game_path", "game")]
+        if dev:
+            keys += [path_row("xma2encode.exe path:", "xma2encode", "file"),
+                     path_row("ffmpeg.exe path:",     "ffmpeg",     "file")]
 
-        # Game path — special row: accepts .xex, .iso, or a folder
-        ttk.Label(outer, text="Game (.xex, .iso, or folder):").grid(
-            row=3, column=0, sticky=W, pady=5)
-        self._sv_game_path = StringVar(value=self.cfg.get("game_path", ""))
-        ttk.Entry(outer, textvariable=self._sv_game_path, width=60).grid(
-            row=3, column=1, padx=(8, 4), sticky=EW)
-        def _browse_game():
-            p = filedialog.askopenfilename(
-                title="Select game file or folder",
-                filetypes=[
-                    ("Xbox 360 executable", "*.xex"),
-                    ("ISO image", "*.iso *.xiso"),
-                    ("All files", "*.*"),
-                ])
-            if not p:
-                # Fallback: ask for directory (STFS / extracted folder)
-                p = filedialog.askdirectory(title="Or select game folder")
-            if p:
-                self._sv_game_path.set(p)
-        ttk.Button(outer, text="Browse…", command=_browse_game).grid(
-            row=3, column=2, padx=(0, 2))
-        path_row(4, "xma2encode.exe path:",          "xma2encode", is_dir=False)
-        path_row(5, "ffmpeg.exe path:",              "ffmpeg",     is_dir=False)
-
-        outer.columnconfigure(1, weight=1)
-        ttk.Separator(outer).grid(row=8, column=0, columnspan=3, sticky=EW, pady=18)
+        # ── Mod pack link ────────────────────────────────────────────────────
+        r = nxt()
+        ttk.Label(outer, text="Mod pack download page:").grid(row=r, column=0, sticky=W, pady=5)
+        self._sv_modpack_url = StringVar(value=self.cfg.get("modpack_url", ""))
+        ttk.Entry(outer, textvariable=self._sv_modpack_url, width=60).grid(
+            row=r, column=1, padx=(8, 4), sticky=EW)
 
         def on_save():
-            self.cfg["root_path"]         = self._sv_root_path.get().strip()
-            self.cfg["xenia_path"]        = self._sv_xenia_path.get().strip()
-            self.cfg["game_path"]         = self._sv_game_path.get().strip()
-            self.cfg["xma2encode"]        = self._sv_xma2encode.get().strip()
-            self.cfg["ffmpeg"]            = self._sv_ffmpeg.get().strip()
+            for k in keys:
+                self.cfg[k] = getattr(self, f"_sv_{k}").get().strip()
+            self.cfg["modpack_url"] = self._sv_modpack_url.get().strip()
             save_config(self.cfg)
             self._v_root.set(self.cfg["root_path"])
             self._reload_all()
             messagebox.showinfo("Settings", "Settings saved.")
 
         ttk.Button(outer, text="Save Settings", style="Accent.TButton",
-                   command=on_save).grid(row=9, column=1, sticky=W)
+                   command=on_save).grid(row=nxt(), column=1, sticky=W, pady=(14, 0))
 
-        note = ("Game files folder — the folder containing the raw 0A, 0B, 1A, 1B archives.\n"
-                "Xenia executable — path to xenia_canary.exe.\n"
-                "Game ISO / folder — the NHL 2K10 ISO or extracted game folder.\n"
-                "xma2encode.exe  — required for Extract and Patch Audio operations.\n"
-                "ffmpeg.exe      — required for Patch Audio only.")
-        ttk.Label(outer, text=note, foreground="#888888",
-                  font=("Segoe UI", 8)).grid(
-            row=10, column=0, columnspan=3, sticky=W, pady=(14, 0))
+        note = ["Game files folder — the folder containing the raw 0A, 0B, 1A, 1B archives.",
+                "Xenia executable — path to xenia_canary.exe.",
+                "Game — the NHL 2K10 .xex, ISO or extracted game folder.",
+                "Mod pack download page — where the “Get Mod Packs” button sends you."]
+        if dev:
+            note[3:3] = ["xma2encode.exe  — required for Extract and Patch Audio operations.",
+                         "ffmpeg.exe      — required for Patch Audio only."]
+        ttk.Label(outer, text="\n".join(note), foreground="#888888",
+                  font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3,
+                                             sticky=W, pady=(14, 0))
 
         # ── Default matchup (two `li r3,imm` in the boot path) ────────────────
-        ttk.Separator(outer).grid(row=11, column=0, columnspan=3, sticky=EW, pady=18)
-        ttk.Label(outer, text="Default Matchup (teams selected on boot)",
-                  font=("Segoe UI", 11, "bold")).grid(row=12, column=0, columnspan=3, sticky=W)
-        ttk.Label(
-            outer, foreground="#888888", font=("Segoe UI", 8),
-            text=("The two teams Play Now / Exhibition start on. Stock is Detroit v Pittsburgh "
-                  "(the 2009 Cup Final). Patches your game .xex, so it travels to a console.\n"
-                  "Teams are matched by roster ID, so this keeps working if you rename teams. "
-                  "Only applies to the v1.0 executable — Title Update #1 relocates the code.")
-        ).grid(row=13, column=0, columnspan=3, sticky=W, pady=(2, 8))
-
-        dm = ttk.Frame(outer); dm.grid(row=14, column=0, columnspan=3, sticky=W)
+        heading("Default Matchup (teams selected on boot)")
+        blurb("The two teams Play Now / Exhibition start on. Stock is Detroit v Pittsburgh "
+              "(the 2009 Cup Final). The change is written into the game itself, so it travels "
+              "with your game files.\n"
+              "Renaming a team does not break this. Needs the original v1.0 game "
+              "(not Title Update #1).")
+        dm = ttk.Frame(outer); dm.grid(row=nxt(), column=0, columnspan=3, sticky=W)
         self._dm_home = StringVar(); self._dm_away = StringVar()
         self._dm_status = StringVar(value="")
         ttk.Label(dm, text="Home:").pack(side=LEFT)
@@ -5981,17 +6510,51 @@ class App(tk.Tk):
         ttk.Button(dm, text="Revert to stock", command=self._dm_revert).pack(side=LEFT, padx=4)
         ttk.Button(dm, text="Refresh", command=self._dm_refresh).pack(side=LEFT, padx=4)
         ttk.Label(outer, textvariable=self._dm_status, foreground="#888888",
-                  font=("Segoe UI", 8)).grid(row=15, column=0, columnspan=3, sticky=W, pady=(6, 0))
+                  font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
         self._dm_refresh()
 
-        ttk.Separator(outer).grid(row=16, column=0, columnspan=3, sticky=EW, pady=18)
-        ttk.Label(outer, text="Share & Merge (collaboration)",
-                  font=("Segoe UI", 11, "bold")).grid(row=17, column=0, columnspan=3, sticky=W)
-        ttk.Label(
-            outer, foreground="#888888", font=("Segoe UI", 8),
-            text=("Export your work to share, or import someone else's and merge it into yours. "
+        # ── Game calendar (authoring only) ───────────────────────────────────
+        # Hidden in Simple mode: "Use system time" is right for everyone who just wants to play,
+        # it is already the default, and it needs no decision. The override exists for authoring —
+        # shipping a roster for a specific season, or checking how ages render in some other year.
+        if dev:
+            heading("Game Calendar (the date the game thinks it is)")
+            blurb("The game ships hardcoded to 1 October 2009, which is why players' ages come out "
+                  "years too low — it works out every age from that date. This sets the season the "
+                  "game boots into: 1 Oct of the start year through 13 Apr of the next.\n"
+                  "Left on system time it rolls itself forward each 1 July, so an install that sits "
+                  "unopened into next season still reports ages correctly. Untick to pin a season — "
+                  "worth doing when a roster is built for one particular year.\n"
+                  "Franchise saves are unaffected: in a franchise the game uses its own clock, and "
+                  "only falls back to this date outside one.")
+            gd = ttk.Frame(outer); gd.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+            self._gd_auto = BooleanVar(value=self.cfg.get(xbase.CFG_SEASON, xbase.AUTO)
+                                       in (None, "", xbase.AUTO))
+            self._gd_year = StringVar()
+            self._gd_preview = StringVar(value="")
+            self._gd_status = StringVar(value="")
+            ttk.Checkbutton(gd, text="Use system time", variable=self._gd_auto,
+                            command=self._gd_toggle).pack(side=LEFT, padx=(0, 16))
+            ttk.Label(gd, text="Season start year:").pack(side=LEFT)
+            self._gd_entry = ttk.Entry(gd, textvariable=self._gd_year, width=8)
+            self._gd_entry.pack(side=LEFT, padx=(4, 10))
+            ttk.Label(gd, textvariable=self._gd_preview, foreground="#888888",
+                      font=("Segoe UI", 8)).pack(side=LEFT, padx=(0, 14))
+            ttk.Button(gd, text="Apply", style="Accent.TButton",
+                       command=self._gd_apply).pack(side=LEFT, padx=4)
+            ttk.Button(gd, text="Revert to stock", command=self._gd_revert).pack(side=LEFT, padx=4)
+            ttk.Label(outer, textvariable=self._gd_status, foreground="#888888",
+                      font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3,
+                                                 sticky=W, pady=(6, 0))
+            self._gd_year.trace_add("write", lambda *_a: self._gd_update_preview())
+            self._gd_refresh()
+
+        # ── Share & Merge (authoring only) ───────────────────────────────────
+        if dev:
+            heading("Share & Merge (collaboration)")
+            blurb("Export your work to share, or import someone else's and merge it into yours. "
                   "Conflicts (same item changed both ends) are previewed so you choose which to keep.\n"
-                  "• Audio Names = just naming/category/sample-rate (small, git-friendly JSON).\n"
+                  "• Audio Names = just the naming, categories and sample rates (a small text file).\n"
                   "• Mod Pack = everything: audio names + replacement WAVs + replacement textures "
                   "+ roster edits (team colours / arena names / team names / goalie masks — the "
                   "mask textures ride along automatically) + your Scoreclock "
@@ -5999,18 +6562,237 @@ class App(tk.Tk):
                   "into Modified (review, then Patch); roster edits apply straight onto your "
                   "Roster.ROS so you can share them without shipping your players/ratings; the "
                   "scoreclock replays onto the recipient's game files and lands as a preset too.")
-        ).grid(row=18, column=0, columnspan=3, sticky=W, pady=(2, 8))
-        share = ttk.Frame(outer); share.grid(row=19, column=0, columnspan=3, sticky=W)
-        ttk.Button(share, text="Export Audio Names…", command=self._export_names).pack(side=LEFT, padx=(0, 4))
-        ttk.Button(share, text="Import Audio Names…", command=self._import_names).pack(side=LEFT, padx=4)
-        ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
-        ttk.Button(share, text="Export Mod Pack…", style="Accent.TButton",
-                   command=self._export_modpack).pack(side=LEFT, padx=4)
-        ttk.Button(share, text="Import Mod Pack…", style="Accent.TButton",
-                   command=self._import_modpack).pack(side=LEFT, padx=4)
-        ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
-        ttk.Button(share, text="Revert Mod Pack…",
-                   command=self._revert_modpack).pack(side=LEFT, padx=4)
+            share = ttk.Frame(outer); share.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+            ttk.Button(share, text="Export Audio Names…", command=self._export_names).pack(side=LEFT, padx=(0, 4))
+            ttk.Button(share, text="Import Audio Names…", command=self._import_names).pack(side=LEFT, padx=4)
+            ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
+            ttk.Button(share, text="Export Mod Pack…", style="Accent.TButton",
+                       command=self._export_modpack).pack(side=LEFT, padx=4)
+            ttk.Button(share, text="Import Mod Pack…", style="Accent.TButton",
+                       command=self._import_modpack).pack(side=LEFT, padx=4)
+            ttk.Separator(share, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=10)
+            ttk.Button(share, text="Revert Mod Pack…",
+                       command=self._revert_modpack).pack(side=LEFT, padx=4)
+
+        # ── ReShade (host-side lighting / post-process) ──────────────────────
+        heading("Visual Enhancement (ReShade)")
+        blurb("Adds bloom, a filmic tonemap and sharpening on top of the game's 2009 "
+              "renderer. Press HOME in-game to open the overlay and tune it live; your "
+              "changes save straight back to the preset.\n"
+              "Requires Xenia's d3d12 backend — the launcher switches it for you and "
+              "re-asserts it before every launch, because Xenia rewrites its config on exit.\n"
+              "PC only: this runs on the host after the frame is drawn, so unlike the .xex "
+              "edits elsewhere in this launcher it does NOT carry to a console.")
+        rs = ttk.Frame(outer); rs.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+        self._rs_status = StringVar(value="")
+        # A checkbox, not Enable/Disable buttons: this is a state the user flips back
+        # and forth, and flipping it off keeps every file in place (see reshade.disable).
+        self._rs_on = BooleanVar(value=bool(self.cfg.get("reshade_enabled")))
+        ttk.Checkbutton(rs, text="Use ReShade", variable=self._rs_on,
+                        command=self._rs_toggle).pack(side=LEFT, padx=(0, 12))
+        ttk.Button(rs, text="Open Xenia folder", command=self._rs_open_folder).pack(side=LEFT, padx=4)
+        ttk.Button(rs, text="Remove files…", command=self._rs_remove).pack(side=LEFT, padx=4)
+        ttk.Label(outer, textvariable=self._rs_status, foreground="#888888",
+                  font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
+        self._rs_refresh()
+
+        # ── Developer mode ───────────────────────────────────────────────────
+        heading("Developer Mode")
+        blurb("Unlocks the full authoring interface — roster, textures, audio, speech, models, "
+              "jerseys, animations and the rest. Everything above stays exactly where it is.\n"
+              "The setting is remembered, and this checkbox is in both interfaces, so you can "
+              "come back out the same way you went in.")
+        self._v_devmode = BooleanVar(value=self._dev)
+        dv = ttk.Frame(outer); dv.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+        ttk.Checkbutton(dv, text="Enable Developer Mode", variable=self._v_devmode,
+                        command=lambda: self._switch_mode(self._v_devmode.get())).pack(side=LEFT)
+
+    # ── Switching between the two shells ──────────────────────────────────────
+
+    def _busy_dialog(self, title: str, note: str):
+        """A grabbed toplevel with a running indeterminate bar, for work that blocks the UI
+        thread and can't be moved off it (widget construction, mostly). Returns (toplevel, bar);
+        the caller stops the bar and destroys the toplevel in a finally.
+
+        Callers must cancel any pending after() BEFORE calling this — ttk animates the bar on an
+        after() timer of its own, so a later sweep would freeze the very thing showing progress.
+        """
+        busy = Toplevel(self)
+        busy.title("Please wait")
+        busy.transient(self); busy.resizable(False, False)
+        try:
+            busy.grab_set()
+        except Exception:
+            pass
+        bf = ttk.Frame(busy, padding=22); bf.pack(fill=BOTH, expand=True)
+        ttk.Label(bf, text=title, font=("Segoe UI", 11, "bold")).pack(anchor=W)
+        ttk.Label(bf, text=note, foreground=self._COL["muted"],
+                  font=("Segoe UI", 8)).pack(anchor=W, pady=(4, 12))
+        bar = ttk.Progressbar(bf, mode="indeterminate", length=280)
+        bar.pack(fill=X); bar.start(12)
+        busy.update_idletasks()
+        try:                                              # centre over the main window
+            x = self.winfo_rootx() + (self.winfo_width() - busy.winfo_width()) // 2
+            y = self.winfo_rooty() + (self.winfo_height() - busy.winfo_height()) // 3
+            busy.geometry(f"+{max(0, x)}+{max(0, y)}")
+        except Exception:
+            pass
+        busy.update()
+        return busy, bar
+
+    def _switch_mode(self, dev: bool):
+        """Tear the current front end down and draw the other one, in place.
+
+        Rebuilding rather than restarting keeps the log, the loaded catalogs and any running
+        operation alive across the switch. The cost is that every widget reference the App is
+        holding becomes a handle on a destroyed widget, so they are purged wholesale (see
+        _purge_ui_attrs) instead of one by one — enumerating them would go stale the first time
+        anyone adds a tab.
+        """
+        dev = bool(dev)
+        if dev == self._dev:
+            return
+        if self._op_thread and self._op_thread.is_alive():
+            messagebox.showwarning(
+                "Busy", "An operation is still running.\n\nWait for it to finish before "
+                        "switching modes.")
+            if self.__dict__.get("_v_devmode") is not None:
+                self._v_devmode.set(self._dev)
+            return
+        self.cfg["dev_mode"] = dev
+        save_config(self.cfg)
+
+        # Cancel every pending after() before the dialog appears. Tabs schedule deferred loads against
+        # their own widgets (the Arena tab refills its tree on a timer), and one that fires after
+        # the teardown lands on a destroyed treeview — "invalid command name .!treeview". This has
+        # to happen before the busy bar starts, because ttk animates that bar on an after() timer
+        # of its own and the sweep would freeze the very thing meant to show progress. The log pump
+        # goes with them and is re-armed once the rebuild is done.
+        pending = self.tk.call("after", "info") or ()
+        if isinstance(pending, str):          # some Tk builds hand back one flat string
+            pending = pending.split()
+        for aid in pending:
+            try:
+                self.after_cancel(aid)
+            except Exception:
+                pass
+
+        busy, bar = self._busy_dialog(
+            "Switching to Developer Mode…" if dev else "Switching to Simple Mode…",
+            "Rebuilding the interface — this takes a moment.")
+
+        try:
+            self._dev = dev
+            for w in self.winfo_children():
+                if w is not busy:
+                    w.destroy()
+            self._purge_ui_attrs()
+            self._build_shell()
+            self.update_idletasks()
+        finally:
+            self.after(100, self._poll_log)      # the log pump was cancelled with the rest
+            try:
+                bar.stop()
+            except Exception:
+                pass
+            busy.destroy()
+        self._log(f"Switched to {'Developer' if dev else 'Simple'} Mode.")
+
+    #: Instance attributes the rebuild must NOT drop — they are either engine state or the vars
+    #: the new shell is about to bind to. Everything else that holds a widget or a Tk variable is
+    #: a handle on something the teardown just destroyed.
+    _MODE_KEEP = frozenset({
+        "_v_root", "_v_roster", "_v_status", "_v_iff_lossless",
+        # tkinter.Tk's own bookkeeping — deleting any of these breaks the root window itself
+        "tk", "master", "children", "_w", "_tclCommands", "_last_child_ids", "_windowingsystem",
+    })
+
+    def _purge_ui_attrs(self):
+        """Drop every reference to a widget/Tk-variable that the teardown just invalidated.
+
+        By type, not by name: the alternative is a hand-maintained list that silently rots the
+        first time a tab grows a new widget attribute, and a stale handle does not fail loudly —
+        it fails as a TclError deep inside an unrelated operation weeks later.
+        """
+        keep = self._MODE_KEEP
+        for name, val in list(self.__dict__.items()):
+            if name in keep or name.startswith("__"):
+                continue
+            if isinstance(val, (tk.Misc, tk.Variable, tk.Image)):
+                del self.__dict__[name]
+        # Containers of widgets: same problem, one level down.
+        self._audio_panes = {}
+        self._btns_apply_changes = []
+        self._built_tabs = set()
+        self._tab_builders = {}
+        self._tab_pages = {}
+        self._loading_dlg = None
+        self._ld_bar = self._ld_pct = self._ld_note = None
+        self.__dict__.pop("_log_box", None)      # _log buffers again until the new one exists
+
+    # ── ReShade ───────────────────────────────────────────────────────────────
+
+    def _rs_xenia(self):
+        return self.cfg.get("xenia_path", "")
+
+    def _rs_refresh(self):
+        """Re-read the Xenia folder and make the checkbox match reality.
+
+        The folder is the source of truth, not the config: the user can delete the
+        DLL by hand, or point the launcher at a different Xenia install.
+        """
+        try:
+            st = reshade.status(self._rs_xenia())
+        except Exception as e:
+            self._rs_status.set(f"ReShade: {e}"); return
+        self._rs_status.set(st["detail"])
+        self._rs_on.set(bool(st.get("enabled")))
+
+    def _rs_toggle(self):
+        want = self._rs_on.get()
+        try:
+            ok, msg = (reshade.enable if want else reshade.disable)(self._rs_xenia())
+        except Exception as e:
+            ok, msg = False, str(e)
+        if ok:
+            self.cfg["reshade_enabled"] = want
+            save_config(self.cfg)
+            self._log("ReShade " + ("enabled" if want else "disabled"))
+            # Only the first-run install has anything worth interrupting for; a plain
+            # on/off flip is self-evident from the status line.
+            if want:
+                messagebox.showinfo("ReShade", msg)
+        else:
+            messagebox.showerror("ReShade", msg)
+        self._rs_refresh()   # last, so the checkbox reflects what actually happened
+
+    def _rs_remove(self):
+        if not messagebox.askyesno(
+                "Remove ReShade",
+                "Delete the ReShade files from the Xenia folder and put the GPU backend "
+                "back the way it was?\n\nTo simply turn the effects off, untick "
+                "\"Use ReShade\" instead — that keeps everything in place.\n\n"
+                "Your preset is kept either way."):
+            return
+        try:
+            ok, msg = reshade.remove(self._rs_xenia())
+        except Exception as e:
+            ok, msg = False, str(e)
+        if ok:
+            self.cfg["reshade_enabled"] = False
+            save_config(self.cfg)
+            self._log("ReShade files removed")
+            messagebox.showinfo("ReShade", msg)
+        else:
+            messagebox.showerror("ReShade", msg)
+        self._rs_refresh()
+
+    def _rs_open_folder(self):
+        d = reshade.xenia_dir(self._rs_xenia())
+        if d is None:
+            messagebox.showerror("ReShade", "Set the Xenia executable path in Settings first.")
+            return
+        os.startfile(str(d))
 
     # ── Default matchup (boot teams) ──────────────────────────────────────────
 
@@ -6051,6 +6833,11 @@ class App(tk.Tk):
             dmatch.write(xex, ids[0], ids[1], log=self._log)
         except Exception as e:
             messagebox.showerror("Default Matchup", str(e)); return
+        # Mirror into the config so the startup baseline sync can put this back if the XEX is ever
+        # replaced (fresh copy, mod pack, restored backup). Written together with the XEX, so a
+        # user editing it here is never a "mismatch" — see xex_baseline.
+        self.cfg[xbase.CFG_MATCHUP] = [int(ids[0]), int(ids[1])]
+        save_config(self.cfg)
         self._log(f"Default matchup → {what}")
         self._dm_refresh()
         messagebox.showinfo("Default Matchup",
@@ -6065,6 +6852,92 @@ class App(tk.Tk):
     def _dm_revert(self):
         self._dm_write((dmatch.STOCK_HOME, dmatch.STOCK_AWAY),
                        "stock (Detroit v Pittsburgh)")
+
+    # ── Game calendar (three `li r3,<year>` in the XEX — see launcher/game_date.py) ────
+
+    def _gd_toggle(self):
+        """Ticking 'Use system time' greys the box and snaps it back to the real-world season, so
+        the field always shows what would actually be written rather than a stale hand-typed year."""
+        auto = self._gd_auto.get()
+        self._gd_entry.configure(state=("disabled" if auto else "normal"))
+        if auto:
+            self._gd_year.set(str(xbase.current_season_start_year()))
+        self._gd_update_preview()
+
+    def _gd_update_preview(self):
+        y = self._gd_typed_year()
+        self._gd_preview.set(f"= {y}-{(y + 1) % 100:02d}  (1 Oct {y} – 13 Apr {y + 1})"
+                             if y else "enter a year, 2000-2126")
+
+    def _gd_typed_year(self):
+        s = self._gd_year.get().strip()
+        return int(s) if s.isdigit() and 2000 <= int(s) <= 2126 else None
+
+    def _gd_refresh(self):
+        """Show what the XEX holds and what the config wants — they can differ until Apply."""
+        auto = self._gd_auto.get()
+        self._gd_entry.configure(state=("disabled" if auto else "normal"))
+        self._gd_year.set(str(xbase.wanted_season_year(self.cfg)))
+        self._gd_update_preview()
+        xex = self._sb_xex()
+        if not xex:
+            self._gd_status.set("No game .xex found — set the Game path above.")
+            return
+        try:
+            cur = gdate.read(xex)
+        except Exception as e:
+            self._gd_status.set(str(e))
+            return
+        y, m, d = cur["current"]
+        season = gdate.season_year(xex)
+        self._gd_status.set(
+            f"{xex.name}: today is {y}-{m:02d}-{d:02d}"
+            + (f", season {season}-{(season + 1) % 100:02d}" if season else " (hand-edited dates)")
+            + ("  (stock — ages will be wrong)" if cur == gdate.STOCK else ""))
+
+    def _gd_write(self, year, auto: bool):
+        """Write the calendar and record the choice. Both together, so the startup baseline sync
+        sees agreement and a replaced default.xex gets this back — same contract as the matchup."""
+        xex = self._sb_xex()
+        if not xex:
+            messagebox.showerror("Game Calendar",
+                                 "No game .xex found — set the Game path in Settings."); return
+        try:
+            gdate.set_season(xex, year, log=self._log)
+        except Exception as e:
+            messagebox.showerror("Game Calendar", str(e)); return
+        self.cfg[xbase.CFG_SEASON] = xbase.AUTO if auto else int(year)
+        save_config(self.cfg)
+        self._log(f"Game calendar → {year}-{(year + 1) % 100:02d} season"
+                  + (" (tracking system time)" if auto else " (pinned)"))
+        self._gd_refresh()
+        messagebox.showinfo("Game Calendar",
+                            f"Game calendar set to the {year}-{(year + 1) % 100:02d} season."
+                            + ("\n\nThis will follow the system clock, rolling over each 1 July."
+                               if auto else "\n\nPinned — it will stay here until you change it.")
+                            + "\n\nRestart the game to see it.")
+
+    def _gd_apply(self):
+        auto = self._gd_auto.get()
+        year = xbase.current_season_start_year() if auto else self._gd_typed_year()
+        if year is None:
+            messagebox.showerror("Game Calendar",
+                                 "Enter a season start year between 2000 and 2126, or tick "
+                                 "“Use system time”."); return
+        self._gd_write(year, auto)
+
+    def _gd_revert(self):
+        """Back to the shipped 2009-10 calendar. Pinned, not auto — otherwise the next launch's
+        baseline sync would helpfully undo the revert."""
+        if not messagebox.askyesno(
+                "Game Calendar",
+                "Put the shipped 2009-10 calendar back?\n\n"
+                "Every player's age will again be worked out from 1 October 2009, so a current "
+                "roster will show players years too young. This pins the season at 2009 so it "
+                "stays reverted."):
+            return
+        self._gd_auto.set(False)
+        self._gd_write(gdate.STOCK["current"][0], auto=False)
 
     # ── Share & Merge (mod packs / audio-name files) ──────────────────────────
 
@@ -6449,7 +7322,7 @@ class App(tk.Tk):
         if not items:
             messagebox.showinfo("Export Mod Pack",
                 "No modified files to export.\n\nEdit some textures/audio (or set a Roster.ROS on the "
-                "Teams tab for roster edits) first, then try again."); return
+                "Roster Editor tab for roster edits) first, then try again."); return
         sel = self._pick_items_dialog(
             "Export Mod Pack", "Choose the items to include (all checked by default):", items)
         if sel is None:
@@ -6542,7 +7415,7 @@ class App(tk.Tk):
         if inv["audio_keys"]:
             lines.append(f"• {len(inv['audio_keys'])} audio stream(s) restored to original")
         if inv["scoreclock"]:
-            lines.append("• Scoreclock: layout back to stock, SOG + screen-anchor XEX patches undone")
+            lines.append("• Scoreclock: layout, shots-on-goal and screen placement back to stock")
         if inv["portraits"]:
             lines.append("• Portraits: ALL 1478 faces back to stock (your own portrait work goes too)")
         if inv.get("heads"):
@@ -6704,6 +7577,7 @@ class App(tk.Tk):
         cand = []
         if tex_folders:
             fset = set(tex_folders)
+            self._ensure_iff_catalog()   # Textures tab may never have been opened
             for iff in sorted({r["iff"] for r in self._iff_catalog}):
                 try:
                     if archtex.asset_iff(iff) in fset or archtex._legacy_asset_iff(iff) in fset:
@@ -6820,7 +7694,7 @@ class App(tk.Tk):
             f"Imported {len(new)} new, kept {len(same)} identical, resolved {len(confl)} "
             f"conflict(s).\n\nNames: {counts['meta']}   Audio: {counts['audio']}   "
             f"Textures: {counts['tex']}\n\nReplacements are staged in your Extracted folder — "
-            f"review, then Apply to IFF (or Apply All Mods).")
+            f"review, then Apply to Game (or Apply All Mods).")
 
     def _resolve_conflicts_dialog(self, conflicts, zip_path):
         """Modal conflict resolver. Returns {('section|key'): 'mine'|'theirs'} or None if
@@ -6949,19 +7823,39 @@ class App(tk.Tk):
 
     # ── Root / data reload ────────────────────────────────────────────────────
 
-    def _get_root(self) -> Path | None:
+    def _get_root(self, quiet: bool = False) -> Path | None:
+        """quiet=True for loads the user did not ask for -- a tab building itself on first click.
+        Before lazy tabs those loads all ran once at startup; now every un-configured tab click
+        would raise its own modal, which is noise on top of the welcome message that already sent
+        the user to Settings."""
         r = self._v_root.get().strip() or self.cfg.get("root_path", "")
         if not r:
-            messagebox.showwarning("No Game Folder",
-                "Set the NHL 2k10 game files folder in Settings first.")
+            if not quiet:
+                messagebox.showwarning("No Game Folder",
+                    "Set the NHL 2k10 game files folder in Settings first.")
             return None
         p = Path(r)
         if not p.is_dir():
-            messagebox.showwarning("Invalid Path", f"Path does not exist:\n{p}")
+            if not quiet:
+                messagebox.showwarning("Invalid Path", f"Path does not exist:\n{p}")
             return None
         ex = p / "NHL2k10_Extracted_Files"
         ex.mkdir(parents=True, exist_ok=True)
         return ex
+
+    def _register_expansion_clubs(self) -> None:
+        """Teach the Team filter about any club this roster has beyond the shipped thirty.
+
+        Silent when there is no roster yet, which is the normal first-run state -- the filter then
+        offers the thirty, exactly as it always did. Logged rather than raised for the same reason
+        the rest of the startup path is: a launcher that will not open because a roster is odd is
+        worse than one whose Team list is short."""
+        try:
+            ros = (self.cfg.get("roster_path", "") or self._discover_roster()).strip()
+            if ros and Path(ros).is_file():
+                team_tag.register_from_roster(ros, log=self._log)
+        except Exception as e:
+            self._log(f"[team] expansion-club scan skipped: {e}")
 
     def _current_roster_path(self) -> str:
         """The Roster.ROS a mod pack should read/write, or "" if none is available.
@@ -7017,6 +7911,12 @@ class App(tk.Tk):
             archtex.set_game_dir(r)
             archtex.LIVE_CATALOG = Path(r) / "live_capture" / "live_offsets.json"
             archtex.reload_live_catalog()
+            # A wave bank that has been GROWN cannot stay where the disc put it, so it gets
+            # relocated — on this install lines_ts.bin, teams.bin, palines.bin and
+            # loadingaudio_teams.bin have all moved, two of them into a fifth container. Ask the
+            # live TOC where they are now, or every stream in them reads as bank-less: no Bin
+            # column, no line table, and the default 48 kHz for banks that are 44.1.
+            wbanks.set_live_layout(r, log=self._log)
             try:
                 from launcher import live_capture
                 live_capture.set_out_root(r)          # captures land beside the game files
@@ -7024,9 +7924,17 @@ class App(tk.Tk):
                 pass
 
     def _reload_all(self):
+        """Re-read everything the CURRENTLY LIVE UI is showing.
+
+        Deliberately not "load everything": tabs build lazily now, so a catalog nobody is looking
+        at is one nobody has paid for yet, and reloading it here would hand back the startup cost
+        this change exists to remove. Whoever needs the data calls _ensure_* for it.
+        """
         self._apply_game_paths()
-        self._reload_audio()
-        self._iff_load_catalog()
+        if self._audio_panes:
+            self._reload_audio()
+        if self._iff_catalog or hasattr(self, "_iff_team_cb"):
+            self._iff_load_catalog()
 
     def _get_tools_quiet(self):
         """(xma2encode, ffmpeg) if both are configured and exist, else None — no error dialog."""
@@ -7069,6 +7977,7 @@ class App(tk.Tk):
                         pass
         except Exception as e:
             self._log(f"[apply-all] edit scan fell back to full scan ({e})"); edited_folders = None
+        self._ensure_iff_catalog()       # Textures tab may never have been opened
         for iff in sorted({r["iff"] for r in self._iff_catalog}):
             if edited_folders is not None and not (
                     archtex.asset_iff(iff) in edited_folders
@@ -7093,7 +8002,7 @@ class App(tk.Tk):
         n_tex = sum(len(e) for _, e in tex_jobs) + len(prim_jobs)
         if not tex_jobs and not prim_jobs and not tools:
             messagebox.showinfo("Apply All Mods",
-                "Nothing to apply.\n\nEdit some textures in the IFF Textures tab and/or add "
+                "Nothing to apply.\n\nEdit some textures in the Textures tab and/or add "
                 "replacement audio, then try again."); return
         scope = self._apply_scope_dialog(n_tex, len(tex_jobs) + len(prim_jobs),
                                          tools is not None, game_dir)
@@ -7202,11 +8111,11 @@ class App(tk.Tk):
         if not xenia_root_path or not Path(xenia_root_path).exists():
             messagebox.showerror("Xenia not configured",
                 "Set the Xenia executable path in Settings first.")
-            self._nb.select(self._tab_settings); return
+            self._open_settings(); return
         if not game_path or not Path(game_path).exists():
             messagebox.showerror("Game not configured",
                 "Set the game .xex / ISO / folder path in Settings first.")
-            self._nb.select(self._tab_settings); return
+            self._open_settings(); return
 
         #2) Run the resolution check dialog
         # (self.settings stores launcher configs, where 'never_check_xenia_res' will be saved)
@@ -7218,6 +8127,19 @@ class App(tk.Tk):
             messagebox.showerror("Xenia not configured",
                 "Set the Xenia executable path in Settings first.")
             return
+
+        #2b) If ReShade is switched ON, re-assert the d3d12 backend. Xenia rewrites its
+        # config on exit, so a value written at install time does not survive — this
+        # is the only moment it can be relied on. Silent when already correct.
+        # Gated on is_enabled, not is_installed: a user who turned ReShade off should
+        # not have their GPU backend forced on their behalf.
+        try:
+            if reshade.is_enabled(reshade.xenia_dir(xenia_root_path)):
+                changed, rs_msg = reshade.ensure_backend(reshade.xenia_dir(xenia_root_path))
+                if changed:
+                    self._log(f"ReShade: {rs_msg}")
+        except Exception as e:
+            self._log(f"ReShade backend check failed (launching anyway): {e}")
 
         #3) Save launcher settings if "Never" was clicked
         if hasattr(self, "save_settings"):
@@ -7335,6 +8257,11 @@ class App(tk.Tk):
         slow load. The file/JSON work now runs on a worker; only the widget updates come back to
         the main thread via after(), because Tkinter is not thread-safe.
         """
+        # Nothing on screen shows audio and nothing is cached => don't pay for the catalog. The
+        # Audio/Speech tabs load it themselves the first time they are opened (_ensure_audio_rows),
+        # which is also the only way it gets loaded in Simple mode.
+        if not self._audio_panes and not self.audio_rows:
+            return
         root = self._get_root()
         if not root: return
         if self._audio_loading:          # Reload All double-click, or a reload during startup
@@ -8009,8 +8936,8 @@ class App(tk.Tk):
         v_workers = StringVar(value="6")
         ttk.Combobox(wf, textvariable=v_workers, state="readonly", width=5,
                      values=["1", "2", "4", "6", "8", "12"]).pack(side=LEFT, padx=(6, 0))
-        ttk.Label(f, text="Decoding is one xma2encode spawn per stream — the bank list and the "
-                          "decoder count are what shorten it, not the archive size.",
+        ttk.Label(f, text="Every sound is decoded one at a time, so what shortens the job is "
+                          "picking fewer banks or allowing more decoders — not a smaller archive.",
                   foreground="#888888", wraplength=370, justify=LEFT).pack(pady=(6, 0), anchor=W)
 
         # The gameplay SFX are a second, separate audio system: authored sounds inside 0A/0B
@@ -8208,9 +9135,14 @@ class App(tk.Tk):
             while True:
                 msg = self._log_q.get_nowait()
                 if msg is None:
-                    self._progress.stop()
-                    try: self._progress.config(mode="indeterminate")
-                    except Exception: pass
+                    # __dict__, not attribute access: a mode switch destroys and re-creates the
+                    # bar, and this poll can land in the gap while the rebuild pumps events.
+                    bar = self.__dict__.get("_progress")
+                    if bar is not None:
+                        try:
+                            bar.stop(); bar.config(mode="indeterminate")
+                        except Exception:
+                            pass
                     if self._loading_dlg:
                         try: self._loading_dlg.destroy()
                         except Exception: pass
@@ -8311,7 +9243,7 @@ class App(tk.Tk):
         self._log_q.put(f"__PROGRESS__{frac:.4f}|{note}")
 
     def _emit_progressf(self, frac, note=""):
-        """Thread-safe fractional progress (0..1) for stage-based ops (e.g. a single Apply to IFF)."""
+        """Thread-safe fractional progress (0..1) for stage-based ops (e.g. a single Apply to Game)."""
         self._log_q.put(f"__PROGRESS__{max(0.0, min(1.0, frac)):.4f}|{note}")
 
     # ── Log helpers ───────────────────────────────────────────────────────────
@@ -8340,10 +9272,10 @@ class App(tk.Tk):
         ttk.Separator(bar, orient=VERTICAL).pack(side=LEFT, fill=Y, padx=6)
         ttk.Button(bar, text="Extract Selected", command=self._iff_extract_asset).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Extract All Listed", command=self._iff_extract_shown).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Apply to IFF", style="Accent.TButton",
+        ttk.Button(bar, text="Apply to Game", style="Accent.TButton",
                    command=self._iff_apply_selected).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Extract Original Files", command=self._iff_revert_extract).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Revert IFF to Original", command=self._iff_revert).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Revert to Original", command=self._iff_revert).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Open Extracted Files", command=lambda: self._iff_open("Extracted")).pack(side=LEFT, padx=2)
         # The Jersey Normal Stitcher used to have a button here. It moved to the Jersey Editor's
         # Normals page, where the kit is already chosen and the model preview lights the result.
@@ -8351,18 +9283,18 @@ class App(tk.Tk):
         # grow, a larger-than-native source auto-upscales the slot (hi-res), and the archives
         # auto-compact after any relocating apply. Capture-from-Game logic is retained
         # (self._iff_capture_from_game / self._iff_compact) but their buttons are hidden — every
-        # repacked pack is already catalogued.
-        self._v_iff_lossless = BooleanVar(value=True)
+        # repacked pack is already catalogued.  (_v_iff_lossless now lives in __init__ — the apply
+        # paths that read it also run for a mod-pack import, with no Textures tab in existence.)
 
         ttk.Label(t, foreground="#ffd479", font=("Segoe UI", 8, "bold"),
-                  text="Workflow:  Extract Selected  →  edit the PNG/DDS in the Extracted folder  →  Apply to IFF. "
+                  text="Workflow:  Extract Selected  →  edit the PNG/DDS in the Extracted folder  →  Apply to Game. "
                        "Ctrl/Shift-click to select several assets and Extract or Apply them all at once. "
                        "Right-click a texture on the right to work on just that one. PNG is easiest — author at any "
                        "size (same aspect) and it's fitted for you.").pack(fill=X, padx=6, pady=(2, 0))
         ttk.Label(t, foreground="#999", font=("Segoe UI", 8),
                   text="Apply re-encodes only the files you changed and is permanent (a one-time backup is kept); "
-                       "quality is automatic (lossless where possible, larger art auto-upscales).  "
-                       "'Extract Original Files' re-pulls a clean copy · 'Revert IFF to Original' undoes an apply.").pack(fill=X, padx=6)
+                       "quality is handled for you.  "
+                       "'Extract Original Files' re-pulls a clean copy · 'Revert to Original' undoes an apply.").pack(fill=X, padx=6)
 
         pane = ttk.PanedWindow(t, orient=HORIZONTAL); pane.pack(fill=BOTH, expand=True, padx=4, pady=(0, 4))
         left = ttk.Frame(pane); pane.add(left, weight=3)
@@ -8386,7 +9318,7 @@ class App(tk.Tk):
         self._iff_canvas = Canvas(right, bg="#1a1a2e", width=300, height=240, highlightthickness=0)
         self._iff_canvas.pack(fill=BOTH, expand=True)
         sub = ttk.Frame(right); sub.pack(fill=X, padx=4)
-        ttk.Label(sub, text="Textures in this asset (multi-texture .iff)",
+        ttk.Label(sub, text="Textures in this asset",
                   foreground="#999", font=("Segoe UI", 8)).pack(anchor=W)
         stv = ttk.Treeview(sub, columns=("n", "size", "fmt"), show="headings",
                            height=6, selectmode="browse")
@@ -8401,9 +9333,13 @@ class App(tk.Tk):
         self._iff_info = ttk.Label(right, text="Select an asset to preview", foreground="#888888",
                                    font=("Consolas", 8), justify=LEFT)
         self._iff_info.pack(fill=X, padx=6, pady=4)
-        self._iff_catalog = []
         self._iff_subtex = []
-        self._iff_load_catalog()
+        # Already loaded => an Apply All or a mod-pack import got here first; just show it rather
+        # than paying for the scan a second time.
+        if self._iff_catalog:
+            self._iff_populate_filters()      # loaded by Apply All / a mod-pack import already
+        else:
+            self._ensure_iff_catalog()        # quiet no-op until a game folder is set
 
     def _iff_discover_extra_teams(self):
         """List EXPANSION teams' assets alongside the 30 shipped ones.
@@ -8479,7 +9415,7 @@ class App(tk.Tk):
         if shared:
             self._log(f"[iff] ⚠ {len(shared)} expansion asset(s) still share bytes with the team "
                       f"they were cloned from — editing them would edit that team too. "
-                      f"Use “Separate expansion assets” on the Teams tab first.")
+                      f"Use “Separate expansion assets” on the Roster Editor tab first.")
 
     def _iff_load_catalog(self):
         try:
@@ -8519,13 +9455,23 @@ class App(tk.Tk):
                           + ("" if _n else " — every discovered asset was filtered out as hidden"))
         except Exception:
             pass
-        teams = ["All"] + sorted(set(r["team"] for r in rows))
-        cats = ["All"] + sorted(set(r["category"] for r in rows))
-        self._iff_team_cb["values"] = teams
-        self._iff_cat_cb["values"] = cats
-        self._iff_apply_filter()
+        self._iff_populate_filters()
         if hasattr(self, "_ga_mask_cb"):          # goalie tab: refresh built-in masks + free counts
             self._goalie_refresh_masklist()
+
+    def _iff_populate_filters(self):
+        """Push the loaded catalog into the Textures tab's filter bars and list.
+
+        Split out of _iff_load_catalog because the catalog is data first and a tab's contents
+        second: Apply All Mods and the mod-pack importer both need it loaded in Simple mode, or in
+        a dev session that has not opened the Textures tab yet, where none of these widgets exist.
+        """
+        if not hasattr(self, "_iff_team_cb"):
+            return
+        rows = self._iff_catalog
+        self._iff_team_cb["values"] = ["All"] + sorted({r["team"] for r in rows})
+        self._iff_cat_cb["values"]  = ["All"] + sorted({r["category"] for r in rows})
+        self._iff_apply_filter()
 
     def _iff_apply_filter(self):
         tv = getattr(self, "_iff_tv", None)
@@ -8703,10 +9649,10 @@ class App(tk.Tk):
         """Main asset list — whole-asset actions."""
         m = Menu(self, tearoff=0)
         m.add_command(label="Extract (all textures)", command=self._iff_extract_asset)
-        m.add_command(label="Apply to IFF", command=self._iff_apply_selected)
+        m.add_command(label="Apply to Game", command=self._iff_apply_selected)
         m.add_separator()
         m.add_command(label="Extract Original Files (re-extract)", command=self._iff_revert_extract)
-        m.add_command(label="Revert IFF to Original", command=self._iff_revert)
+        m.add_command(label="Revert to Original", command=self._iff_revert)
         m.add_command(label="Reveal in Extracted/", command=lambda: self._iff_reveal("Extracted"))
         self._iff_ctx = m
 
@@ -8903,9 +9849,9 @@ class App(tk.Tk):
         if not root or not iff:
             return
         if not messagebox.askyesno("Extract Original Files",
-                f"Re-extract {iff} from the clean game files into Extracted/, discarding your edits "
-                f"to it?\n\n(This only touches the Extracted/ file — it does not change the game "
-                f"archives; use 'Revert IFF to Original' for that.)"):
+                f"Re-extract {iff} from the clean game files, discarding your edits to it?\n\n"
+                f"(This only replaces your working copy — it does not change the game itself. "
+                f"Use 'Revert to Original' for that.)"):
             return
         self._log(f"─── Revert {iff} → clean into Extracted/ ───")
         def work():
@@ -9048,7 +9994,7 @@ class App(tk.Tk):
         Failures are logged, never fatal — the primary asset is already written.
 
         MUST be called from every apply path. It originally hung off the single-texture apply only,
-        so 'Apply to IFF' (the button you actually use for a 6-texture uniform) silently skipped the
+        so 'Apply to Game' (the button you actually use for a 6-texture uniform) silently skipped the
         mirror and the front-end never updated.
         """
         try:
@@ -9099,7 +10045,7 @@ class App(tk.Tk):
         game_dir = self._get_game_root()
         if not iff or not game_dir:
             messagebox.showerror("Revert", "Select an asset and set the game folder first."); return
-        if not messagebox.askyesno("Revert IFF to Original",
+        if not messagebox.askyesno("Revert to Original",
                 f"Revert {iff} in the game archives back to its ORIGINAL (undo your applied "
                 f"changes for this asset)?\n\nYour Extracted/ source files are not touched."):
             return
@@ -9138,7 +10084,7 @@ class App(tk.Tk):
         self._run_in_thread(work, op_label="Compacting…")
 
     def _iff_apply_selected(self):
-        """Route 'Apply to IFF': one asset -> the single-asset apply (handles hires/overlay); many
+        """Route 'Apply to Game': one asset -> the single-asset apply (handles hires/overlay); many
         selected assets -> a batched apply that repacks each in turn with a per-asset progress bar."""
         iffs = self._iff_selected_many()
         if len(iffs) > 1:
@@ -9161,7 +10107,7 @@ class App(tk.Tk):
                             preserve_overlay=True):
         """Apply every edited texture of ONE multi-texture asset from a clean base: preserve the
         scoreclock layout for overlay_static.iff, mirror jersey twins to the front-end copy, and
-        (optionally) compact. Shared by the single 'Apply to IFF' and the multi-select batch so both
+        (optionally) compact. Shared by the single 'Apply to Game' and the multi-select batch so both
         take the IDENTICAL path. `progress` (optional) = fn(frac 0..1, note) for a stage-level bar.
         preserve_overlay=False skips the overlay snapshot/restore — ONLY for callers that rebuild
         the scoreclock layout themselves right after (the modpack import), where the capture+restore
@@ -9241,12 +10187,12 @@ class App(tk.Tk):
         if not njobs:
             messagebox.showinfo("Nothing to apply",
                 f"None of the {len(iffs)} selected assets have extracted/edited files.\n\n"
-                "Use “Extract Selected” first, then edit the DDS/PNG and Apply to IFF."); return
+                "Use “Extract Selected” first, then edit the DDS/PNG and Apply to Game."); return
         msg = f"Apply {n_tex} texture(s) across {njobs} selected asset(s) into the game archives?"
         if skipped:
             msg += f"\n\n({skipped} skipped — unsupported format.)"
         msg += "\n\nA one-time .orig backup is made. Continue?"
-        if not messagebox.askyesno("Apply to IFF (multiple)", msg):
+        if not messagebox.askyesno("Apply to Game (multiple)", msg):
             return
         self._log(f"─── Apply {njobs} selected assets ({n_tex} texture(s)) → game files (PERMANENT) ───")
         total = njobs + 1                                   # +1 = the single compact step at the end
@@ -9286,7 +10232,7 @@ class App(tk.Tk):
                             on_done=lambda: (self._iff_apply_filter(), self._prompt_restart_if_running()))
 
     def _iff_apply_all(self):
-        """Apply to IFF — splice EVERY edited texture of the selected asset into the game in ONE
+        """Apply to Game — splice EVERY edited texture of the selected asset into the game in ONE
         re-encode (one decompress + one re-compress; much faster than applying each individually).
         A single-texture asset falls through to the primary-apply path. (To apply just one texture
         of a multi-texture pack, right-click it in the texture list on the right.)"""
@@ -9305,7 +10251,7 @@ class App(tk.Tk):
         folder = archtex.asset_iff(iff)
         # ALWAYS apply whatever DDS/PNG files are sitting in the Extracted/ folder — the folder is the
         # source of truth. We deliberately do NOT gate on is_edited() (SHA-1 vs an extract-time hash):
-        # that silently skipped files after a folder delete + re-extract, so "Apply to IFF" reported
+        # that silently skipped files after a folder delete + re-extract, so "Apply to Game" reported
         # "no files changed" even though the folder had real edits. Files identical to the archive just
         # re-encode to the same bytes (harmless); genuinely-changed ones get pushed in.
         edits = []; skipped = 0
@@ -9319,12 +10265,12 @@ class App(tk.Tk):
         if not edits:
             messagebox.showinfo("Nothing to apply",
                 f"No extracted texture files found in Extracted/{folder}/.\n\nUse “Extract Selected” "
-                f"first, then edit the DDS/PNG in that folder and Apply to IFF."); return
+                f"first, then edit the DDS/PNG in that folder and Apply to Game."); return
         msg = f"Apply {len(edits)} texture(s) from Extracted/{folder}/ into the game archives in ONE pass?"
         if skipped:
             msg += f"\n\n({skipped} skipped — unsupported format.)"
         msg += "\n\nA one-time .orig backup is made. Continue?"
-        if not messagebox.askyesno("Apply to IFF", msg):
+        if not messagebox.askyesno("Apply to Game", msg):
             return
         self._log(f"─── Apply ALL ({len(edits)}) {iff} → game files (PERMANENT) ───")
         def work():
@@ -9371,8 +10317,11 @@ class App(tk.Tk):
         # No baked-in default: it only ever pointed at one machine. Found under the Xenia folder as
         # content\<profile>\54540853\00000001\Roster.ROS\Roster.ROS — auto-discovered when the Xenia
         # path is configured, else the user browses to it once and it's remembered.
-        default_ros = self.cfg.get("roster_path") or self._discover_roster() or ""
-        self._v_roster = StringVar(value=default_ros)
+        # The var itself is created in __init__, not here: a mod-pack import reads it to decide
+        # which Roster.ROS to patch, and in Simple mode (or before this tab has been opened, now
+        # that tabs build lazily) this builder has never run.
+        if not self._v_roster.get().strip():
+            self._v_roster.set(self.cfg.get("roster_path") or self._discover_roster() or "")
         ttk.Entry(pathbar, textvariable=self._v_roster, width=58).pack(side=LEFT, padx=(4, 2))
         ttk.Button(pathbar, text="Browse…", command=self._teams_browse).pack(side=LEFT, padx=2)
         ttk.Button(pathbar, text="Load",    command=self._teams_load).pack(side=LEFT, padx=2)
@@ -9384,7 +10333,11 @@ class App(tk.Tk):
         sub = ttk.Notebook(outer); sub.pack(fill=BOTH, expand=True)
         self._roster_sub = sub
         t = ttk.Frame(sub); sub.add(t, text="  Teams  ")
-        self._tab_players = ttk.Frame(sub); sub.add(self._tab_players, text="  Players  ")
+        # NOT `_tab_players`: that name belongs to the top-level "Models" tab, and assigning it
+        # here silently stole it. Roster Editor builds first, so by the time Models was opened
+        # char_gui was handed THIS frame and built the model browser into the roster's sub-tab,
+        # leaving Models blank — unless you happened to click Models before Roster Editor.
+        self._tab_rosplayers = ttk.Frame(sub); sub.add(self._tab_rosplayers, text="  Players  ")
         self._players_frame = None            # built on first view, not at launcher startup
         sub.bind("<<NotebookTabChanged>>", self._roster_sub_changed)
 
@@ -9406,6 +10359,8 @@ class App(tk.Tk):
                    command=self._teams_prepare_expansion).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Update AHL affiliates…",
                    command=self._teams_update_affiliates).pack(side=LEFT, padx=2)
+        ttk.Button(bar, text="Verify vs NHL.com…",
+                   command=self._teams_verify_nhl).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Team history / records…",
                    command=self._teams_history).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Uniforms…",
@@ -9415,15 +10370,16 @@ class App(tk.Tk):
                   text="Name is the nickname (\"Devils\"); City/State is where the team plays (Newark, "
                        "New Jersey) — not the same thing.  \"—\" means the save stores nothing for that "
                        "field (Dallas has no city — the game composes the rest itself).\n"
-                       "Double-click City / State / Name / Arena to rename — a name must fit its "
-                       "existing slot; longer is rejected (growing needs the string pool repointed).  "
-                       "Double-click Primary / Secondary for a colour picker — those save straight to the "
-                       "Roster.ROS (a .colorbak is made) and show after a game restart.\n"
+                       "Double-click City / State / Name / Arena to rename — a new name has to be no "
+                       "longer than the one it replaces.  Double-click Primary / Secondary for a colour "
+                       "picker; colours save straight to your Roster.ROS (a backup is made) and show "
+                       "after a game restart.\n"
                        "Dashers is the arena's board colour (most of the league is red; Edmonton blue, "
-                       "San Jose yellow, Boston grey) and Seats its capacity — both live on the ARENA "
-                       "record, save immediately (a .arenabak is made), and are shared by every team that "
-                       "plays in that building.  \"Uniforms…\" opens the jersey list for the selected team: "
-                       "add one, rename it, repoint its .iff keys and edit its palette.").pack(fill=X, padx=6)
+                       "San Jose yellow, Boston grey) and Seats its capacity — both belong to the "
+                       "building, so they are shared by every team that plays there, and both save "
+                       "immediately (a backup is made).  \"Uniforms…\" opens the jersey list for the "
+                       "selected team: add one, rename it, point it at different art and edit its "
+                       "colours.").pack(fill=X, padx=6)
 
         tv = ttk.Treeview(t, columns=self._ROSTER_COLS, show="headings", height=20)
         for c, w in (("code", 52), ("city", 118), ("state", 128), ("name", 128),
@@ -9554,6 +10510,145 @@ class App(tk.Tk):
         self._teams_load()
         messagebox.showinfo("AHL affiliates",
                             "Done — affiliations updated. Restart the game to see the change.")
+
+    _VERIFY_COLS = [("kind", "Issue", 96), ("team", "Team", 48), ("row", "Row", 52),
+                    ("player", "Player", 172), ("detail", "Detail", 460)]
+    _TEAMCHK_COLS = [("team", "Team", 52), ("ros", "ROS", 44), ("nhl", "NHL", 44),
+                     ("g", "G", 32), ("bad", "Findings", 62), ("pool", "Pool", 44),
+                     ("missing", "Missing from save", 560)]
+
+    def _teams_verify_nhl(self):
+        """Diff the loaded Roster.ROS against the NHL's own roster feed — launcher/roster_verify.py.
+
+        Read-only: it never writes to the save. The fetch is 32 HTTP calls (12 h disk cache), so it
+        runs on a worker thread and the window fills in when it lands.
+
+        Two caveats worth repeating in the UI, because both look like bugs and are not: ratings are
+        NOT compared (NHL.com publishes none, so an "expected" rating would be invented), and in the
+        offseason the /current feed omits unsigned UFAs and AHL contracts, which makes NOT_IN_NHL and
+        WRONG_TEAM noisy until training camp.
+        """
+        path = self._v_roster.get().strip()
+        if not path or not Path(path).is_file():
+            messagebox.showerror("Verify roster", "Set a valid Roster.ROS path first (Browse…).")
+            return
+        try:
+            from launcher import roster_verify as RV
+        except Exception as e:
+            messagebox.showerror("Verify roster", f"roster_verify module unavailable:\n{e}"); return
+
+        win = Toplevel(self); win.title(f"Verify roster vs NHL.com — {Path(path).name}")
+        win.geometry("1180x680")
+        head = ttk.Frame(win, padding=(8, 6, 8, 2)); head.pack(fill=X)
+        status = ttk.Label(head, text="Fetching rosters from NHL.com…")
+        status.pack(side=LEFT)
+        ttk.Label(win, foreground="#999", font=("Segoe UI", 8), justify=LEFT,
+                  text="Checks team, position, handedness, height, weight and sweater number against "
+                       "api-web.nhle.com (cached 12 h). Nothing is written to the save.\n"
+                       "Ratings are NOT checked — the NHL publishes none, so any \"expected\" rating "
+                       "would be made up; only an all-zero rating block is flagged.\n"
+                       "In the offseason the feed leaves out unsigned UFAs and AHL contracts, so "
+                       "NOT_IN_NHL is informational and WRONG_TEAM includes real summer trades."
+                  ).pack(fill=X, padx=8, pady=(0, 4))
+
+        nb = ttk.Notebook(win); nb.pack(fill=BOTH, expand=True, padx=8, pady=4)
+        f_find = ttk.Frame(nb); nb.add(f_find, text="  Players  ")
+        f_team = ttk.Frame(nb); nb.add(f_team, text="  Teams  ")
+
+        filt = ttk.Frame(f_find, padding=(0, 4)); filt.pack(fill=X)
+        ttk.Label(filt, text="Show:").pack(side=LEFT)
+        v_kind = StringVar(value="all")
+        cb = ttk.Combobox(filt, textvariable=v_kind, width=16, state="readonly",
+                          values=["all"] + RV.ORDER)
+        cb.pack(side=LEFT, padx=4)
+        v_team = StringVar(value="all")
+        ttk.Label(filt, text="Team:").pack(side=LEFT, padx=(10, 0))
+        cbt = ttk.Combobox(filt, textvariable=v_team, width=8, state="readonly", values=["all"])
+        cbt.pack(side=LEFT, padx=4)
+
+        tv = ttk.Treeview(f_find, columns=[c for c, _, _ in self._VERIFY_COLS], show="headings")
+        for c, label, w in self._VERIFY_COLS:
+            tv.heading(c, text=label); tv.column(c, width=w, anchor=W)
+        sb = ttk.Scrollbar(f_find, command=tv.yview); tv.configure(yscrollcommand=sb.set)
+        sb.pack(side=RIGHT, fill=Y); tv.pack(fill=BOTH, expand=True, pady=(2, 0))
+
+        tvt = ttk.Treeview(f_team, columns=[c for c, _, _ in self._TEAMCHK_COLS], show="headings")
+        for c, label, w in self._TEAMCHK_COLS:
+            tvt.heading(c, text=label); tvt.column(c, width=w, anchor=W)
+        sbt = ttk.Scrollbar(f_team, command=tvt.yview); tvt.configure(yscrollcommand=sbt.set)
+        sbt.pack(side=RIGHT, fill=Y); tvt.pack(fill=BOTH, expand=True, pady=(2, 0))
+
+        res = {}
+
+        def repaint(*_a):
+            tv.delete(*tv.get_children())
+            k, t = v_kind.get(), v_team.get()
+            fs = [f for f in res.get("findings", [])
+                  if (k == "all" or f["kind"] == k) and (t == "all" or f["team"] == t)]
+            for i, f in enumerate(sorted(fs, key=lambda x: (RV.ORDER.index(x["kind"]),
+                                                            x["team"], x["player"]))):
+                tv.insert("", END, iid=str(i), values=(f["kind"], f["team"], f["row"],
+                                                       f["player"], f["detail"]))
+            status.config(text=f"{res.get('players_checked', 0)} players on NHL clubs, "
+                               f"{len(res.get('findings', []))} findings — showing {len(fs)}")
+
+        cb.bind("<<ComboboxSelected>>", repaint)
+        cbt.bind("<<ComboboxSelected>>", repaint)
+
+        def save_report():
+            out = filedialog.asksaveasfilename(
+                parent=win, defaultextension=".txt", initialfile="roster_verify_report.txt",
+                filetypes=[("Text report", "*.txt"), ("JSON", "*.json")])
+            if not out:
+                return
+            try:
+                if out.lower().endswith(".json"):
+                    Path(out).write_text(json.dumps(res, indent=1), encoding="utf-8")
+                else:
+                    Path(out).write_text(RV.format_report(res, max_per_kind=10_000),
+                                         encoding="utf-8")
+            except Exception as e:
+                messagebox.showerror("Verify roster", f"Could not write:\n{e}", parent=win); return
+            messagebox.showinfo("Verify roster", f"Saved to\n{out}", parent=win)
+
+        btn = ttk.Frame(win, padding=(8, 2, 8, 8)); btn.pack(fill=X)
+        b_save = ttk.Button(btn, text="Save report…", command=save_report, state=DISABLED)
+        b_save.pack(side=LEFT)
+        b_again = ttk.Button(btn, text="Re-check (ignore cache)", state=DISABLED)
+        b_again.pack(side=LEFT, padx=6)
+        ttk.Button(btn, text="Close", command=win.destroy).pack(side=RIGHT)
+
+        def run(use_cache=True):
+            b_save.config(state=DISABLED); b_again.config(state=DISABLED)
+            status.config(text="Fetching rosters from NHL.com…")
+
+            def work():
+                try:
+                    r = RV.verify(path, use_cache=use_cache, log=self._log)
+                except Exception as e:
+                    self.after(0, lambda: (status.config(text=f"Failed: {e}"),
+                                           messagebox.showerror("Verify roster",
+                                                                f"Check failed:\n{e}", parent=win)))
+                    return
+                self.after(0, lambda: done(r))
+
+            def done(r):
+                res.clear(); res.update(r)
+                cbt.config(values=["all"] + sorted({f["team"] for f in r["findings"]}))
+                tvt.delete(*tvt.get_children())
+                for abbr, t in sorted(r["teams"].items()):
+                    miss = ", ".join(t["missing"][:8]) + (
+                        f" +{len(t['missing']) - 8}" if len(t["missing"]) > 8 else "")
+                    tvt.insert("", END, iid=abbr, values=(abbr, t["ros_count"], t["nhl_count"],
+                                                          t["goalies"], t["findings"],
+                                                          t["pool_rows"], miss))
+                repaint()
+                b_save.config(state=NORMAL); b_again.config(state=NORMAL)
+
+            threading.Thread(target=work, daemon=True).start()
+
+        b_again.config(command=lambda: run(use_cache=False))
+        run()
 
     _HIST_COLS = [("code", "Team", 56), ("founded", "Founded", 62), ("winning", "Win sea.", 62),
                   ("playoffs", "Playoffs", 62), ("division", "Div titles", 68),
@@ -9828,12 +10923,12 @@ class App(tk.Tk):
         try:
             from launcher.player_editor_gui import PlayerEditorFrame
         except Exception as e:
-            ttk.Label(self._tab_players, foreground="#e06060",
+            ttk.Label(self._tab_rosplayers, foreground="#e06060",
                       text=f"Players editor unavailable:\n{e}").pack(padx=12, pady=12)
             self._players_frame = False
             return
         self._players_frame = PlayerEditorFrame(
-            self._tab_players, p if p and Path(p).is_file() else None,
+            self._tab_rosplayers, p if p and Path(p).is_file() else None,
             game_root=self._get_game_root(), on_edit_head=self._player_edit_head)
         self._players_frame.pack(fill=BOTH, expand=True)
 
@@ -9850,8 +10945,8 @@ class App(tk.Tk):
             from launcher.face_editor_gui import HeadEditor
         except Exception as e:
             return messagebox.showerror(
-                "Edit head", f"Head editor unavailable:\n{e}\n\nIt needs mediapipe, opencv and "
-                             f"scipy for the photo fit.")
+                "Edit head", f"Head editor unavailable:\n{e}\n\nRe-run the launcher installer to "
+                             f"add the photo-fitting components.")
         HeadEditor(self, table, row, self._get_game_root(), on_change)
 
     def _teams_edit_cell(self, event):
@@ -9875,8 +10970,7 @@ class App(tk.Tk):
             # pool relocated + repointed — see the module docstring.
             messagebox.showinfo("Teams",
                 f"This roster stores no '{cname}' for {tv.set(row,'code')}, so there's nothing to "
-                "edit. Adding a string the game never had isn't supported (it needs the string pool "
-                "relocated and its reference repointed).")
+                "edit. A field the save never had can't be added.")
             return
         x, y, w, h = tv.bbox(row, col)
         e = Entry(tv); e.place(x=x, y=y, width=w, height=h)
@@ -9950,8 +11044,8 @@ class App(tk.Tk):
         cur = tv.set(row, "capacity")
         v = simpledialog.askinteger("Seating capacity",
                                     f"{tv.set(row, 'code')} — {tv.set(row, 'arena')}\n\n"
-                                    "Seats (0-65535; the field is a u16, and Wrigley Field's 41118 "
-                                    "is the largest the game ships):",
+                                    "Seats (0-65535; the largest the game ships is Wrigley "
+                                    "Field's 41118):",
                                     parent=self, minvalue=0, maxvalue=65535,
                                     initialvalue=int(cur) if str(cur).isdigit() else 18000)
         if v is None:
@@ -10007,7 +11101,7 @@ class App(tk.Tk):
                    command=self._uni_add).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Edit…", command=self._uni_edit).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Remove", command=self._uni_remove).pack(side=LEFT, padx=2)
-        ttk.Button(bar, text="Create missing .iff assets…",
+        ttk.Button(bar, text="Create missing art files…",
                    command=self._uni_make_assets).pack(side=LEFT, padx=2)
         ttk.Button(bar, text="Close", command=win.destroy).pack(side=RIGHT, padx=2)
         self._uni_refresh()
@@ -10121,8 +11215,8 @@ class App(tk.Tk):
         r = ucol.read_row(ros, row)
         if not messagebox.askyesno("Remove Uniform",
                 f"Remove \"{r['label']}\" ({r['slot_name']}, row {row}) from {self._uni_code}?\n\n"
-                "The row goes back to the spare pool. The .iff assets it used are left in the "
-                "archives — nothing is deleted from the game files."):
+                "The jersey slot is freed for re-use. Its artwork stays in the game files — "
+                "nothing is deleted."):
             return
         ucol.release_uniform(ros, row, log=self._log)
         try:
@@ -10138,8 +11232,8 @@ class App(tk.Tk):
         if not root:
             messagebox.showinfo("Add Uniform",
                 "Jersey added to the roster.\n\nSet the game files folder in Settings and use "
-                "\"Create missing .iff assets…\" so the game has art to draw for it — without those "
-                "files the jersey is listed but renders nothing."); return
+                "\"Create missing art files…\" to give it something to wear — until then the "
+                "jersey is listed but renders blank."); return
         try:
             ros, _t, _r = self._uni_rows()
             miss = [n for n in ucol.required_assets(ros, row) if not archtex.resolve(n, root)]
@@ -10174,8 +11268,8 @@ class App(tk.Tk):
         d = ucol.read_row(ros, donor)
         if self._xenia_game_pids() and not messagebox.askyesno(
                 "Uniforms",
-                "NHL 2K10 is running in Xenia. This splices new entries into the archive TOC and "
-                "appends to 1B, which the game has open.\n\nClose it first — continue anyway?"):
+                "NHL 2K10 is running. This writes new files the game currently has open."
+                "\n\nClose it first — continue anyway?"):
             return
         try:
             msg = extra_teams.ensure_uniform_slot(
@@ -10185,20 +11279,18 @@ class App(tk.Tk):
         except Exception as e:
             messagebox.showerror("Uniforms", f"Could not create the assets:\n{e}"); return
         self._log(f"[uniforms] {msg}")
-        messagebox.showinfo("Uniforms", msg + "\n\nRepaint them from the IFF / Uniforms tabs.")
+        messagebox.showinfo("Uniforms", msg + "\n\nRepaint them on the Textures tab.")
         self._uni_refresh()
 
     # ── the per-uniform editor ────────────────────────────────────────────────
 
-    _UNI_GROUPS = (("accent", "Accents", "Three extra ARGB slots, stored apart from the other 57. "
-                                         "The glove zone map continues into them, so they are "
-                                         "named for the cuff — that reading is extrapolated from "
-                                         "the team block, not measured. 48 of the table's rows "
-                                         "leave them at zero — an unset one shows as “unset”."),
-                   ("team", "Team colours", "Shared by every one of this team's jerseys — the same "
-                                            "44 values sit on its Home and Away rows. The gloves "
-                                            "are here, which is why a club wears one pair with "
-                                            "every kit."),
+    _UNI_GROUPS = (("accent", "Accents", "Three extra colours that continue the glove trim, so "
+                                         "they are named for the cuff. Most jerseys leave them "
+                                         "alone — those show as “unset”."),
+                   ("team", "Team colours", "Shared by every one of this team's jerseys, so a "
+                                            "change here shows on the Home and the Away kit "
+                                            "alike. The gloves are here, which is why a club "
+                                            "wears one pair with every kit."),
                    ("uniform", "This jersey", "Only this kit: the helmet shell, then the name, "
                                               "number, sleeve number and helmet number, each as "
                                               "outline / mid / fill. Front and back numbers share "

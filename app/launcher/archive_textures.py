@@ -3187,7 +3187,7 @@ def _grow_many(iff, arc, off, idx, res, size, tex_b, items, game_dir, log, prefe
             struct.pack_into(">I", dram, rec + 0xA0, (f3v & ~0xFFF) | _FMT_F3_LOW[nf])
             struct.pack_into(">I", dram, rec + 0xA8, (mip0 & ~0xFFF) | 0xA00)
     if n8:
-        log(f"  {n8} texture(s) stored UNCOMPRESSED (8888 colour / 8_8 normal — no block artifacts)")
+        log(f"  {n8} texture(s) stored at full quality — no compression artifacts")
     dram_c = EE.encode_payload(bytes(dram), wparam=dram_b["wp"], codec=dram_b["codec"])
     tex_c = EE.encode_payload(bytes(tex), wparam=tex_b["wp"], codec=tex_b["codec"])
     for blob_c, dec in ((dram_c, bytes(dram)), (tex_c, bytes(tex))):
@@ -3373,7 +3373,7 @@ def _repack_scatter(iff, arc, off, idx, res, size, tex_b, items, game_dir, new_f
     _backup_once(game_dir / arc, log)
     e0 = items[0][0]
     log(f"  {iff}: SCATTER REPACK — {nconv} texture(s) -> {new_fmt}, blob {len(tex)}->{len(new_tex)} "
-        f"(group offsets recomputed; VERIFY the arena presentation renders correctly in-game)")
+        f"(check the arena presentation still renders correctly in-game)")
     return _relocate(iff, bytes(new_res), idx, game_dir, e0["w"], e0["h"], new_fmt, log)
 
 
@@ -3562,17 +3562,17 @@ def replace_many(iff, edits, game_dir, log=print, prefer_lossless=True) -> str:
             if reloc:
                 return (f"RELOCATED (full quality): {iff} — {len(items)} texture(s) applied, VRAM blob "
                         f"{len(new_blob)} bytes (was {old_tot}); blob0/layout preserved. {reloc}")
-        log(f"  {len(items)} edit(s) {len(new_blob) - old_tot} bytes over the in-place slot — "
-            f"can't relocate this pack; auto-fitting (posterize)…")
+        log(f"  {len(items)} edit(s) are {len(new_blob) - old_tot} bytes too big for the space this "
+            f"texture has, and it can't be moved — reducing colours to make them fit…")
         for lv in (64, 32, 16):
             new_blob = _encode(lv); used = lv
             if len(new_blob) <= old_tot:
                 break
     if len(new_blob) > old_tot:
         raise ValueError(
-            f"{iff}: the {len(items)} edits don't fit in place (+{len(new_blob) - old_tot} bytes) "
-            f"even after posterizing, and this pack can't be relocated. Apply the heaviest "
-            f"texture(s) individually, or simplify them. (In-place only here.)")
+            f"{iff}: the {len(items)} edits are {len(new_blob) - old_tot} bytes too big even after "
+            f"reducing colours, and this texture can't be moved to make room. Apply the heaviest "
+            f"texture(s) one at a time, or use simpler art for them.")
     new_res = bytearray(res)
     new_res[vo:vo + old_tot] = new_blob + b"\x00" * (old_tot - len(new_blob))
     _backup_once(game_dir / arc, log)
@@ -4100,10 +4100,10 @@ def smart_replace_record(iff, rec, edited_path, game_dir, log=print, prefer_loss
             st = replace_multitex_convert(iff, rec["vram_off"], rec["w"], rec["h"],
                                           target, edited_path, game_dir, log)
             if target == "8_8":
-                log("  (stored UNCOMPRESSED as 8_8 — removes BC4 block noise on the normal; the 8_8 "
-                    "descriptor is DERIVED, so verify the normal renders correctly in-game)")
+                log("  (stored at full quality — this clears the blocky noise off the normal map; "
+                    "check it renders correctly in-game)")
             else:
-                log("  (stored LOSSLESS as 8888 — no DXT block artifacts)")
+                log("  (stored lossless — no compression artifacts)")
             return st
         except ValueError as e:
             log(f"  (uncompressed {target} unavailable here — {e}; keeping {fmt})")

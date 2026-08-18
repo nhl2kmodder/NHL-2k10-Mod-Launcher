@@ -308,8 +308,7 @@ class RosterEditor:
                 "These strings are shared by more than one team — writing here would rename "
                 "the others too (both New Yorks share one city string; a cloned expansion "
                 "team still shares its donor's arena):\n" + lines +
-                "\n\nGiving one team its own copy needs a string-pool allocation, which this "
-                "editor doesn't do — the AHL affiliate tool is where that lives.")
+                "\n\nGiving one team its own copy of a name isn't something this editor can do.")
         if too_long:
             lines = "\n".join(f"  • '{s.text}' → '{n}'  "
                               f"(slot fits {s.cap_chars} chars, name is {len(n)})"
@@ -317,8 +316,7 @@ class RosterEditor:
             raise ValueError(
                 "These names are longer than their fixed slot in the save and can't be "
                 "written without corrupting it:\n" + lines +
-                "\n\nKeep each name within its slot length (shorter or equal). "
-                "Longer-name support needs relocation + repointing, which isn't built yet.")
+                "\n\nKeep each name the same length as the one it replaces, or shorter.")
         for slot, new in plan:
             old_span = (len(slot.text) + 1) * 2           # bytes the old string occupied
             nb = new.encode("utf-16-be") + b"\x00\x00"

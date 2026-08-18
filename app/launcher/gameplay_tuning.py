@@ -43,63 +43,63 @@ TUNERS = [
          note="Facing/approach-angle gate to start a pin. Lower = pins start from wider angles."),
     dict(key="pin_target_dot_min", group="Pinning", label="Pin gate: target angle min",
          va=0x849F15C4, stock=0xBEFFFC5F, v11=0x3ED86028,
-         note="Victim-relative angle gate. v1.1 raised it to the same 0.42 as the approach gate."),
+         note="How square you have to be to the player you are pinning. Lower = easier to pin."),
     dict(key="pin_speed_gate_min", group="Pinning", label="Pin gate: speed window min",
          va=0x849F15DC, stock=0x3F000000, v11=0x40200000,
-         note="Speed window for pin initiation, interpolated vs approach speed "
-              "(Gameplay_PinCheck_InitiationGate). v1.1: 0.5 -> 2.5 = pins start at slow speeds."),
+         note="Slowest closing speed that can start a pin. Higher = pins also start at a crawl."),
     dict(key="pin_speed_gate_max", group="Pinning", label="Pin gate: speed window max",
          va=0x849F15E0, stock=0x3FA66666, v11=0x40200000,
-         note="Upper end of the same window. v1.1: 1.3 -> 2.5."),
+         note="Fastest closing speed that can start a pin."),
     # ── Skating ───────────────────────────────────────────────────────────────
     dict(key="skate_launch_a", group="Skating", label="Launch/accel scale A",
          va=0x849F15FC, stock=0x3F8CCCCD, v11=0x3FC00000,
-         note="Acceleration/launch retune (patch note: 'retuned speed for acceleration and "
-              "launches'). v1.1: 1.1 -> 1.5."),
+         note="How hard skaters accelerate out of a standstill. Higher = quicker jump."),
     dict(key="skate_launch_b", group="Skating", label="Launch/accel scale B",
          va=0x849F1624, stock=0x3FA66666, v11=0x3FD9999A,
-         note="Companion launch scale. v1.1: 1.3 -> 1.7."),
+         note="The companion to scale A — raise both together for faster acceleration."),
     # ── Stick / loose pucks ───────────────────────────────────────────────────
     dict(key="sweep_pickup_delay", group="Stick & loose pucks", label="Post-sweep pickup shot delay",
          va=0x849F1B2C, stock=0x3F000000, v11=0x3F666666,
-         note="Matches patch note 'briefly disable loose shots when sweeping your stick then "
-              "gaining possession'. v1.1: 0.5 -> 0.9 (seconds, presumed)."),
-    dict(key="misc_6to8", group="Stick & loose pucks", label="Retuned scalar @849F0888",
+         note="Seconds you cannot shoot after sweeping the puck loose and picking it up. "
+              "Higher = fewer instant snipes off a poke check."),
+    dict(key="misc_6to8", group="Stick & loose pucks", label="Loose-puck scalar (unidentified)",
          va=0x849F0888, stock=0x40C00000, v11=0x41000000,
-         note="Unattributed float the TU changed 6.0 -> 8.0 (near a 0.05 rate constant). "
-              "Flip and observe to attribute."),
+         note="Part of the loose-puck retune in the official patch — exactly what it controls "
+              "has not been pinned down. Change it and watch."),
     # ── Shooting ──────────────────────────────────────────────────────────────
     dict(key="shot_curve_lo", group="Shooting", label="Rating→power curve: low",
          va=0x849F8CB0, stock=0x3FC00000, v11=0x3F400000,
-         note="Piecewise curve mapping 0-255 player rating to shot power "
-              "(Gameplay_ShotPowerObject_Create). v1.1 halved: 1.5 -> 0.75."),
+         note="Shot power given to the weakest shooters. The low/mid/high trio is the curve "
+              "that turns a player's shot rating into actual shot power."),
     dict(key="shot_curve_mid", group="Shooting", label="Rating→power curve: mid",
          va=0x849F8CB4, stock=0x3F99999A, v11=0x3F000000,
-         note="v1.1: 1.2 -> 0.5."),
+         note="Shot power for average shooters."),
     dict(key="shot_curve_hi", group="Shooting", label="Rating→power curve: high",
          va=0x849F8CB8, stock=0x3F000000, v11=0x3E800000,
-         note="v1.1: 0.5 -> 0.25."),
+         note="Shot power for the hardest shooters."),
     dict(key="shot_vel_a", group="Shooting", label="Shot velocity multiplier A",
          va=0x849F8D08, stock=0x3F8E353F, v11=0x3F933333,
-         note="Velocity multiplier triple (rebounds/loose-puck shot retune). v1.1: 1.111 -> 1.15."),
+         note="Puck speed off the stick. A, B and C are applied together — raise all three for "
+              "harder shots."),
     dict(key="shot_vel_b", group="Shooting", label="Shot velocity multiplier B",
          va=0x849F8D0C, stock=0x3F8353F8, v11=0x3F8CCCCD,
-         note="v1.1: 1.026 -> 1.10."),
+         note="The second of the three shot-velocity multipliers."),
     dict(key="shot_vel_c", group="Shooting", label="Shot velocity multiplier C",
          va=0x849F8D10, stock=0x3F7A7EFA, v11=0x3F800000,
-         note="v1.1: 0.9785 -> 1.0."),
+         note="The third of the three shot-velocity multipliers."),
     dict(key="shot_reb_a", group="Shooting", label="Rebound shot scale A",
          va=0x849F8D24, stock=0x3F99999A, v11=0x3F80A3D7,
-         note="v1.1: 1.2 -> 1.005."),
+         note="How hard a shot taken off a rebound comes out. Lower = fewer rocket putbacks."),
     dict(key="shot_reb_b", group="Shooting", label="Rebound shot scale B",
          va=0x849F8D28, stock=0x3F99999A, v11=0x3F9851EE,
-         note="v1.1: 1.2 -> 1.19."),
+         note="The second of the three rebound-shot scales."),
     dict(key="shot_reb_c", group="Shooting", label="Rebound shot scale C",
          va=0x849F8D30, stock=0x3F800000, v11=0x3FA66666,
-         note="v1.1: 1.0 -> 1.3."),
-    dict(key="shot_65to5", group="Shooting", label="Retuned scalar @849F8DC4",
+         note="The third of the three rebound-shot scales."),
+    dict(key="shot_65to5", group="Shooting", label="Shooting scalar (unidentified)",
          va=0x849F8DC4, stock=0x40D00000, v11=0x40A00000,
-         note="Unattributed float in the shot cluster, v1.1: 6.5 -> 5.0."),
+         note="Part of the shooting retune in the official patch — exactly what it controls has "
+              "not been pinned down. Change it and watch."),
 ]
 
 # Words adjacent to the tuners that v1.0 AND v1.1 agree on — must match before any write.

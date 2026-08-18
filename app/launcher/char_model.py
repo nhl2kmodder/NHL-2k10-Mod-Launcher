@@ -33,6 +33,7 @@ edit. Nothing here can change a submesh's vertex or index budget.
 """
 from __future__ import annotations
 
+import functools
 import struct
 import zlib
 from pathlib import Path
@@ -606,14 +607,51 @@ HEAD_LIGHT = (0.78, 0.46, 0.43)
 HEAD_FILL = (-0.74, 0.10, 0.66)          # dim, from the other side, so the shadow half is readable
 HEAD_AMBIENT, HEAD_KEY, HEAD_FILLK = 0.14, 0.88, 0.24
 
+# ...which is a fine light to JUDGE a head under and a bad one to ACCEPT a head under, because it
+# is not the light the head will ever be seen in. The game's own front-end render is the only
+# ground truth for that, and Face_Model_Proto/*_InGame holds four captures of it drawing the STOCK
+# head with the STOCK maps — so the albedo is a constant between the game and us and everything
+# left over is the light. Two of the four carry landmarks (front and 45 deg); between them the head
+# turns 47 deg, which is what separates a camera-relative light from a mesh-relative one.
+#
+# Measured over the skin the visor does not cover, in real L units:
+#
+#   game                 front  63.9 mean / 10.2 spread     45 deg  66.2 / 7.8
+#   HEAD_LIGHT rake            26.6 / 20.9                          44.2 / 13.2
+#   this preset                63.8 /  8.5                          67.8 / 6.3
+#
+# The rake was rendering the face at LESS THAN HALF the brightness the game shows it at, and at
+# twice the contrast. Against that, the direction turns out not to be recoverable at all: z-scored
+# so exposure cannot pay for shading, every candidate direction — head-on, from above, raking from
+# either side, mesh-fixed or camera-fixed — lands between 0.6 and 1.2 z of residual on both shots,
+# because what is left after the level and the spread match is the AO map, the JPEG, the visor's
+# lower fringe and a 2.35x warp, not the key. So only the two numbers the eye actually reads were
+# fitted. Swept over ambient and key, the pair that matches both at once is 0.80/0.25 with the
+# light down the lens; a fill only made it worse (0.08 of fill costs 0.5 L of residual), which is
+# consistent with a single broad source and a lot of bounce.
+GAME_LIGHT = (0.0, 0.0, 1.0)
+GAME_AMBIENT, GAME_KEY, GAME_FILLK = 0.80, 0.25, 0.0
 
-def head_light(scene, light=HEAD_LIGHT, ambient=HEAD_AMBIENT, key=HEAD_KEY,
-               fill_dir=HEAD_FILL, fill=HEAD_FILLK):
-    """Point a head scene's key light across the face instead of down the lens. -> the scene."""
+HEAD_MODES = {"game": (GAME_LIGHT, GAME_AMBIENT, GAME_KEY, HEAD_FILL, GAME_FILLK),
+              "studio": (HEAD_LIGHT, HEAD_AMBIENT, HEAD_KEY, HEAD_FILL, HEAD_FILLK)}
+
+
+def head_light(scene, mode="game", light=None, ambient=None, key=None,
+               fill_dir=None, fill=None):
+    """Light a head scene. -> the scene.
+
+    `mode="game"` reproduces the front-end render the player will actually see (measured above);
+    `mode="studio"` is the raking light that shows shape, for judging a build. Either can be
+    overridden argument by argument. Both are camera-relative, so the light does not orbit away
+    when the model is turned.
+    """
+    L, a, k, F, f = HEAD_MODES.get(mode, HEAD_MODES["game"])
     if scene is not None:
-        scene.update(light=np.asarray(light, np.float32), ambient=float(ambient),
-                     key=float(key), fill_dir=np.asarray(fill_dir, np.float32),
-                     fill=float(fill), light_rel=True)
+        scene.update(light=np.asarray(light if light is not None else L, np.float32),
+                     ambient=float(a if ambient is None else ambient),
+                     key=float(k if key is None else key),
+                     fill_dir=np.asarray(fill_dir if fill_dir is not None else F, np.float32),
+                     fill=float(f if fill is None else fill), light_rel=True)
     return scene
 
 
@@ -646,13 +684,32 @@ def tangents(pos, uv, tri, nrm=None):
     return (T / n[:, None]).astype(np.float32)
 
 
+# How much of a texel's light the occlusion map is allowed to take away. Occlusion is an AMBIENT
+# term: it says how much of the sky a point can see, not how much light reaches it in total. Folding
+# it into the albedo at full strength — which is what this did — says an occluded texel loses its
+# direct light too, and since shade()'s lambert already darkens the same concavity off the normals,
+# every socket and crease got shaded twice. On head 138 that showed up as a black eye socket where
+# the game's own render has ordinary skin: measured against an in-game capture of the same head, the
+# darkest tenth of the orbit sat at 0.30x the cheek against the game's 0.43x, and taking the full
+# multiply out put it at 0.41x. Swept over the same capture, the ratio stops improving below about
+# 0.7 while the shadow keeps SPREADING (18% of the orbit under half cheek brightness at 0.7, 24% at
+# 0), so 0.7 is where both numbers are best at once rather than where either alone is.
+AO_AMBIENT = 0.70
+
+
+def apply_ao(col, ao):
+    """Occlusion applied as the ambient term it is. col float32 HxWx3, ao float32 HxW in 0..1."""
+    return col * ((1.0 - AO_AMBIENT) + AO_AMBIENT * ao)[..., None]
+
+
 def _asset_maps(asset: str, game_dir=None) -> tuple:
     """(colour x occlusion, normal) for an asset that carries the head texture triple, else None.
 
     Head assets are the one character asset with its own maps and a UV layout that matches the
     mesh, so this is what makes the preview show the face the Face Builder just wrote instead of
     a grey lambert bust. Occlusion is folded into the albedo here rather than carried as a third
-    channel — it is a fixed multiplier over the same UVs, so there is nothing to separate.
+    channel — it is a fixed multiplier over the same UVs, so there is nothing to separate — but only
+    to the depth AO_AMBIENT allows; see there for why a full multiply blackens the eye sockets.
     """
     try:
         from . import archive_textures as A
@@ -666,8 +723,8 @@ def _asset_maps(asset: str, game_dir=None) -> tuple:
                                          ).convert("RGB"), np.float32)
         if "occlusion" in recs:
             ao = A.decode_record(asset, recs["occlusion"], game_dir, live=True).convert("L")
-            col = col * (np.asarray(ao.resize(
-                (col.shape[1], col.shape[0])), np.float32)[..., None] / 255.0)
+            col = apply_ao(col, np.asarray(ao.resize(
+                (col.shape[1], col.shape[0])), np.float32) / 255.0)
         nrm = None
         if "normal" in recs:
             nrm = np.asarray(A.decode_record(asset, recs["normal"], game_dir, live=True
@@ -748,8 +805,255 @@ def merge_scenes(a: dict, b: dict) -> dict:
     return out
 
 
+# The four eyeball BaseMaps, all in global.iff at 512x512 DXT1, indexed the way the player record
+# indexes them: (*(u32*)(rec+0xB8) >> 10) & 3  ->  0 brown, 1 blue, 2 green, 3 hazel.
+EYE_TEX_REC = (227, 112, 130, 127)
+
+
+def eye_parts(d: dict) -> set:
+    """The two eyeballs in a head's part table, by shape rather than by record number.
+
+    Measured recs 5 and 6 on 27 of 27 sampled heads, so a constant would have worked — but the
+    heads do NOT all share a part table (8 distinct ones in that sample, differing in the hair
+    shells), so the test is geometric and degrades to "no eyes" instead of to a wrong part: a pair
+    of ~210-triangle meshes sitting at eye height and off the midline.
+    """
+    P = d["pos"]
+    y = P[:, 1]
+    lo, hi = float(y.min()), float(y.max())
+    out = set()
+    for p in d["parts"]:
+        v = np.unique(p["tris_idx"])
+        if not len(v) or not (180 <= len(p["tris_idx"]) <= 260):
+            continue
+        c = P[v].mean(0)
+        if 0.55 < (c[1] - lo) / max(hi - lo, 1e-6) < 0.80 and abs(c[0]) > 0.5:
+            out.add(p["rec"])
+    return out if len(out) == 2 else set()
+
+
+EYE_MARGIN = 0.06        # cm the lid is held off the globe; below this the rim tears open again
+EYE_RELAX = 4            # smoothing passes over the socket after the clearance is forced
+
+
+def seat_eyes(sc: dict, margin: float = EYE_MARGIN, reach: float = 2.2,
+              smooth: int = EYE_RELAX) -> dict:
+    """Move the LIDS off the eyeball, not the eyeball off the lids. Idempotent; safe to re-run.
+
+    The shipped eyeball is BIGGER than the hole the lids leave it — about a fifth of the skin
+    vertices ringing the socket fall inside it, on head 138 by up to 0.57 cm. The game gets away
+    with that because it draws an alpha-cut lash rim over the join. This rasterizer has no alpha,
+    so without help the visible edge of the white is wherever the sphere happened to win the depth
+    test, triangle by triangle: a torn, staring hole.
+
+    This used to be closed by SHRINKING the globe until every lid vertex cleared it. That does give
+    a clean almond and it is why the edge stopped tearing, but measured against a frontal portrait
+    it bought the edge at the cost of the middle: a third of the open eye came out black, 34.7% and
+    26.0% of the two eyes below L45, where the portrait has 1.4% and 0.0%, because a shrunken ball
+    no longer reaches the lid line and behind it there is nothing. Shrinking harder only widens that.
+
+    Turned round, it costs nothing. The globe keeps the size it was authored, so it still fills the
+    opening and the iris keeps its painted size, and the few penetrating skin vertices are pushed
+    straight out along the radius until they clear — which is where a lid belongs anyway, riding on
+    the globe. Three details are not optional, each measured:
+
+      * the clearance is EXACT, never tapered. Tapering reads as gentler and tears the rim straight
+        back open, because a vertex 0.04 inside that is moved 93% of the way out is still inside,
+        and one vertex inside is one black notch.
+      * the crease that leaves is taken out afterwards by smoothing along the surface with the
+        clearance held as a floor. That also cleans the sawtooth at the corners, where the lid meets
+        the globe tangentially and the silhouette is decided by single vertices.
+      * the globe is re-rounded onto its own least-squares sphere first. The shape fit bends it out
+        of round by 0.25 of its 1.70 radius, and a silhouette decided by a warped sphere is ragged
+        whatever the lids do.
+
+    Together with the sclera rebuild in `_eye_map`, the two eyes go from 34.7%/26.0% black and
+    1.0%/2.2% white to 9.3%/0.0% black and 67.8%/61.5% white, against a portrait measured at 0.7%
+    and 59%. The 9% that survives on one eye is a sliver at its outer corner that neither widening
+    the globe's cap nor seating it deeper moves, so it is not the globe running out; it is not
+    chased further here.
+
+    Preview only, and deliberately: nothing here touches the model on disk. The asset is not wrong,
+    it is authored for a renderer that has the rim.
+    """
+    ev = sc.get("eye_verts")
+    if not ev:
+        return sc
+    P = sc["pos"].astype(np.float64)
+    tri = sc["tri"]
+    skin = np.unique(tri[sc["mat"] == 0]) if len(sc.get("mat", ())) else np.array([], int)
+    if not len(skin):
+        return sc
+    def clear(Pts, c, r, axis, cap, margin):
+        """Lift `Pts` (all inside the globe) clear of it ALONG THE EYE'S AXIS, not radially.
+
+        Radially was the obvious way and it is what widened the eye. A lid vertex just inside the
+        globe near the aperture edge is, by definition, close to the globe's silhouette as seen down
+        that axis; pushing it out along its own radius slides it around the sphere, and the component
+        of that motion perpendicular to the axis is the aperture opening. Measured on head 138 the
+        render's lid opening came out +13.5% and +16.9% against the portrait while the fitted MESH's
+        own lid landmarks measured -17% — the skin was closed enough and the seating was prying it
+        back open.
+
+        Riding out along the axis is what a lid physically does on a globe, and it moves the vertex
+        only in depth, so the aperture the camera sees is the one the shape fit solved for. The ray
+        always exits, because every point handled here is strictly inside: with D = p - c and
+        |D| < R, the quadratic |D + t a|^2 = R^2 has a real positive root.
+        """
+        D = Pts - c
+        b = D @ axis
+        t = -b + np.sqrt(np.maximum(b * b - (D * D).sum(1) + (r + margin) ** 2, 0.0))
+        return Pts + np.minimum(t, r)[:, None] * axis
+
+    balls = []
+    for v in ev:
+        Q = P[v]
+        # exact least-squares sphere: |q|^2 = 2 c.q + (r^2 - |c|^2), linear in (c, k)
+        sol, *_ = np.linalg.lstsq(np.column_stack([2 * Q, np.ones(len(Q))]),
+                                  (Q ** 2).sum(1), rcond=None)
+        c = sol[:3]
+        r = float(np.sqrt(max(sol[3] + (c ** 2).sum(), 0.0)))
+        if r <= 0:
+            continue
+        U = (Q - c) / np.maximum(np.linalg.norm(Q - c, axis=1, keepdims=True), 1e-9)
+        P[v] = c + U * r
+        axis = U.mean(0)
+        axis /= max(np.linalg.norm(axis), 1e-9)
+        # the eyeball is a CAP, about a hemisphere. Past its rim there is no surface to clear, and
+        # holding the lid off a sphere that stops there is what opened the notch at the corners.
+        cap = np.cos(np.radians(
+            np.percentile(np.degrees(np.arccos(np.clip(U @ axis, -1, 1))), 99) - 6))
+        balls.append((c, r, axis, cap))
+        D = P[skin] - c
+        d = np.maximum(np.linalg.norm(D, axis=1), 1e-9)
+        hit = (d < r + margin) & ((D / d[:, None]) @ axis > cap)
+        if hit.any():
+            P[skin[hit]] = clear(P[skin[hit]], c, r, axis, cap, margin)
+    ring = set()
+    for c, r, _a, _k in balls:
+        ring |= set(skin[np.linalg.norm(P[skin] - c, axis=1) < r * reach].tolist())
+    ring = np.fromiter(ring, int)
+    if len(ring) and smooth:
+        nb = [[] for _ in range(len(P))]
+        for a, b, cc in tri:
+            nb[a] += [b, cc]
+            nb[b] += [a, cc]
+            nb[cc] += [a, b]
+        for _ in range(int(smooth)):
+            for i in ring:
+                if nb[i]:
+                    P[i] = 0.5 * P[i] + 0.5 * P[nb[i]].mean(0)
+            for c, r, axis, cap in balls:
+                D = P[ring] - c
+                d = np.maximum(np.linalg.norm(D, axis=1), 1e-9)
+                bad = (d < r + margin) & ((D / d[:, None]) @ axis > cap)
+                if bad.any():
+                    P[ring[bad]] = clear(P[ring[bad]], c, r, axis, cap, margin)
+    if balls:
+        sc["pos"] = P.astype(np.float32)
+        sc["nrm"] = _vertex_normals(P, sc["tri"]).astype(np.float32)
+    return sc
+
+
+EYE_WET = 0.65           # how much of the globe's light is ambient — it is wet, it barely shades
+EYE_LID_SHADOW = 0.30    # the upper lid sits ON the globe; without its shadow the eye is a doll's
+
+
+def light_eyes(sc: dict, wet: float = EYE_WET, shadow: float = EYE_LID_SHADOW) -> dict:
+    """Light the globes as globes. Call after head_light, before render. -> the scene.
+
+    An eyeball is wet and nearly white, and the preview's key light rakes across the face, so a
+    plain lambert over a sphere darkens exactly the parts of the white that sit either side of the
+    iris — which is the whole reason a human eye reads as friendly. Measured on head 138 the lit
+    globe's median came out at 58 and 78 against a portrait's 119 and 141; flat-lighting it alone
+    moved that to 87 and 108. So most of its light is made ambient.
+
+    Not ALL of it, though: a globe with no shading at all is a flat disc and reads as a doll's eye.
+    The one piece of shading a real eye has is the upper lid resting on it, so that is put back
+    explicitly as a gradient down from the top of each globe rather than left to the key light.
+    """
+    ev = sc.get("eye_verts")
+    if not ev or sc.get("vcol") is None:
+        return sc
+    P = sc["pos"].astype(np.float64)
+    for v in ev:
+        sc["vcol"][v] = wet + (1.0 - wet) * sc["vcol"][v]
+        if shadow:
+            y = P[v][:, 1]
+            t = np.clip((y - y.min()) / max(y.max() - y.min(), 1e-6), 0, 1)
+            sc["vcol"][v] *= (1.0 - shadow * np.clip((t - 0.45) / 0.55, 0, 1) ** 1.5)[:, None]
+    return sc
+
+
+SCLERA_L = 128.0         # the white the portrait actually has, measured, in luminance out of 255
+SCLERA_KEEP = 0.30       # how much of the sheet's own vein pattern survives the whitening
+
+
+def whiten_sclera(em, target: float = SCLERA_L, keep: float = SCLERA_KEEP):
+    """Give the eyeball sheet the white a real eye has. -> HxWx3 uint8.
+
+    The sheet is one eyeball unwrapped from the front: iris in the middle, sclera radiating out, and
+    a dark olive ring at the border where the globe turns away and the game never shows it. Sampled
+    at the eyeball's own UVs it runs a median luminance of 99.8 against a frontal portrait's 145,
+    and it is warm and red-veined rather than neutral. That is most of what made these eyes read as
+    scary, on its own: an eye looks friendly because there is bright neutral white either side of
+    the iris, and this one has pink-brown there — and the dark border past it is what showed as a
+    black wedge at the corners once the lids were opened up properly.
+
+    So the iris is left exactly alone, found as the dark disc at the centre of the radial luminance
+    profile, and outside it the sclera is lifted to the portrait's lightness with most of the colour
+    pulled out, keeping enough of the veining that it does not go plastic. The border ring is
+    flooded with the sclera's own mean, since nothing out there is meant to be seen and any of it
+    that does show is a hole by another name.
+    """
+    A = np.asarray(em, np.float64)
+    if A.ndim != 3:
+        return em
+    h, w = A.shape[:2]
+    yy, xx = np.mgrid[0:h, 0:w]
+    rr = np.hypot(xx - (w - 1) / 2, yy - (h - 1) / 2)
+    L = A @ (0.299, 0.587, 0.114)
+    half = min(h, w) // 2
+    prof = np.array([L[(rr >= k) & (rr < k + 2)].mean() for k in range(0, half - 2, 2)])
+    inner = prof[:len(prof) // 2]
+    if not len(inner):
+        return em
+    lo = int(np.argmin(inner))
+    iris = 2 * (lo + int(np.argmax(inner[lo:] > 0.5 * (inner[lo] + inner.max())))) + 2
+    out = A.copy()
+    band = rr > iris
+    if not band.any():
+        return em
+    lum = np.maximum(L[band], 1e-6)
+    lift = target / max(float(np.median(lum)), 1e-6)
+    out[band] = (keep * A[band] + (1 - keep) * lum[:, None] * np.ones(3)) * lift
+    edge = rr > min(h, w) * 0.44
+    keepable = band & ~edge
+    out[edge] = out[keepable].mean(0) if keepable.any() else 235.0
+    return np.clip(out, 0, 255).astype(np.uint8)
+
+
+@functools.lru_cache(maxsize=8)
+def _eye_map(color: int, game_dir=None):
+    """The eyeball sheet for one eye colour, from global.iff, with its sclera rebuilt.
+
+    -> HxWx3 uint8 or None. See whiten_sclera for why the shipped sclera is not usable as-is here.
+    """
+    try:
+        from . import archive_textures as A
+    except ImportError:
+        import archive_textures as A
+    try:
+        rec = EYE_TEX_REC[int(color) & 3]
+        r = {t["index"]: t for t in A.list_textures("global.iff", game_dir)}[rec]
+        return whiten_sclera(np.asarray(A.decode_record("global.iff", r, game_dir, live=True
+                                                        ).convert("RGB"), np.uint8))
+    except Exception:
+        return None
+
+
 def build_scene(b: bytes, m: dict, first_part_id: int = 1, only=None,
-                asset: str | None = None, game_dir=None, also=None) -> dict | None:
+                asset: str | None = None, game_dir=None, also=None, eyes=None) -> dict | None:
     """The same draw-list dict arena_preview.raster/shade take, for ONE character model.
 
     Characters carry no baked lighting — the arena's vcol field is a bake, here it has to be
@@ -771,6 +1075,10 @@ def build_scene(b: bytes, m: dict, first_part_id: int = 1, only=None,
     `only` = the submesh records to draw. The file holds every equipment alternative side by
     side (drawn_set), so leaving this open stacks six pad variants in the same space.
 
+    `eyes` = eye colour 0..3 (brown/blue/green/hazel, the record's own numbering), or None to leave
+    the sockets empty as before. The eyeballs are one of the submeshes that cut drops, which is why
+    heads previewed with black sockets; this brings them back and binds the right global.iff sheet.
+
     `also` = records to keep DESPITE that cut, drawn untextured. That is how a facial-hair shell
     is previewed: no map is bound to its material, so it falls back to the vertex lambert and
     reads as the silhouette it is, instead of printing a second face across the jaw.
@@ -779,11 +1087,20 @@ def build_scene(b: bytes, m: dict, first_part_id: int = 1, only=None,
     pos, nrm = d["pos"], d["nrm"]
     vcol = lambert(nrm, len(pos))
     got = _asset_maps(asset, game_dir) if asset else None
+    # Eyeballs are a submesh like any other, so the skin cut drops them and the preview looks
+    # straight through the socket into the inside of the skull — which is what read as "black
+    # sockets" in every head render so far. They are not a missing texture, they were not drawn.
+    # Their sheet is not in the head .iff either: the four eye colours live in global.iff and the
+    # player record picks between them, so it has to be passed in.
+    eye_map = _eye_map(eyes, game_dir) if eyes is not None else None
+    eye_rec = eye_parts(d) if eye_map is not None else set()
+    also = set(also or ()) | eye_rec
     # the skin is the big one — every card and shell beside it is a few hundred triangles
     skin_mat = (max(d["parts"], key=lambda p: len(p["tris_idx"]))["mat"]
                 if got is not None else None)
     cut = skin_mat if (skin_mat is not None and only is None) else None
     TRI, MAT, PART, pbox = [], [], [], {}
+    eye_mat = None
     pid = first_part_id - 1
     for p in d["parts"]:
         pid += 1
@@ -794,11 +1111,14 @@ def build_scene(b: bytes, m: dict, first_part_id: int = 1, only=None,
             continue
         v = np.unique(t)
         pbox[pid] = (pos[v].min(0), pos[v].max(0))
-        if cut is not None and p["mat"] != cut:
+        if cut is not None and p["mat"] != cut and p["rec"] not in eye_rec:
             # An `also` part: no map is bound to its material, so all it has is the vertex
             # lambert, which prints a pale grey plate. Darken it to hair so the silhouette
-            # reads as the beard it is rather than as a mask.
+            # reads as the beard it is rather than as a mask. An eyeball is exempt — it is about
+            # to get a real texture, and darkening it to hair would just be a black socket again.
             vcol[v] = vcol[v] * np.array([0.20, 0.17, 0.15], np.float32)
+        if p["rec"] in eye_rec:
+            eye_mat = p["mat"]
         TRI.append(t)
         MAT.append(np.full(len(t), p["mat"], np.int32))
         PART.append(np.full(len(t), pid, np.int32))
@@ -818,6 +1138,20 @@ def build_scene(b: bytes, m: dict, first_part_id: int = 1, only=None,
                 sc["ntex"][int(mid)] = nmap
         if nmap is not None:
             sc["tan"] = tangents(pos, uv, tri, nrm)
+    # No normal map for the eyes on purpose. The game gives them a corneal dome and an iris-fibre
+    # normal of their own, but those are separate global.iff textures over the eyeball's own unwrap
+    # — handing them the FACE normal map would emboss skin pores onto a cornea.
+    if eye_map is not None and eye_mat is not None and eye_mat in mat:
+        sc["tex"][int(eye_mat)] = eye_map
+        # Which vertices are which eyeball, split by side of the midline (the head's mirror plane
+        # is x = 0, measured). Recorded rather than recomputed because a caller that swaps in
+        # fitted geometry has to re-seat, and re-deriving it from the swapped positions would let
+        # a bad fit change WHICH vertices count as an eye.
+        ev = np.unique(tri[mat == eye_mat])
+        sc["eye_mat"] = int(eye_mat)
+        sc["eye_verts"] = [ev[pos[ev][:, 0] > 0], ev[pos[ev][:, 0] < 0]]
+        seat_eyes(sc)
+        light_eyes(sc)
     return sc
 
 
@@ -959,7 +1293,14 @@ def part_budget(part: dict) -> dict:
 
 
 def _vertex_normals(P, T):
-    """Area-weighted normals for the imported mesh — the file has no other way to get them."""
+    """Area-weighted normals for the imported mesh — the file has no other way to get them.
+
+    Not welded by position, deliberately, though it looks like it should be: the head has 315
+    duplicated positions and their normals disagree by a full 90 degrees, which reads exactly like
+    the UV cut being split and each copy getting only its own side's faces. It is not that. 296 of
+    the 315 are ORPHANS — a vertex no triangle references — so their normal is the zero vector and
+    the 90 degrees is just arccos(0). Welding them was measured and moved the rendered seam by 0.00.
+    """
     N = np.zeros_like(P, np.float64)
     a, b_, c = P[T[:, 0]], P[T[:, 1]], P[T[:, 2]]
     fn = np.cross(b_ - a, c - a)

@@ -4,12 +4,14 @@ The game reads a goalie's mask from the loaded player struct as
     shell   = (*(u32*)(player+0xB4) >> 23) & 0xF      (Goalie_GetMaskModelIndex   @0x840a8888)
     pattern =  *(u32*)(player+0xB8)        & 0x1F      (Goalie_GetMaskPatternIndex @0x840a9010)
 
-This module is now the LISTING half of the Goalie tab, not the writing half. Player NAMES only
-resolve in the running game (the record holds a pointer into a name pool; nothing in the save file
-spells the name inline), so the tab still enumerates live — but the assignment is written into
-**Roster.ROS** via player_assign.py, because the on-disk record is the same struct at the same
-offsets. A live memory patch dies with the Xenia process and can never reach a console; a file edit
-travels with the game files. set_mask()/apply_masks() below are kept for diagnostics only.
+This module is the LISTING half of the Goalie tab, not the writing half. It used to enumerate the
+running game because player names were believed to resolve only there — that stopped being true on
+2026-08-06, when the on-disk name pointers were solved (player_assign), so list_goalies(ros_path)
+now reads the save directly and the live walk below is the fallback for when no roster file is set.
+The assignment is written into **Roster.ROS** via player_assign.py, because the on-disk record is
+the same struct at the same offsets. A live memory patch dies with the Xenia process and can never
+reach a console; a file edit travels with the game files. set_mask()/apply_masks() below are kept
+for diagnostics only.
 
 Verified live (xenia_canary):
   g_RosterManager global @ guest VA 0x849DE29C -> manager base pointer.
@@ -26,10 +28,12 @@ import struct
 
 try:
     from . import xenia_mem as XM
+    from . import player_ids as _pid
 except ImportError:
     import xenia_mem as XM
+    import player_ids as _pid
 
-VIRT = 0x100000000                       # host = VIRT + guest_addr
+VIRT = 0x100000000                     # host = VIRT + guest_addr
 G_ROSTER_MANAGER_VA = 0x849DE29C         # global holding the manager base pointer
 PLAYER_CHUNK_HASH   = 0x1E159C31
 REC        = 0x1A4
@@ -96,9 +100,9 @@ def _read_utf16(h, guest, maxchars=48):
 
 
 def enumerate_goalies(h):
-    """Return [{index, addr(guest), first, last, name, shell, pattern, portrait, roster_count}] for
-    every goalie in the loaded roster, or [] if the roster manager isn't reachable (game not at a
-    roster-loaded state).
+    """Return [{index, addr(guest), first, last, name, shell, pattern, portrait, num, bio, pid,
+    roster_count}] for every goalie in the loaded roster, or [] if the roster manager isn't
+    reachable (game not at a roster-loaded state). `pid` is the per-PERSON id — see player_ids.
 
     `index`/`roster_count` line a live record up with the same row in Roster.ROS (same table, same
     stride, same order); `portrait` is the per-row key that double-checks the match. See
@@ -132,10 +136,12 @@ def enumerate_goalies(h):
         first = _read_utf16(h, fn)
         if not (last or first):
             continue
+        num, bio = _pid.bio_fields(blob, base)
         out.append({"index": i, "addr": arr + base, "first": first, "last": last,
                     "name": (first + " " + last).strip(), "shell": shell, "pattern": pat,
                     "portrait": struct.unpack_from(">H", blob, base + OFF_KEY)[0],
-                    "roster_count": cnt})
+                    "num": num, "bio": bio, "roster_count": cnt})
+    _pid.assign_player_ids(out)
     return out
 
 
@@ -175,12 +181,37 @@ def _open():
     try:
         h = XM.open_process(pid)
     except OSError as e:
-        return None, f"can't open Xenia ({e}); run the launcher as Administrator."
+        try:
+            from . import elevation as EL
+        except ImportError:
+            import elevation as EL
+        return None, EL.explain_open_failure(e)
     return h, None
 
 
-def list_goalies():
-    """(goalies, error). goalies = enumerate_goalies output; error = a message or None."""
+def list_goalies(ros_path=None):
+    """(goalies, error). goalies = enumerate_goalies output; error = a message or None.
+
+    With `ros_path`, the list is read straight out of that Roster.ROS and the game does NOT have to
+    be running — names resolve on disk (player_assign's self-relative, SIGNED name pointers), and
+    the record dicts carry the same fields, so the caller can't tell the two sources apart. The file
+    is also the right source when both are available: the mask write lands in the file, and a live
+    roster that has drifted from it would show masks the save doesn't have.
+
+    Without one, this falls back to enumerating the running game, as it always did.
+    """
+    if ros_path:
+        try:
+            from . import player_assign as _pas
+        except ImportError:
+            import player_assign as _pas
+        try:
+            gs = _pas.enumerate_goalies(ros_path)
+        except Exception as e:
+            return [], f"can't read {ros_path}: {e}"
+        if not gs:
+            return [], "no named goalies in that Roster.ROS — is it a valid save?"
+        return gs, None
     h, err = _open()
     if err:
         return [], err

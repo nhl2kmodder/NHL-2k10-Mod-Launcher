@@ -57,8 +57,13 @@ from __future__ import annotations
 
 import re
 
-# Full names as shown in the UI -- must stay identical to TEAMS in nhl2k10_launcher.py
-# or the Team filter combobox will offer values that never match a row.
+# Full names as shown in the UI. ``nhl2k10_launcher.TEAMS`` is this same list object, so the
+# two cannot drift apart and the Team filter always offers exactly what ``canon`` produces.
+#
+# This is the SHIPPED thirty, and it is not the whole story on an install that has expansion
+# clubs: ``register_from_roster`` appends them at startup, in place. Anything reading TEAMS must
+# therefore read it when it needs it rather than copying it at import time -- see the note on
+# ``register_club``.
 TEAMS = [
     "Anaheim Ducks", "Atlanta Thrashers", "Boston Bruins", "Buffalo Sabres",
     "Calgary Flames", "Carolina Hurricanes", "Chicago Blackhawks",
@@ -125,15 +130,23 @@ _STRONG: dict[str, str] = {}      # lowercase token -> team
 _WEAKMAP: dict[str, str] = {}     # lowercase token -> team (capitalisation required)
 _CODES: dict[str, str] = {}       # UPPERCASE token -> team
 
-for _team, (_codes, _cities, _nicks) in _ALIASES.items():
-    for _c in _codes:
-        _CODES[_c] = _team
-    for _s in _cities + _nicks:
-        _key = _s.replace(" ", "").lower()
-        if _s in _WEAK:
-            _WEAKMAP[_key] = _team
-        else:
-            _STRONG[_key] = _team
+
+def _rebuild() -> None:
+    """Re-derive the three lookup tables from ``_ALIASES``. Called once at import, and again
+    every time a club is registered -- the tables are a projection of _ALIASES, so the only way
+    they can be wrong is to have been built before the last club arrived."""
+    _STRONG.clear()
+    _WEAKMAP.clear()
+    _CODES.clear()
+    for team, (codes, cities, nicks) in _ALIASES.items():
+        for c in codes:
+            _CODES[c] = team
+        for s in cities + nicks:
+            key = s.replace(" ", "").lower()
+            (_WEAKMAP if s in _WEAK else _STRONG)[key] = team
+
+
+_rebuild()
 
 # Split a stem into candidate tokens: underscores, digits and CamelCase humps all break.
 # "Chatter_Str_OnMinnesota_Var4" -> On, Minnesota, Var
@@ -204,6 +217,74 @@ def canon(value: str) -> str:
     if v.upper() in _CODES:
         return _CODES[v.upper()]
     return team_from_name(v) or v
+
+
+# ── clubs this build has never heard of ──────────────────────────────────────────
+
+def register_club(name: str, code: str = "", city: str = "", nick: str = "") -> bool:
+    """Teach the tagger a club that is not one of the shipped thirty. True if it was new.
+
+    An expansion club's tag already SURVIVES -- ``canon`` hands back anything it cannot resolve
+    rather than blanking it -- but it is invisible to the Team filter, which is a combobox built
+    from ``TEAMS`` and matched by equality. So Seattle and Vegas could be tagged and could not be
+    found, which is the whole point of the column.
+
+    TEAMS is extended IN PLACE so that ``nhl2k10_launcher.TEAMS`` -- the same list object -- and
+    any combobox built from it before this ran still see the club. Registering is idempotent and
+    never touches a club already in ``_ALIASES``: the shipped thirty are the id space the slot
+    sources index into (team id == position in TEAMS), so re-ordering or replacing an entry would
+    silently re-point every positional tag in ``audio_team_slots.json``. New clubs can only ever
+    be appended.
+    """
+    name = (name or "").strip()
+    if not name or name in _ALIASES:
+        return False
+    codes = tuple(c for c in ((code or "").strip().upper(),) if c)
+    cities = tuple(dict.fromkeys(c for c in ((city or "").strip(),
+                                             (city or "").replace(" ", "").strip()) if c))
+    nicks = tuple(dict.fromkeys(n for n in ((nick or "").strip(),
+                                            (nick or "").replace(" ", "").strip()) if n))
+    _ALIASES[name] = (codes, cities, nicks)
+    TEAMS.append(name)
+    _rebuild()
+    return True
+
+
+def register_from_roster(ros_path, log=None) -> list[str]:
+    """Register every expansion club in a Roster.ROS. Returns the names newly added.
+
+    RELOCATED clubs are deliberately not registered, and ``extra_teams.extra_teams`` is what
+    draws that line: it returns league-0 records whose asset key the shipped catalog does not
+    know, and a relocation keeps the donor's key -- Winnipeg still keys on ATL, Utah on PHO. That
+    matches how the tags themselves are built: ``team_link.py`` folds a relocated club back onto
+    the original club on purpose, because the tag tracks the audio SLOT and the slot has not
+    moved. Registering "Winnipeg Jets" here would add a filter entry that matches nothing while
+    Winnipeg's takes stayed under "Atlanta Thrashers".
+
+    Everything is guarded: no roster, an unreadable one, or a launcher without the roster modules
+    all degrade to the shipped thirty, which is exactly what this module did before.
+    """
+    added: list[str] = []
+    if not ros_path:
+        return added
+    try:
+        try:
+            from . import extra_teams as ET
+        except ImportError:
+            import extra_teams as ET                    # running from launcher/ directly
+        clubs = ET.extra_teams(ros_path)
+    except Exception as e:
+        if log:
+            log(f"[team] expansion-club scan skipped: {e}")
+        return added
+    for t in clubs:
+        city, nick = (t.get("city") or "").strip(), (t.get("nick") or "").strip()
+        name = (f"{city} {nick}").strip()
+        if name and register_club(name, code=t.get("code") or "", city=city, nick=nick):
+            added.append(name)
+    if added and log:
+        log(f"[team] expansion club(s) added to the Team filter: {', '.join(added)}")
+    return added
 
 
 _SLOTS: dict[str, str] | None = None
