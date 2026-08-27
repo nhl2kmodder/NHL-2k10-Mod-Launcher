@@ -175,7 +175,11 @@ class PlayerTable:
         if not 0 <= t < len(d) - 1:
             return ""
         end = t
-        while end + 1 < len(d) and d[end:end + 2] != b"\0\0":
+        # 0xFFFF is the name pool's FILLER marker — roster_names.NamePool writes it over the
+        # tail when a shorter name is spliced onto a longer one. It ends a string just as hard
+        # as 0x0000 does; scanning past it reads the reclaimed tail back as text (Shabanov's
+        # slot came back as 'Shaban￿￿￿￿' before this stopped here).
+        while end + 1 < len(d) and d[end:end + 2] not in (b"\0\0", b"\xff\xff"):
             end += 2
         if end - t > 128:                             # runaway = not a string
             return ""
@@ -296,22 +300,31 @@ class PlayerTable:
 
     # ── goalie mask ──────────────────────────────────────────────────────────
     def mask(self, row):
-        """(shell, pattern) -> texture helmet_g{shell+1:02d}_pattern_{pattern:02d}.iff."""
-        return ((self._u32(row, OFF_SHELL) >> SHELL_SHIFT) & SHELL_MASK,
-                self._u32(row, OFF_PATTERN) & PATTERN_MASK)
+        """(shell, pattern) -> texture helmet_g{shell+1:02d}_pattern_{pattern:02d}.iff.
+
+        6-bit patterns (mask_pattern6 XEX lane): the shell nibble's top bit (+0xB4
+        conv bit 26, always 0 in stock data) is the pattern's bit 5, so shell is
+        really 3 bits and pattern runs 0..63.  Stock records decode identically."""
+        b4 = self._u32(row, OFF_SHELL)
+        shell = (b4 >> SHELL_SHIFT) & 0x7
+        donor = (b4 >> 26) & 1
+        return (shell, (self._u32(row, OFF_PATTERN) & PATTERN_MASK) | (donor << 5))
 
     def set_mask(self, row, shell: int, pattern: int):
         """Read-modify-write BOTH dwords, preserving every other bit — the shell and pattern bits
         share their dwords with unrelated player data, so a blind store would corrupt the record."""
-        if not 0 <= shell <= SHELL_MASK:
-            raise ValueError(f"shell {shell} out of range 0..{SHELL_MASK}")
-        if not 0 <= pattern <= PATTERN_MASK:
-            raise ValueError(f"pattern {pattern} out of range 0..{PATTERN_MASK} (5-bit field)")
+        if not 0 <= shell <= 0x7:
+            raise ValueError(f"shell {shell} out of range 0..7")
+        if not 0 <= pattern <= 63:
+            raise ValueError(f"pattern {pattern} out of range 0..63 (6-bit field)")
+        if pattern > 31 and shell != 0:
+            raise ValueError("patterns 32-63 need the standard style (shell 0)")
         v = self._u32(row, OFF_SHELL)
         self._set_u32(row, OFF_SHELL,
-                      (v & ~(SHELL_MASK << SHELL_SHIFT)) | (shell << SHELL_SHIFT))
+                      (v & ~(SHELL_MASK << SHELL_SHIFT))
+                      | (shell << SHELL_SHIFT) | (((pattern >> 5) & 1) << 26))
         v = self._u32(row, OFF_PATTERN)
-        self._set_u32(row, OFF_PATTERN, (v & ~PATTERN_MASK) | pattern)
+        self._set_u32(row, OFF_PATTERN, (v & ~PATTERN_MASK) | (pattern & PATTERN_MASK))
 
     # ── mask recolor + cage colors ───────────────────────────────────────────
     # Stored 0xAARRGGBB with alpha FF. The public API speaks plain 0xRRGGBB so callers (and
@@ -451,6 +464,7 @@ def enumerate_players(ros_path, skip_unnamed=True, goalies_only=False):
         out.append({"index": row, "addr": None, "first": first, "last": last,
                     "name": (first + " " + last).strip(),
                     "key": key, "portrait": key, "shell": shell, "pattern": pattern,
+                    "cage": t.cage_color(row),      # 0xRRGGBB — per-player, edited in the Goalie tab
                     "num": num, "bio": bio, "roster_count": t.nrec})
     _pid.assign_player_ids(out)
     return out

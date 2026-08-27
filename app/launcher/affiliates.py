@@ -34,6 +34,7 @@ Identical text is shared rather than duplicated — "Toronto" already exists, so
 just point at it.  That is how the pool is built in the first place.
 """
 from __future__ import annotations
+import re
 import shutil
 import struct
 from pathlib import Path
@@ -113,6 +114,18 @@ def _enc(text):
     return text.encode("utf-16-be") + b"\x00\x00"
 
 
+# The created-team placeholder: "****************" + terminator, UTF-16BE, on a 0x22 grid.
+# Hundreds of these sit in the same pool as the team strings, and only SOME of them are a team
+# record's city/nick/code — the rest are reached from PLAYER records (+0x00 last, +0x04 first),
+# which this module has no index for. They are strings all the same, so the allocator has to see
+# them or `capacity()` runs a reclaimed slot straight through one. See `_placeholders`.
+_STAR_RX = re.compile(rb'(?:\x00\*){16}\x00\x00')
+
+
+def _placeholders(d):
+    return {m.start() for m in _STAR_RX.finditer(bytes(d))}
+
+
 class Pool:
     """Free-space allocator over dead string slots, plus a reuse index by exact text."""
 
@@ -128,6 +141,15 @@ class Pool:
                     self.refs.setdefault(t, []).append((i, nm))
         self.starts = sorted(self.refs)
         self.extern, self.foreign = self._scan_extern()
+        # Every created-team placeholder is a live string until it is deliberately spent, and
+        # most of them are reached only from PLAYER records, which `_scan_extern` cannot index
+        # (it recognises a target only if some TEAM field already points at it). Marking them
+        # foreign is what stops `capacity()` reporting a reclaimed slot as running through the
+        # placeholder array — that over-report is how an arena rename once wrote "Canada Life
+        # Centre" over two of them and left Maxim Shabanov's first name pointing at "Winnipeg".
+        # Slots a spare record legitimately owns are still spendable: `_spare_records` releases
+        # those by pointer into the reserve tier, which does not consult `foreign`.
+        self.foreign |= {s for s in _placeholders(self.d) if s not in self.refs}
         self.by_text = {}
         for t in self.starts:
             self.by_text.setdefault(_read_str(d, t), t)

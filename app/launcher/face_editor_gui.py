@@ -53,6 +53,7 @@ except ImportError:                                    # pragma: no cover
     Image = ImageTk = None
 
 PHOTO_TYPES = [("Images", "*.jpg *.jpeg *.png *.webp *.bmp"), ("All files", "*.*")]
+MODEL_TYPES = [("Head models", "*.obj *.glb *.gltf *.fbx"), ("All files", "*.*")]
 FRONT = 3.14                                           # camera yaw that looks at the face
 
 # name, attribute, lo, hi, default, tooltip-ish one-liner shown under the slider block
@@ -111,6 +112,11 @@ class HeadEditor(tk.Toplevel):
         self._tex_over = {}                            # {label: filename} maps imported by hand
         self.newP = None                               # fitted positions, not yet installed
         self._fit = None                               # (blob, model, M) that newP belongs to
+        self._cm_path = None                           # the imported model file
+        self._cm_src = None                            # (mesh as read, embedded images)
+        self._cm_mesh = None                           # that mesh, oriented + fitted to the head
+        self.custom_blob = None                        # blob 0 with the import already inside
+        self._cm_for = None                            # head id custom_blob was built against
         self.scene = None
         self._busy = False
         self._photo = None
@@ -246,6 +252,41 @@ class HeadEditor(tk.Toplevel):
                    command=self._do_install_maps).pack(fill=tk.X, pady=(4, 0))
         ttk.Label(tf, text="exports what the preview is showing; an import goes straight onto the "
                            "model", wraplength=300, foreground="#888").pack(anchor="w")
+
+        # ── custom model ──
+        # A head made anywhere else — sculpted, scanned, exported from Blender — goes straight
+        # onto this player without touching the photo pipeline. The import is fitted onto the
+        # base head's bounding box, the biggest submesh (the face skin) is replaced and every
+        # other part is folded away; a mesh with more vertices than the slot holds grows the
+        # asset and relocates the span (head_import.respan).
+        cf = ttk.LabelFrame(left, text="Custom model", padding=6)
+        cf.pack(fill=tk.X, pady=(8, 0))
+        cr = ttk.Frame(cf)
+        cr.pack(fill=tk.X)
+        self._cm_btn = ttk.Button(cr, text="Import model…", command=self._cm_import)
+        self._cm_btn.pack(side=tk.LEFT)
+        self._cm_lbl = ttk.Label(cr, text="", foreground="#8c8")
+        self._cm_lbl.pack(side=tk.LEFT, padx=6)
+        ck = ttk.Frame(cf)
+        ck.pack(fill=tk.X, pady=(4, 0))
+        self._cm_flip = tk.BooleanVar(value=False)
+        self._cm_zup = tk.BooleanVar(value=False)
+        ttk.Checkbutton(ck, text="Faces backwards (flip 180°)", variable=self._cm_flip,
+                        command=self._cm_retransform).pack(side=tk.LEFT)
+        ttk.Checkbutton(ck, text="Z-up export", variable=self._cm_zup,
+                        command=self._cm_retransform).pack(side=tk.LEFT, padx=8)
+        cb2 = ttk.Frame(cf)
+        cb2.pack(fill=tk.X, pady=(4, 0))
+        self._cm_apply_btn = ttk.Button(cb2, text="Apply to game files",
+                                        command=self._cm_install, state=tk.DISABLED)
+        self._cm_apply_btn.pack(side=tk.LEFT)
+        self._cm_new_btn = ttk.Button(cb2, text="Install as NEW head id…",
+                                      command=self._cm_install_new, state=tk.DISABLED)
+        self._cm_new_btn.pack(side=tk.LEFT, padx=4)
+        ttk.Label(cf, text=".obj, .glb/.gltf or binary .fbx; a GLB brings its textures along. "
+                           "More vertices than the slot holds is fine — the asset grows.",
+                  wraplength=300, foreground="#888",
+                  justify=tk.LEFT).pack(anchor=tk.W, pady=(4, 0))
 
         ab = ttk.Frame(left)
         ab.pack(fill=tk.X, pady=(8, 0))
@@ -565,12 +606,29 @@ class HeadEditor(tk.Toplevel):
         hid = self.head_id
         nm = C.HEAD_FMT.format(hid)
         use_built = (not from_disk) and self.built is not None
+        # An imported model owns the "Built" view outright: its blob already holds the final
+        # geometry (biggest part replaced, everything else folded), so none of the built-head
+        # machinery — fitted positions, hair shells, eye seating — applies to it.
+        custom = self.custom_blob if (not from_disk and self.custom_blob is not None
+                                      and self._cm_for == hid) else None
         # Read ONCE: _fh_apply publishes this from the UI thread, and a worker that read it
         # twice could take the no-shells branch and then find shells to apply with no model.
         over = dict(self._hair_over or {})
 
         def work():
             try:
+                if custom is not None:
+                    b = bytes(custom)
+                    m = C.scan_models(b, nm)[0]
+                    # eyes stays at its default None — the eyeball parts are folded away with
+                    # the rest, so there is nothing to seat and nothing to colour.
+                    sc = C.build_scene(b, m, asset=nm, game_dir=self.game_root)
+                    if sc is None:
+                        raise ValueError(f"{nm}: nothing to draw")
+                    C.head_light(sc, self._light_mode())
+                    self._apply_maps(sc)      # imported / GLB-embedded textures, if any
+                    err = None
+                    raise StopIteration       # done — skip the base-head path below
                 if use_built and self._fit is not None:
                     b, m, _M = self._fit
                     # The facial-hair edits go in at the BLOB level, exactly as Install writes
@@ -607,6 +665,8 @@ class HeadEditor(tk.Toplevel):
                 if use_built:
                     self._apply_built(sc)
                 err = None
+            except StopIteration:
+                pass                          # the custom branch finished with sc in hand
             except Exception as e:
                 sc, err = None, str(e)
                 self.log(traceback.format_exc())
@@ -652,6 +712,13 @@ class HeadEditor(tk.Toplevel):
             # also bends the globe out of round, which seat_eyes now corrects for.
             C.seat_eyes(sc)
             C.light_eyes(sc)          # the lambert above wiped the globes' ambient; put it back
+        self._apply_maps(sc)
+
+    def _apply_maps(self, sc):
+        """The uninstalled maps onto every material but the eyeballs' — shared by the built
+        preview and the custom-model preview. No-op until there is a colour map to paint."""
+        if not self.built or self.built.get("color") is None:
+            return
         col = np.asarray(self.built["color"].convert("RGB"), np.float32)
         ao = self.built.get("occlusion")
         if ao is not None:
@@ -713,13 +780,20 @@ class HeadEditor(tk.Toplevel):
     def _lock(self, on):
         self._busy = on
         st = tk.DISABLED if on else tk.NORMAL
-        for b in (self._build_btn, self._restore_btn, self._slot_btn):
+        for b in (self._build_btn, self._restore_btn, self._slot_btn, self._cm_btn):
             b.config(state=st)
         if not on:
             self._refresh_slot()
-            self._install_btn.config(state=tk.NORMAL if self.built else tk.DISABLED)
+            # Install needs the FIT, not just maps — a texture import alone seeds self.built,
+            # and enabling Install on that would unpack self._fit = None.
+            self._install_btn.config(state=tk.NORMAL if self.built and self._fit is not None
+                                     else tk.DISABLED)
+            ok = self.custom_blob is not None and self._cm_for == self.head_id
+            for b in (self._cm_apply_btn, self._cm_new_btn):
+                b.config(state=tk.NORMAL if ok else tk.DISABLED)
         else:
-            self._install_btn.config(state=tk.DISABLED)
+            for b in (self._install_btn, self._cm_apply_btn, self._cm_new_btn):
+                b.config(state=tk.DISABLED)
 
     def _do_build(self):
         if not self.refs:
@@ -915,7 +989,7 @@ class HeadEditor(tk.Toplevel):
         threading.Thread(target=work, daemon=True).start()
 
     def _do_install(self):
-        if not self.built:
+        if not self.built or self._fit is None:
             return
         others = self._shared_rows()
         if others:
@@ -999,6 +1073,208 @@ class HeadEditor(tk.Toplevel):
                     return messagebox.showerror("Restore", err, parent=self)
                 self._view.set("installed")
                 self._reload_scene(from_disk=True)
+            try:
+                self.after(0, done)
+            except tk.TclError:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    # ── custom model: import, preview, install ───────────────────────────────
+    def _cm_import(self):
+        p = filedialog.askopenfilename(parent=self, title="Head model", filetypes=MODEL_TYPES)
+        if not p:
+            return
+        self._cm_path = Path(p)
+        self._cm_src = None                            # force a fresh read of the new file
+        self._cm_run()
+
+    def _cm_retransform(self):
+        """Flip / Z-up toggled: re-orient the same import and re-fit it. No file re-read."""
+        if self._cm_path is not None and not self._busy:
+            self._cm_run()
+
+    def _cm_run(self):
+        """Read (or re-use) the model, orient + fit it onto this head, and build the blob the
+        preview shows and Apply writes. All of it off the UI thread — an FBX parse plus a
+        respan is seconds, not milliseconds."""
+        from . import head_import as HI
+        path, hid, G = self._cm_path, self.head_id, self.game_root
+        src = self._cm_src
+        flip, zup = bool(self._cm_flip.get()), bool(self._cm_zup.get())
+        self._lock(True)
+        self.log(f"importing {path.name} onto head {hid} — nothing is written yet")
+
+        def work():
+            out = err = None
+            try:
+                mesh, imgs = HI.read_mesh(path, log=self.log) if src is None else src
+                nm = C.HEAD_FMT.format(hid)
+                # The pristine base, exactly what Apply starts from — so what you preview is
+                # what installs, and re-importing never stacks a grow on top of a grow.
+                b = C.blob(False, G, nm)
+                m = C.scan_models(b, nm)[0]
+                mm = HI.orient(mesh, flip180=flip, zup=zup)
+                mm = HI.fit_to_head(mm, b, m, log=self.log)
+                nb, _rec = HI.apply_mesh_to_blob(b, mm, log=self.log)
+                seed = None
+                if imgs and src is None:
+                    # A GLB's own textures: resized onto the head's map dimensions so the
+                    # preview shows them and "Apply textures to game files" can write them.
+                    # The other maps come through live so the working set stays complete.
+                    live = self._live_maps()
+                    seed = {}
+                    for k, im in imgs.items():
+                        ref = live.get(k)
+                        if ref is None:
+                            continue
+                        im = im.convert("L" if k == "occlusion" else "RGB")
+                        if im.size != ref.size:
+                            im = im.resize(ref.size, Image.LANCZOS)
+                        seed[k] = im
+                    for k, v in live.items():
+                        seed.setdefault(k, v)
+                out = (mesh, imgs, mm, nb, seed)
+            except Exception as e:
+                err = str(e)
+                self.log(traceback.format_exc())
+
+            def done():
+                if out is None:
+                    self._lock(False)
+                    self._cm_lbl.config(text="import failed", foreground="#e06060")
+                    return messagebox.showerror("Import model", err, parent=self)
+                mesh, imgs, mm, nb, seed = out
+                self._cm_src = (mesh, imgs)
+                self._cm_mesh, self.custom_blob, self._cm_for = mm, nb, hid
+                self._cm_lbl.config(
+                    text=f"{path.name}: {len(mesh['pos']):,} v / {len(mesh['tris']):,} tris",
+                    foreground="#8c8")
+                if seed:
+                    if self.built is None:
+                        self.built = {}
+                    self.built.update(seed)
+                    for k in imgs:
+                        if k in seed:
+                            self._tex_over[k] = path.name
+                            self._tex_lbl[k].config(text="embedded")
+                self._lock(False)              # after the state, so Apply lights up
+                self.log("custom head ready — previewing; Apply writes it into the game files")
+                self._view.set("built")
+                self._reload_scene(from_disk=False)
+            try:
+                self.after(0, done)
+            except tk.TclError:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _cm_maps(self):
+        """What Apply should write alongside the geometry — the working texture set, if any.
+        Passing it matters on the grown path: install starts from the PRISTINE asset, so maps
+        installed earlier in the session would be wiped if they did not ride along."""
+        maps = {k: self.built[k] for k in ("color", "normal", "occlusion")
+                if self.built and self.built.get(k) is not None}
+        return maps or None
+
+    def _cm_install(self):
+        from . import head_import as HI
+        if self.custom_blob is None or self._cm_mesh is None:
+            return
+        others = self._shared_rows()
+        if others:
+            return messagebox.showwarning(
+                "Apply", f"Head {self.head_id} is shared with {len(others)} other player(s) — "
+                         f"applying would give every one of them this model.\n\n"
+                         f"Use \"Give this player his own head slot\" first, or "
+                         f"\"Install as NEW head id\".", parent=self)
+        hid = self.head_id
+        if not messagebox.askyesno(
+                "Apply", f"Write the imported model into player_head_id_{hid:04d}.iff?\n\n"
+                         f"The geometry is replaced — grown and relocated if it does not fit. "
+                         f"\"Restore stock head\" puts the artist's head back.", parent=self):
+            return
+        mesh, maps, G = self._cm_mesh, self._cm_maps(), self.game_root
+        self._lock(True)
+
+        def work():
+            err = None
+            try:
+                HI.install_custom_head(G, hid, mesh, maps=maps, log=self.log)
+            except Exception as e:
+                err = str(e)
+                self.log(traceback.format_exc())
+
+            def done():
+                self._lock(False)
+                if err:
+                    return messagebox.showerror("Apply", err, parent=self)
+                self._tex_over.clear()
+                for lb in self._tex_lbl.values():
+                    lb.config(text="")
+                self.log(f"head {hid}: custom model installed")
+                self._view.set("installed")
+                self._reload_scene(from_disk=True)
+            try:
+                self.after(0, done)
+            except tk.TclError:
+                pass
+        threading.Thread(target=work, daemon=True).start()
+
+    def _cm_install_new(self):
+        """A brand-new head asset for this model — the answer both to a shared slot and to a
+        mesh nobody wants squeezed into an existing head's file."""
+        from . import head_import as HI
+        if self.custom_blob is None or self._cm_mesh is None:
+            return
+        src = self.head_id
+        try:
+            new_id = HI.next_free_head_id(self.game_root)
+        except Exception as e:
+            return messagebox.showerror("New head id", str(e), parent=self)
+        if not messagebox.askyesno(
+                "New head id",
+                f"Add player_head_id_{new_id:04d}.iff with the imported model inside, and point "
+                f"{self.player} at it?\n\nNo existing head is touched. The head id itself is a "
+                f"roster edit — press Save on the Players tab afterwards.", parent=self):
+            return
+        mesh, maps, G = self._cm_mesh, self._cm_maps(), self.game_root
+        self._lock(True)
+
+        def work():
+            err = None
+            try:
+                HI.add_head_slot(G, new_id, src, mesh, maps=maps, log=self.log)
+            except Exception as e:
+                err = str(e)
+                self.log(traceback.format_exc())
+
+            def done():
+                if err:
+                    self._lock(False)
+                    return messagebox.showerror("New head id", err, parent=self)
+                try:
+                    self.table.set_head(self.row, new_id, game_dir=self.game_root)
+                except Exception as e:
+                    self._lock(False)
+                    return messagebox.showerror(
+                        "New head id", f"The asset was added, but the roster row could not be "
+                                       f"pointed at it: {e}", parent=self)
+                self._cm_for = new_id          # the blob in memory IS this new asset's content
+                self._tex_over.clear()
+                for lb in self._tex_lbl.values():
+                    lb.config(text="")
+                self._fh_rows, self._fh_for = [], None   # the shell list was per old head
+                self._fh_list.delete(0, tk.END)
+                self._lock(False)              # re-reads head_id, so it sees the new slot
+                if self.on_change:
+                    self.on_change()
+                self.log(f"head {new_id}: added and assigned to {self.player} "
+                         f"(roster edit, unsaved)")
+                self._view.set("installed")
+                self._reload_scene(from_disk=True)
+                messagebox.showinfo(
+                    "New head id", f"Head {new_id} written.\n\nRemember to press Save in the "
+                                   f"Players tab — the head id is a roster edit and is still "
+                                   f"unsaved.", parent=self)
             try:
                 self.after(0, done)
             except tk.TclError:

@@ -40,6 +40,8 @@ _required = [
     # hair recoloured. Both are ~20 MB and both are silently droppable by a glob, which is exactly
     # what this list is for.
     'face_landmarker.task', 'selfie_multiclass.tflite',
+    # Jersey Editor > Normals: the stitcher MEASURES its relief off these at import time.
+    'normal_tmpl_base.png', 'normal_tmpl_seam.png', 'normal_tmpl_weave.png',
 ]
 _have = {p.name for p in data_src.glob('*') if p.is_file()} if data_src.is_dir() else set()
 _gone = [f for f in _required if f not in _have]
@@ -130,21 +132,28 @@ a = Analysis(
                    'portrait_assign', 'portrait_download', 'requests', 'urllib3', 'onnxruntime',
                    # head editor
                    'cv2', 'mediapipe', 'face_shape', 'face_builder', 'facial_hair',
-                   'face_editor_gui']
+                   'face_editor_gui',
+                   # lazy function-level imports static analysis can miss (see excludes note)
+                   'scipy.sparse', 'scipy.sparse.csgraph', 'scipy.spatial']
                   + _scipy_hidden + _mp_hidden,
     hookspath=[],
     runtime_hooks=[],
-    # scipy is here for exactly THREE functions -- distance_transform_edt (archive_textures,
-    # encode_dxt5), gaussian_filter and sobel (normal_stitcher) -- all from scipy.ndimage. The
-    # full package is ~114 MB on disk and PyInstaller was packing all of it, which is dead weight
-    # in a ONEFILE build: every launch unpacks the whole payload to %TEMP% and Defender rescans it
-    # after every rebuild. Dropping the unused subpackages removes ~92 MB of that.
-    # ndimage genuinely needs scipy._lib, scipy.linalg and scipy.special -- verified by importing
-    # the three functions with everything below blocked -- so those stay.
-    excludes=['scipy.stats', 'scipy.optimize', 'scipy.sparse', 'scipy.signal',
-              'scipy.interpolate', 'scipy.spatial', 'scipy.integrate', 'scipy.io',
+    # scipy: only the subpackages the launcher actually calls ship; the rest are excluded
+    # because the full package is ~114 MB on disk and PyInstaller was packing all of it, which
+    # is dead weight in a ONEFILE build: every launch unpacks the whole payload to %TEMP% and
+    # Defender rescans it after every rebuild.
+    # Used (must NOT be excluded — all of these are function-level lazy imports, so a stitch or
+    # a head import that worked in dev dies in the exe with "No module named ...", which is how
+    # the scipy.sparse exclusion was caught 2026-08-18):
+    #   scipy.ndimage         distance_transform_edt / gaussian_filter / sobel / map_coordinates
+    #   scipy.sparse(.csgraph)  csr_matrix + dijkstra  (normal_stitcher seam tracing)
+    #   scipy.spatial         Delaunay + cKDTree       (face_builder, custom head import)
+    # ndimage also genuinely needs scipy._lib, scipy.linalg and scipy.special -- verified by
+    # importing with everything below blocked -- so those stay.
+    excludes=['scipy.stats', 'scipy.optimize', 'scipy.signal',
+              'scipy.interpolate', 'scipy.integrate', 'scipy.io',
               'scipy.fft', 'scipy.fftpack', 'scipy.cluster', 'scipy.odr',
-              'scipy.constants', 'scipy.datasets', 'scipy.differentiate'],
+              'scipy.datasets', 'scipy.differentiate'],   # scipy.constants stays: scipy.spatial needs it
     noarchive=False,
 )
 

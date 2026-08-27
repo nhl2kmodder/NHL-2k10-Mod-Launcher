@@ -77,9 +77,7 @@ EXTRA_SIZE_ROWS = (
 EXTRA_SIZE_SHEET = {k: s for k, _, s in EXTRA_SIZE_ROWS}
 
 # Columns of the slot table, and which of them can be typed into directly.
-# "#" is the slot's ENTRY in the uniform's own table (DRAM 0x550 + N*16) -- the number the
-# game's stamp pass indexes it by, and the order it lives in on disk.
-SLOT_COLS = ("#", "on", "x", "y", "w", "h", "size")
+SLOT_COLS = ("on", "x", "y", "w", "h", "size")
 EDIT_COLS = ("x", "y", "w", "h", "size")
 
 
@@ -326,17 +324,6 @@ class JerseyConvertTab:
         # have a size but no rect (see EXTRA_SIZE_ROWS). 1.0 == whatever the kit already draws.
         self.sizes = {n: 1.0 for n in self.slot_names}
         self.sizes.update({k: 1.0 for k, _, _ in EXTRA_SIZE_ROWS})
-        # The kit's own slot table as the game files hold it NOW (stamp_shader.kit_table), and
-        # the uniform's ROS stamp flags. The boxes above are seeded FROM the table on load, so
-        # what the editor shows is what the game samples; Apply writes the table back when it
-        # differs. None until a kit is loaded / when the asset cannot be read.
-        self.table_stock: dict | None = None
-        self._kit_flags: dict | None = None
-        self._stock_empty: set = set()   # slots the kit's table holds empty
-        self.v_advance = StringVar(value="")
-        self.v_model_sleeve_l = BooleanVar(value=True)
-        self.v_model_laces = BooleanVar(value=False)
-        self.v_model_sleeve_r = BooleanVar(value=True)
         self.art_cfg = {k: v for k, v in cfg.get("art", {}).items() if not k.startswith("_")}
         # EMPTY, not the profile's bundled replacements: a slot the user hasn't touched keeps
         # whatever it already has. (A conversion still gets the bundled marks -- build_stamps
@@ -476,34 +463,17 @@ class JerseyConvertTab:
                        "shoulder_right empty and the game puts the left mark on both shoulders. "
                        "Only fill it for a kit whose shoulders genuinely differ (Calgary's "
                        "Canada / Alberta flags are the shipped example).\n\n"
-                       "These boxes are the GAME'S OWN windows: each uniform carries a 27-entry "
-                       "table of sheet rectangles (# is the entry) and the stamp shader samples "
-                       "exactly that rectangle, masked to it. They are read from the kit when it "
-                       "loads, the model follows every edit live, and Apply writes the table back "
-                       "into the uniform. Where a stamp lands ON THE BODY is still the mesh — to "
-                       "move a crest on the jersey, move it inside its own slot art.\n\n"
-                       "Digits: the box is the digit's INK rectangle and the advance is the "
-                       "width of one digit's quad, so a wider advance spaces a two-digit number "
-                       "out. A digit drawn bigger than its box is clipped by it — grow the box "
-                       "too.\n\n"
+                       "These boxes are where a stamp's art is CUT FROM the sheet. Where it lands "
+                       "ON THE BODY is fixed by the game and can't be changed here — to move a "
+                       "crest on the jersey, move it inside its own slot art.\n\n"
                        "SIZE is how big the mark is drawn inside its cell, in percent. Click any "
-                       "number to type a new one; click ON to turn a slot off (its entry is "
-                       "written as empty).").pack(
+                       "number to type a new one; click ON to turn a slot off.").pack(
             fill=X, pady=(0, 8))
-        ab = ttk.Frame(p_slot); ab.pack(fill=X, pady=(0, 6))
-        ttk.Label(ab, text="Digit advance (px)").pack(side=LEFT)
-        sb = ttk.Spinbox(ab, from_=8, to=512, increment=1, width=5, textvariable=self.v_advance,
-                         command=self._advance_changed)
-        sb.pack(side=LEFT, padx=(6, 10))
-        sb.bind("<Return>", lambda e: self._advance_changed())
-        sb.bind("<FocusOut>", lambda e: self._advance_changed())
-        self.v_table_note = StringVar(value="")
-        ttk.Label(ab, textvariable=self.v_table_note, foreground="#888").pack(side=LEFT)
         self.tree = ttk.Treeview(p_slot, columns=SLOT_COLS, show="tree headings", height=18,
                                  selectmode="browse")
         self.tree.heading("#0", text="Slot")
         self.tree.column("#0", width=128, stretch=False)
-        for c, wd in zip(SLOT_COLS, (26, 30, 44, 44, 44, 44, 50)):
+        for c, wd in zip(SLOT_COLS, (30, 44, 44, 44, 44, 50)):
             self.tree.heading(c, text=c.upper())
             self.tree.column(c, width=wd, anchor="e", stretch=False)
         self.tree.pack(fill=BOTH, expand=True)
@@ -965,17 +935,6 @@ class JerseyConvertTab:
                           values=("small", "big", "none"))
         cb.pack(side=LEFT, padx=(4, 12))
         cb.bind("<<ComboboxSelected>>", lambda e: self.model_refresh())
-        # The two sleeve numbers are ROS flags too (+0x18 bits 20/19); seeded from the kit's
-        # record by _sync_front_number, written back by Apply like the chest number.
-        ttk.Checkbutton(bar, text="L sleeve #", variable=self.v_model_sleeve_l,
-                        command=self.model_refresh).pack(side=LEFT, padx=(0, 6))
-        ttk.Checkbutton(bar, text="R sleeve #", variable=self.v_model_sleeve_r,
-                        command=self.model_refresh).pack(side=LEFT, padx=(0, 6))
-        # The collar strings are a collar MESH, not art: ROS +0x18 bits 24..26 pick which of the
-        # skater's five collars the kit wears and 1 is the laced one (Islanders); off goes back
-        # to the plain V (Devils). Seeded by _sync_front_number, written by Apply.
-        ttk.Checkbutton(bar, text="Collar strings", variable=self.v_model_laces,
-                        command=self.model_refresh).pack(side=LEFT, padx=(0, 12))
         # Relief is the normal maps, lit. On by default because that is what the game draws; the
         # toggle is there so a flat read of the artwork is one click away.
         self.v_model_normals = BooleanVar(value=True)
@@ -996,18 +955,12 @@ class JerseyConvertTab:
 
         miss = ", ".join(n.replace("_", " ") for n in JP.unplaced())
         ttk.Label(f, foreground="#888", wraplength=560, justify=LEFT, padding=(6, 2, 6, 6),
-                  text=("Drag to turn, wheel to zoom. " + (
-                        "The figure (skater, gloves, helmet, head) and its decal quads are read "
-                        "straight from the game's global.iff. "
-                        if JP.mesh_source() == "game" else
-                        "No game folder yet, so the figure is the shipped capture bake. ") +
-                       "Every stamp is drawn from the uniform's OWN "
-                       "data: the slot table in the uniform asset picks the sheet window for the "
-                       "crest, letters, digits and patches (edit the boxes and the advance on the "
-                       "Slots tab and this follows), and the roster's uniform flags pick the front "
-                       "number placement, the sleeve numbers and which patch each site wears. "
-                       "Front # and the sleeve toggles here edit those flags; Apply writes them. "
-                       f"Still approximate or not drawn: {miss}.")).pack(
+                  text="Drag to turn, wheel to zoom. The crest, captaincy letter, front and back "
+                       "numbers and both sleeve numbers are placed exactly where the game puts "
+                       "them, at the size the game draws them. Front numbers have two placements, "
+                       "not two sizes: small sits high on the left chest, big in the centre — the "
+                       f"uniform's own setting picks which. Still approximate or not drawn: "
+                       f"{miss}.").pack(
         fill=X)
 
     def _model_view(self, yaw):
@@ -1462,196 +1415,10 @@ class JerseyConvertTab:
         try:
             from . import uniform_colors as ucol
             found = self._target_row()
-            self._kit_flags = None
             if found:
-                self._kit_flags = ucol.stamp_flags(*found)
-                self.v_model_front.set(self._kit_flags["front"])
-                self.v_model_sleeve_l.set(self._kit_flags["sleeve_left"])
-                self.v_model_sleeve_r.set(self._kit_flags["sleeve_right"])
-                self.v_model_laces.set(self._kit_flags.get("collar") == ucol.COLLAR_LACED)
+                self.v_model_front.set(ucol.front_number(*found))
         except Exception:
             pass
-
-    def _laces_change(self):
-        """The collar-strings edit waiting to be written: `(ros_path, row, on)` or None."""
-        try:
-            from . import uniform_colors as ucol
-            found = self._target_row()
-            if not found:
-                return None
-            ros, row = found
-            want = bool(self.v_model_laces.get())
-            # Style 1 (laced) or 0 (no-tab) and nothing else: the two CUSTOM collars live in
-            # those two records, so a kit still on 2..4 (ANA's tab, EDM's) is moved onto 0.
-            if ucol.collar_style(ros, row) == (ucol.COLLAR_LACED if want else 0):
-                return None
-            return str(ros.path), row, want
-        except Exception:
-            return None
-
-    @staticmethod
-    def _write_laces(change, log):
-        path, row, on = change
-        from . import ros_file as RF, uniform_colors as ucol
-        ros = RF.RosFile(path)
-        style = ucol.COLLAR_LACED if on else 0
-        if ucol.collar_style(ros, row) == style:
-            return
-        ucol.set_collar_style(ros, row, style)
-        ros.save()
-        log("[jersey] collar strings -> %s (Roster.ROS uniform row %d, collar style %d)"
-            % ("on" if on else "off", row, ucol.collar_style(ros, row)))
-
-    def _sleeve_change(self):
-        """The sleeve-number edit waiting to be written: `(ros_path, row, left, right)` or None.
-        Same contract as `_front_number_change`."""
-        try:
-            from . import uniform_colors as ucol
-            found = self._target_row()
-            if not found:
-                return None
-            ros, row = found
-            want = (bool(self.v_model_sleeve_l.get()), bool(self.v_model_sleeve_r.get()))
-            if ucol.sleeve_numbers(ros, row) == want:
-                return None
-            return str(ros.path), row, want[0], want[1]
-        except Exception:
-            return None
-
-    @staticmethod
-    def _write_sleeves(change, log):
-        path, row, left, right = change
-        from . import ros_file as RF, uniform_colors as ucol
-        ros = RF.RosFile(path)
-        if ucol.sleeve_numbers(ros, row) == (left, right):
-            return
-        ucol.set_sleeve_numbers(ros, row, left, right)
-        ros.save()
-        log("[jersey] sleeve numbers -> L %s / R %s (Roster.ROS uniform row %d)"
-            % ("on" if left else "off", "on" if right else "off", row))
-
-    # ── the kit's slot table ─────────────────────────────────────────────────────────────
-    def _seed_from_table(self, names=None):
-        """Seed the slot boxes (and the advance) from the kit's own table.
-
-        An entry the game holds EMPTY (w or h == 0) keeps the profile's box so there is something
-        to drag, but starts OFF -- the two agree on what the game draws (nothing), and turning
-        it on is what puts the box into the table.
-        """
-        t = self.table_stock
-        slots = self.profile["stamps"]["slots"]
-        if names is None:
-            self._stock_empty = set()
-        for n in (names if names is not None else self.slot_names):
-            if n not in self.rects:
-                continue
-            ent = SS.DRAM_ENTRY.get(n)
-            r = list(t["rects"][ent]) if (t and ent is not None) else None
-            if r and r[2] > 0 and r[3] > 0:
-                self.rects[n] = r
-                self.enabled[n] = True
-            else:
-                self.rects[n] = list(slots[n]["rect"])
-                self.enabled[n] = t is None
-                if t is not None:
-                    self._stock_empty.add(n)
-        if t and (names is None):
-            self.v_advance.set(str(t["advance"]))
-
-    def _advance_px(self) -> int | None:
-        try:
-            v = int(float(self.v_advance.get()))
-        except (ValueError, TypeError):
-            return None
-        return v if 8 <= v <= 512 else None
-
-    def _advance_changed(self):
-        # The advance only spaces the digit quads -- no art moves -- so just the model redraws.
-        if self._advance_px() is not None:
-            self.model_refresh()
-
-    def _live_table(self) -> dict | None:
-        """The table as the editor currently has it, in the game's entry order."""
-        t = self.table_stock
-        if t is None:
-            return None
-        rects = [list(r) for r in t["rects"]]
-        for n, ent in SS.DRAM_ENTRY.items():
-            if n in self.rects:
-                rects[ent] = [max(0, int(v)) for v in self.rects[n]] \
-                    if self.enabled.get(n, True) else [0, 0, 0, 0]
-        adv = self._advance_px()
-        return {"advance": adv if adv is not None else t["advance"],
-                "row_h": t.get("row_h", 128), "rects": rects}
-
-    def _table_change(self) -> dict | None:
-        """The live table if it differs from what the uniform holds, else None."""
-        live = self._live_table()
-        if live is None or self.table_stock is None:
-            return None
-        same = (live["advance"] == self.table_stock["advance"]
-                and all(list(a) == list(b) for a, b in zip(live["rects"],
-                                                          self.table_stock["rects"])))
-        return None if same else live
-
-    def _live_flags(self) -> dict:
-        """The ROS stamp flags with the model bar's unsaved edits laid over them."""
-        f = dict(self._kit_flags or {})
-        f["sleeve_left"] = bool(self.v_model_sleeve_l.get())
-        f["sleeve_right"] = bool(self.v_model_sleeve_r.get())
-        f["front"] = self.v_model_front.get()
-        # Ticked = the laced collar (style 1, record 17); unticked = the no-tab collar (style 0,
-        # record 16). Those two records hold the CUSTOM collars (build_collar.py), so a kit's own
-        # 2..4 is never kept -- same rule as the write.
-        try:
-            from . import uniform_colors as ucol
-            laced = ucol.COLLAR_LACED
-        except Exception:
-            laced = 1
-        f["collar"] = laced if self.v_model_laces.get() else 0
-        return f
-
-    def _front_number_change(self):
-        """The chest-number edit waiting to be written: `(ros_path, row, mode)` or None.
-
-        `_sync_front_number` re-seeds the combobox from the target kit's OWN uniform record every
-        time the target changes, so a value that still matches the record means the user never
-        touched it and there is nothing to write. Resolved here, on the UI thread, because it
-        reads Tk vars -- the apply worker gets a plain tuple and re-opens the roster itself.
-        """
-        try:
-            from . import uniform_colors as ucol
-            found = self._target_row()
-            if not found:
-                return None
-            ros, row = found
-            mode = self.v_model_front.get()
-            if mode not in ("none", "small", "big") or ucol.front_number(ros, row) == mode:
-                return None
-            return str(ros.path), row, mode
-        except Exception:
-            return None
-
-    @staticmethod
-    def _write_front_number(change, log):
-        """Write the chest-number placement into this uniform's ROS record (+0x18).
-
-        Nothing in the ART decides this -- the stamps sheet carries one digit set either way --
-        so the placement is a flag on the roster row and flipping it is the whole job. See
-        `uniform_colors.FRONTNUM_BIG` / `FRONTNUM_SMALL`.
-
-        The roster is re-opened from disk rather than carrying the RosFile across from the UI
-        thread: the Uniforms tab edits the same file with the same read -> mutate -> save cycle,
-        so writing back a copy read minutes ago would revert whatever it saved in between.
-        """
-        path, row, mode = change
-        from . import ros_file as RF, uniform_colors as ucol
-        ros = RF.RosFile(path)
-        if ucol.front_number(ros, row) == mode:          # already there -- leave the file alone
-            return
-        ucol.set_front_number(ros, row, mode)
-        ros.save()
-        log("[jersey] chest number -> %s (Roster.ROS uniform row %d)" % (mode, row))
 
     def _model_render(self, ss=2):
         if self.cv_model is None:
@@ -1668,19 +1435,14 @@ class JerseyConvertTab:
                 # preview has to read the TARGET's own table or the numbers come out the wrong
                 # size for every kit but the one the shader constants were captured from.
                 pair = self.targets.get(self.v_target.get())
-                live = self._live_table()
-                metrics = SS.table_metrics(
-                    live, self._live_flags(),
-                    logo=SS.kit_logo_params(pair[1]) if pair else None) if live else (
-                    SS.kit_metrics(pair[1]) if pair else None)
+                metrics = SS.kit_metrics(pair[1]) if pair else None
                 self._model_scene = JP.build_scene(
                     sheets, letter=None if letter == "—" else letter,
                     name=self.v_model_name.get().strip(),
                     number=self.v_model_number.get().strip(),
                     front_style=self.v_model_front.get(),
                     palette=self._target_palette(), metrics=metrics,
-                    normals=bool(self.v_model_normals.get()),
-                    collar=self._live_flags().get("collar"))
+                    normals=bool(self.v_model_normals.get()))
                 self._model_dirty = False
             W = max(120, self.cv_model.winfo_width())
             H = max(160, self.cv_model.winfo_height())
@@ -1829,13 +1591,6 @@ class JerseyConvertTab:
         except Exception as e:
             self.app._log_q.put(f"[jersey] {base_iff}: {e}")
 
-        SS.clear_cache(uni_iff)
-        self.table_stock = SS.kit_table(uni_iff, live=True)
-        self._seed_from_table()
-        self.v_table_note.set("from the uniform's own table" if self.table_stock
-                              else "no slot table read — boxes are the profile's")
-        self._fill_tree()
-        self._push_boxes()
         self._stitched = set()
         self.imported = {}               # a fresh kit load is an explicit reset — imports too
         self.edit_mode = True
@@ -1854,10 +1609,8 @@ class JerseyConvertTab:
         read '—' rather than a zero that looks editable."""
         pct = f"{round(self.sizes[name] * 100)}%"
         if name in EXTRA_SIZE_SHEET:
-            return ("", "", "—", "—", "—", "—", pct)
-        ent = SS.DRAM_ENTRY.get(name)
-        return ("" if ent is None else str(ent), "✔" if self.enabled[name] else "",
-                *self.rects[name], pct)
+            return ("", "—", "—", "—", "—", pct)
+        return ("✔" if self.enabled[name] else "", *self.rects[name], pct)
 
     def _fill_tree(self):
         sel = self.tree.selection()
@@ -1885,8 +1638,6 @@ class JerseyConvertTab:
         if not n:
             return "break"
         self.enabled[n] = not self.enabled[n]
-        if self.enabled[n] and not (self.rects[n][2] > 0 and self.rects[n][3] > 0):
-            self.rects[n] = list(self.profile["stamps"]["slots"][n]["rect"])
         self._update_row(n)
         self._push_boxes()
         self._rebuild_stamps()
@@ -1975,18 +1726,14 @@ class JerseyConvertTab:
         slots = self.profile["stamps"]["slots"]
         names = (self.slot_names + [k for k, _, _ in EXTRA_SIZE_ROWS]) if everything \
             else [self.tree.selection()[0]] if self.tree.selection() else []
-        # "Reset" means the kit as the game files hold it -- the stock table -- and only the
-        # profile's boxes when no table could be read.
-        self._seed_from_table([n for n in names if n in self.rects])
         for n in names:
+            if n in self.rects:
+                self.rects[n] = list(slots[n]["rect"])
             self.sizes[n] = 1.0
             self._size_dirty.add(EXTRA_SIZE_SHEET.get(n, "stamps"))
-        if everything and self.table_stock:
-            self.v_advance.set(str(self.table_stock["advance"]))
         self._fill_tree()
         self._push_boxes()
         self._do_size()
-        self._rebuild_stamps()
 
     def set_all(self, on):
         for n in self.slot_names:
@@ -2028,11 +1775,7 @@ class JerseyConvertTab:
         return J.Options(layers=None, strip_logos=bool(self.v_strip.get()),
                          helmet_from_jersey=bool(self.v_helm_jersey.get()),
                          helmet_keep_logo=bool(self.v_helm_logo.get()),
-                         # A slot the kit's own table already holds EMPTY has no stock art
-                         # under its box; 'off' there is the table entry, not an erase.
-                         enabled={n: v or n in self._stock_empty
-                                  for n, v in self.enabled.items()},
-                         rects=dict(self.rects), art=art,
+                         enabled=dict(self.enabled), rects=dict(self.rects), art=art,
                          helmet_logo=dict(self.helmet_logo)
                          if (self.helmet_logo.get("file")
                              or self.helmet_logo.get("tint")) else {},
@@ -2109,12 +1852,6 @@ class JerseyConvertTab:
         self.txt_warn.delete("1.0", END)
         if res.warnings:
             self.txt_warn.insert(END, "\n".join(res.warnings))
-        if res.collar_colors:
-            names = {"A": "back", "B": "side", "C": "V", "D": "inside", "E": "laces",
-                     "F": "eyelets"}
-            self.txt_warn.insert(END, ("\n" if res.warnings else "") + "collar zones: " +
-                                 "  ".join(f"{z} {names.get(z, z)} #{r:02x}{g:02x}{b:02x}"
-                                           for z, (r, g, b) in sorted(res.collar_colors.items())))
         lifted = ", ".join(lg.name for lg in res.logos) or "none"
         lay = "  ".join(f"{k} {v}" for k, v in sorted(res.layers.items()))
         self.v_status.set(f"{len(res.sheets)} sheet(s) built — logos lifted: {lifted}"
@@ -2248,15 +1985,7 @@ class JerseyConvertTab:
         # DXN round-trip for no change.
         normals = {NS.normal_key(s) for s in NS.SHEET_ORDER}
         names = [n for n in names if n not in normals or n in self._stitched]
-        # The chest number is a ROSTER flag, not art, so it can be the only thing the user
-        # changed -- it must not be swallowed by the "no sheets touched" / "all sheets unticked"
-        # early-outs below.
-        front = self._front_number_change()
-        sleeves = self._sleeve_change()
-        laces = self._laces_change()
-        table = self._table_change()
-        extra = front or sleeves or laces or table
-        if not names and not extra:
+        if not names:
             messagebox.showinfo("Jersey Editor", "Nothing has been changed yet.")
             return
         # The "Apply writes" checkboxes gate the write per garment part; an unticked part's
@@ -2265,73 +1994,24 @@ class JerseyConvertTab:
                    if self.v_apply[key].get() for s in sheets}
         skipped = [n for n in names if n not in allowed]
         names = [n for n in names if n in allowed]
-        if not names and not extra:
+        if not names:
             messagebox.showinfo("Jersey Editor",
                                 "Every changed sheet is unticked under 'Convert parts' — "
                                 "tick at least one part to apply.")
             return
         if skipped:
             self.app._log_q.put("[jersey] held back by 'Convert parts': " + ", ".join(skipped))
-        ask = []
-        if names:
-            ask.append(f"Write {', '.join(names)} into {pair[0]} and {pair[1]}?")
-            if "stamps" in names:
-                ask.append("The stamps sheet is also mirrored to this jersey's front-end "
-                           "team-select art.")
-        if front:
-            ask.append(f"Set this kit's chest number to “{front[2]}” in Roster.ROS.")
-        if sleeves:
-            ask.append("Set this kit's sleeve numbers to L %s / R %s in Roster.ROS."
-                       % ("on" if sleeves[2] else "off", "on" if sleeves[3] else "off"))
-        if laces:
-            ask.append("Put the collar strings %s in Roster.ROS (collar style %s)."
-                       % ("on" if laces[2] else "off", "1, laced" if laces[2] else "0, no tab"))
-        if table:
-            ch = [SS.ENTRY_NAME.get(i, str(i)) for i, (a, b) in
-                  enumerate(zip(table["rects"], self.table_stock["rects"])) if list(a) != list(b)]
-            if table["advance"] != self.table_stock["advance"]:
-                ch.insert(0, f"advance {self.table_stock['advance']}→{table['advance']}")
-            ask.append(f"Write the slot table into {pair[1]} (in place): " + ", ".join(ch) + ".")
-        if not messagebox.askyesno("Apply jersey", "\n\n".join(ask)):
+        if not messagebox.askyesno(
+                "Apply jersey", f"Write {', '.join(names)} into {pair[0]} and {pair[1]}?\n\n"
+                                "The stamps sheet is also mirrored to this jersey's front-end "
+                                "team-select art."):
             return
         sheets = {k: self.res.sheets[k].copy() for k in names}
-        self.app._run_in_thread(self._apply_worker, pair, sheets, root, front, sleeves, table,
-                                laces, op_label="Applying converted jersey…")
+        self.app._run_in_thread(self._apply_worker, pair, sheets, root,
+                                op_label="Applying converted jersey…")
 
-    def _apply_worker(self, pair, sheets, root, front=None, sleeves=None, table=None,
-                      laces=None):
+    def _apply_worker(self, pair, sheets, root):
         log = self.app._log_q.put
-        base_iff, uni_iff = pair
-        # The roster flags go first: they are the edits that can stand alone, and a texture
-        # write raising further down must not cost them.
-        if front:
-            try:
-                self._write_front_number(front, log)
-            except Exception as e:
-                log(f"[jersey] chest number NOT written: {e}")
-        if sleeves:
-            try:
-                self._write_sleeves(sleeves, log)
-            except Exception as e:
-                log(f"[jersey] sleeve numbers NOT written: {e}")
-        if laces:
-            try:
-                self._write_laces(laces, log)
-            except Exception as e:
-                log(f"[jersey] collar strings NOT written: {e}")
-        try:
-            self._apply_sheets(pair, sheets, root, log)
-        finally:
-            # The table goes LAST: a whole-asset apply resets the uniform to its shipped bytes
-            # first (`_reset_if_whole`), which would throw away a table written before it.
-            if table:
-                try:
-                    log("[jersey] " + SS.write_kit_table(uni_iff, table, root, log))
-                    self.table_stock = table
-                except Exception as e:
-                    log(f"[jersey] slot table NOT written: {e}")
-
-    def _apply_sheets(self, pair, sheets, root, log):
         base_iff, uni_iff = pair
         tmp = Path(tempfile.mkdtemp(prefix="jerseyconv_"))
         try:
@@ -2349,11 +2029,11 @@ class JerseyConvertTab:
                     (uni_iff, [(0, "stamps"), (2, "helmet"), (3, "letters"),
                                (1, "normal"), (4, "letters_normal")])]
             for iff, wants in plan:
-                edits, ntex = self._edits_for(iff, wants, paths, log)
+                edits = self._edits_for(iff, wants, paths, log)
                 if not edits:
                     continue
                 log(f"[jersey] {iff}: {len(edits)} texture(s)")
-                self._reset_if_whole(iff, edits, ntex, root, log)
+                archtex.ensure_clean(iff, root, log)
                 log("  " + str(archtex.replace_many(iff, edits, root, log,
                                                     prefer_lossless=False)))
 
@@ -2361,11 +2041,11 @@ class JerseyConvertTab:
             # this the jersey changes in-game but not on the team-select screen.
             if "stamps" in paths:
                 for twin in jerseys.twins(uni_iff):
-                    edits, ntex = self._edits_for(twin, [(0, "stamps")], paths, log)
+                    edits = self._edits_for(twin, [(0, "stamps")], paths, log)
                     if not edits:
                         continue
                     log(f"[jersey] mirror → {twin}")
-                    self._reset_if_whole(twin, edits, ntex, root, log)
+                    archtex.ensure_clean(twin, root, log)
                     log("  " + str(archtex.replace_many(twin, edits, root, log,
                                                         prefer_lossless=False)))
             log("[jersey] done.")
@@ -2373,35 +2053,14 @@ class JerseyConvertTab:
             shutil.rmtree(tmp, ignore_errors=True)
 
     @staticmethod
-    def _reset_if_whole(iff, edits, ntex, root, log):
-        """Reset `iff` to its shipped bytes, but ONLY when this apply rewrites every texture in it.
-
-        `ensure_clean` throws the WHOLE asset back to stock so an apply never stacks a grow or a
-        format conversion on a previous edit. That is right for a full apply and destructive for a
-        partial one: in edit mode `names` is just the sheets the user touched, so resetting first
-        silently reverted every sheet this pass was NOT rewriting. Measured on a live install --
-        14 kits had their stamps/helmet/letters sitting byte-identical to stock with only the
-        re-stitched normals applied, which is exactly this. The jersey path always calls
-        replace_many with prefer_lossless=False (same dim, same format, in place), so there is no
-        grow to stack and skipping the reset is safe.
-        """
-        if len(edits) >= ntex:
-            archtex.ensure_clean(iff, root, log)
-            return
-        log(f"  partial apply ({len(edits)} of {ntex} textures) — keeping what is already in "
-            f"the archive; no reset to stock")
-
-    @staticmethod
     def _edits_for(iff, wants, paths, log):
-        """-> ([replace_many edits], texture count), skipping anything this asset doesn't have.
-
-        The count is what lets the caller tell a whole-asset apply from a partial one; see
-        `_reset_if_whole`."""
+        """[(texture index, sheet name)] -> replace_many edits, skipping anything this asset
+        doesn't actually have."""
         try:
             recs = archtex.list_textures(iff)
         except Exception as e:
             log(f"[jersey] {iff}: unreadable ({e})")
-            return [], 0
+            return []
         out = []
         for idx, key in wants:
             if key not in paths:
@@ -2410,7 +2069,7 @@ class JerseyConvertTab:
                 log(f"[jersey] {iff}: no texture #{idx} — skipped {key}")
                 continue
             out.append({**recs[idx], "path": str(paths[key])})
-        return out, len(recs)
+        return out
 
 
 def _pretty(name: str) -> str:

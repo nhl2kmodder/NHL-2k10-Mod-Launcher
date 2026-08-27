@@ -1245,7 +1245,12 @@ def haircut_catalogue(game_dir=None, log=None, force=False):
     """{'ids', 'hair' (packed bits, one 512x512 mask per head), 'strand'} over every shipped head.
 
     Roughly nine minutes cold, because each head is a separate archive decode; then it is a file.
+    Progress is checkpointed every 25 heads, so closing the launcher mid-scan only pauses it —
+    the next build resumes where this one stopped.  (The first cut of the save passed `ids` both
+    positionally and inside **out, so np.savez raised, the bare except ate it, and the "cache"
+    re-scanned all 447 heads on every launcher run.)
     """
+    import time
     cv2 = _cv2()
     key = str(game_dir)
     if not force and key in _HAIRCUTS:
@@ -1256,41 +1261,70 @@ def haircut_catalogue(game_dir=None, log=None, force=False):
         from char_model import head_ids
     ids = list(head_ids(game_dir))
     p = _haircut_cache_path()
+    tried, keep, packed, strand = [], [], [], []
     if not force and p.exists():
         try:
             z = np.load(p)
-            if int(z["version"]) == HAIR_CACHE_VERSION and list(z["ids"]) == ids:
-                out = {"ids": np.asarray(z["ids"]), "hair": np.asarray(z["hair"]),
-                       "strand": np.asarray(z["strand"])}
-                _HAIRCUTS[key] = out
-                return out
+            if int(z["version"]) == HAIR_CACHE_VERSION and list(z["want"]) == ids:
+                tried = [int(x) for x in z["tried"]]
+                keep = [int(x) for x in z["ids"]]
+                packed = [np.asarray(r, np.uint8) for r in z["hair"]]
+                strand = [float(x) for x in z["strand"]]
+                if len(tried) >= len(ids):
+                    out = {"ids": np.asarray(keep, np.int32),
+                           "hair": np.asarray(packed, np.uint8),
+                           "strand": np.asarray(strand, np.float32)}
+                    _HAIRCUTS[key] = out
+                    return out
+        except Exception:
+            tried, keep, packed, strand = [], [], [], []
+
+    def _save():
+        try:
+            np.savez_compressed(p, version=HAIR_CACHE_VERSION,
+                                want=np.asarray(ids, np.int32),
+                                tried=np.asarray(tried, np.int32),
+                                ids=np.asarray(keep, np.int32),
+                                hair=np.asarray(packed, np.uint8),
+                                strand=np.asarray(strand, np.float32))
         except Exception:
             pass
-    if log:
-        log(f"  haircut catalogue: reading {len(ids)} shipped heads, once — this takes a few "
-            f"minutes and is then cached")
+
+    todo = [h for h in ids if h not in set(tried)]
+    if log and todo:
+        if tried:
+            log(f"  haircut catalogue: resuming - {len(tried)} of {len(ids)} heads already "
+                f"scanned")
+        else:
+            log(f"  haircut catalogue: reading {len(ids)} shipped heads, once (~9 min) - "
+                f"progress is saved every 25, so closing mid-scan only pauses it")
     Z = np.zeros((UV, UV), np.float32)
-    keep, packed, strand = [], [], []
-    for hid in ids:
+    t0 = time.time()
+    for n, hid in enumerate(todo, 1):
         try:
             a = np.asarray(base_maps(hid, game_dir)["color"].convert("RGB"), np.uint8)
+            if a.shape[:2] != (UV, UV):
+                a = cv2.resize(a, (UV, UV), interpolation=cv2.INTER_AREA)
+            _, h = skin_hair_masks(a, Z)
+            m = h > 0.5
+            L = _lab(a)[..., 0]
+            keep.append(int(hid))
+            packed.append(np.packbits(m))
+            strand.append(float(np.abs(cv2.GaussianBlur(L, (0, 0), 0.8)
+                                       - cv2.GaussianBlur(L, (0, 0), 3.0))[m].mean())
+                          if m.any() else 0.0)
         except Exception:
-            continue
-        if a.shape[:2] != (UV, UV):
-            a = cv2.resize(a, (UV, UV), interpolation=cv2.INTER_AREA)
-        _, h = skin_hair_masks(a, Z)
-        m = h > 0.5
-        L = _lab(a)[..., 0]
-        keep.append(hid)
-        packed.append(np.packbits(m))
-        strand.append(float(np.abs(cv2.GaussianBlur(L, (0, 0), 0.8)
-                                   - cv2.GaussianBlur(L, (0, 0), 3.0))[m].mean()) if m.any() else 0.0)
+            pass                                       # a bad head is recorded as tried below
+        tried.append(int(hid))
+        if n % 25 == 0 or n == len(todo):
+            _save()
+            if log:
+                el = time.time() - t0
+                eta = el / n * (len(todo) - n)
+                log(f"  haircut catalogue: {n}/{len(todo)} heads, "
+                    f"{el / 60:.1f} min in, about {eta / 60:.1f} min left")
     out = {"ids": np.asarray(keep, np.int32), "hair": np.asarray(packed, np.uint8),
            "strand": np.asarray(strand, np.float32)}
-    try:
-        np.savez_compressed(p, version=HAIR_CACHE_VERSION, ids=np.asarray(ids, np.int32), **out)
-    except Exception:
-        pass
     _HAIRCUTS[key] = out
     return out
 
@@ -3575,7 +3609,15 @@ def build_multi(ref_paths, base_id, game_dir=None, positions=None, sharp=2.0, de
     # from whichever head the player happens to sit on. See `haircut_donor`. Only the hair is taken:
     # the skin retint, the contrast reference and everything else downstream still work off the base
     # head, because those are about this map's own skin and the donor has nothing to say about it.
-    donor_id, donor_np = haircut_donor(hair_seen, hair_wt / 0.02, base_id, game_dir, log=log)
+    # …but only when the donor's PAINT is actually going to be used. With HAIR_FROM_DONOR off
+    # (the user's call: the donor takeover made hair worse) the only thing the donor bought was
+    # a slightly cleaner texel set for the hair-tone median below — not worth the 447-head
+    # catalogue scan (~15 min cold) it drags in. The donor_np=None fallbacks below are the
+    # measure-on-the-base-head path and stand on their own.
+    if HAIR_FROM_DONOR and fill_hair and mode == "ship":
+        donor_id, donor_np = haircut_donor(hair_seen, hair_wt / 0.02, base_id, game_dir, log=log)
+    else:
+        donor_id, donor_np = int(base_id), None
     dlab = _lab(donor_np) if donor_np is not None else blab
     dhair = (skin_hair_masks(donor_np, face_m.astype(np.float32) / 255.0)[1] > 0.5) \
         if donor_np is not None else None

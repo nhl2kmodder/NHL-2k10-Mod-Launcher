@@ -329,10 +329,12 @@ def relight(blob: bytearray, models: list[dict], gain=1.0, tint=(1.0, 1.0, 1.0),
 
 
 # ───────────────────────────── write-back ─────────────────────────────
-def write_dram(iff: str, new_dram: bytes, game_dir, log=print) -> str:
-    """Put a modified blob 0 back into the game archive, SIZE-PRESERVING: re-encode with the
-    blob's own codec/window, pad the packed bytes back to the original length so blob 1 does
-    not move and the TOC needs no edit. Refuses (without touching anything) if it won't fit."""
+def write_dram(iff: str, new_dram: bytes, game_dir, log=print, grow: bool = True) -> str:
+    """Put a modified blob 0 back into the game archive. SIZE-PRESERVING when it fits: re-encode
+    with the blob's own codec/window, pad the packed bytes back to the original length so blob 1
+    does not move and the TOC needs no edit. When the re-encode outgrows the slot and `grow` is
+    on, the resource is rebuilt around the bigger blob and RELOCATED (see _write_dram_grow);
+    with grow=False it refuses without touching anything."""
     game_dir = Path(game_dir)
     loc = A.resolve(iff, game_dir)
     if not loc:
@@ -347,6 +349,8 @@ def write_dram(iff: str, new_dram: bytes, game_dir, log=print) -> str:
     if len(new_dram) != len(b["dec"]):
         raise ValueError(f"{iff}: DRAM size changed ({len(b['dec'])} -> {len(new_dram)})")
     blob = EE.encode_payload(bytes(new_dram), wparam=b["wp"], codec=b["codec"])
+    if len(blob) > b["tot"] and grow:
+        return _write_dram_grow(iff, res, b, blob, new_dram, idx, game_dir, log)
     if len(blob) > b["tot"]:
         raise ValueError(
             f"{iff}: edited geometry/lighting re-compresses to {len(blob)} bytes but its slot is "
@@ -362,8 +366,73 @@ def write_dram(iff: str, new_dram: bytes, game_dir, log=print) -> str:
         f.seek(off)
         f.write(res)
     _DRAM_CACHE.clear()
+    _tree_sync(game_dir, (iff,))
     return (f"IN-PLACE: {iff} blob 0 -> {arc}:0x{off:X} "
             f"({len(blob)}/{b['tot']} bytes, {len(blob)*100//b['tot']}% of slot)")
+
+
+def _write_dram_grow(iff, res, b, blob, new_dram, idx, game_dir, log) -> str:
+    """The packed blob 0 no longer fits its slot. A live global.iff packs to EXACTLY its slot
+    (the speech-DB growth relocated it with zero slack), so any edit that adds entropy — a
+    custom collar, a moved decal window — overflows by a few hundred bytes. Rebuild the
+    resource around the bigger blob: the section table (`count` entries at 0x20, stride 0x20)
+    gets the new packed size on the blob's own entry and the shift on every entry behind it, the
+    resource size at +8 follows, and the whole resource goes through the archive writer, which
+    reuses the slot when it fits and otherwise appends to the last archive. Same surgery as
+    expansion_audio does when it grows this asset's speech DB. The decoded size (+0x0C of the
+    section, the loader's allocation) is untouched — the DRAM did not change length."""
+    chk = DF.decompress_codec(blob[20:], b["dec_sz"], (1 << b["wp"]) - 1, b["wp"])
+    if chk != bytes(new_dram):
+        raise ValueError(f"{iff}: re-encoded DRAM did not round-trip — nothing written")
+    new_res = bytearray(res[:b["off"]]) + blob + res[b["off"] + b["tot"]:]
+    shift = len(blob) - b["tot"]
+    for q in (0x20 + i * 0x20 for i in range(A._BE(new_res, 0x10))):
+        dataoff = A._BE(new_res, q + 0x14)
+        if dataoff == b["off"]:
+            struct.pack_into(">I", new_res, q + 0x18, len(blob))
+        elif dataoff > b["off"]:
+            struct.pack_into(">I", new_res, q + 0x14, dataoff + shift)
+    struct.pack_into(">I", new_res, 8, len(new_res))
+    for a in A.ARCS:
+        if (Path(game_dir) / a).exists():
+            A._backup_once(Path(game_dir) / a, log)
+    st = A._relocate(iff, bytes(new_res), idx, game_dir, 0, 0, "RAW", log)
+    _DRAM_CACHE.clear()
+    _tree_sync(game_dir, (iff,))
+    return (f"RELOCATED: {iff} blob 0 outgrew its slot by {shift} bytes "
+            f"({len(blob)} packed vs {b['tot']}) — {st}")
+
+
+def _write_dram_grow(iff, res, b, blob, new_dram, idx, game_dir, log) -> str:
+    """The packed blob 0 no longer fits its slot. A live global.iff packs to EXACTLY its slot
+    (the speech-DB growth relocated it with zero slack), so any edit that adds entropy — a
+    custom collar, a moved decal window — overflows by a few hundred bytes. Rebuild the
+    resource around the bigger blob: the section table (`count` entries at 0x20, stride 0x20)
+    gets the new packed size on the blob's own entry and the shift on every entry behind it, the
+    resource size at +8 follows, and the whole resource goes through the archive writer, which
+    reuses the slot when it fits and otherwise appends to the last archive. Same surgery as
+    expansion_audio does when it grows this asset's speech DB. The decoded size (+0x0C of the
+    section, the loader's allocation) is untouched — the DRAM did not change length."""
+    chk = DF.decompress_codec(blob[20:], b["dec_sz"], (1 << b["wp"]) - 1, b["wp"])
+    if chk != bytes(new_dram):
+        raise ValueError(f"{iff}: re-encoded DRAM did not round-trip — nothing written")
+    new_res = bytearray(res[:b["off"]]) + blob + res[b["off"] + b["tot"]:]
+    shift = len(blob) - b["tot"]
+    for q in (0x20 + i * 0x20 for i in range(A._BE(new_res, 0x10))):
+        dataoff = A._BE(new_res, q + 0x14)
+        if dataoff == b["off"]:
+            struct.pack_into(">I", new_res, q + 0x18, len(blob))
+        elif dataoff > b["off"]:
+            struct.pack_into(">I", new_res, q + 0x14, dataoff + shift)
+    struct.pack_into(">I", new_res, 8, len(new_res))
+    for a in A.ARCS:
+        if (Path(game_dir) / a).exists():
+            A._backup_once(Path(game_dir) / a, log)
+    st = A._relocate(iff, bytes(new_res), idx, game_dir, 0, 0, "RAW", log)
+    _DRAM_CACHE.clear()
+    _tree_sync(game_dir, (iff,))
+    return (f"RELOCATED: {iff} blob 0 outgrew its slot by {shift} bytes "
+            f"({len(blob)} packed vs {b['tot']}) — {st}")
 
 
 def restore(iff: str, game_dir, log=print) -> str:
@@ -772,3 +841,18 @@ def replace_part(blob: bytearray, m: dict, part: dict, mesh: dict, log=print) ->
         f"{len(strips)} strips = {len(stream)}/{part['n_idx']} indices")
     return (f"part {part['rec']} replaced — {len(P)} vertices, {len(T)} triangles "
             f"({len(stream)}/{part['n_idx']} indices used)")
+
+
+# -- extracted-tree write-through ----------------------------------------------
+# archive_textures wraps its own replace_* entry points so every texture write lands in
+# ROOT/NHL2k10_Extracted as well as the archives. The writes in THIS module go straight to the
+# archive files, so they have to say so themselves or the tree quietly falls behind.
+def _tree_sync(game_dir, names=()):
+    try:
+        try:
+            from . import volume_store as _vs
+        except ImportError:
+            import volume_store as _vs
+        _vs.sync_after_op(game_dir, names)
+    except Exception:
+        pass          # the archives are already correct; a stale tree is not a failure

@@ -98,6 +98,31 @@ FRONTNUM_SMALL = 0x00400000  # small number on the upper RIGHT chest
 FRONTNUM_MASK = FRONTNUM_BIG | FRONTNUM_SMALL
 CLASSIC_BIT = 0x00800000     # throwback kit — set on every `*_CLxx` row (+ CGY's alt), nothing else
 
+# The rest of the +0x18 stamp gates, as Uniform_SetStampShaderParams (0x8408EAE8) reads them:
+SLEEVE_RIGHT_BIT = 0x00080000   # bit 19: right-sleeve digits drawn
+SLEEVE_LEFT_BIT = 0x00100000    # bit 20: left-sleeve digits drawn
+CAPTAIN_STYLE_BIT = 0x00040000  # bit 18: captaincy letter at the alternate site
+# Four 3-bit PATCH PICKERS. The value IS the slot-table entry the site stamps -- 1 pants_patch,
+# 2 shoulder_patch, 3 shoulder_right -- and 4 means "nothing at this site".
+PICK_FIELDS = {"stanley": 3, "pants": 6, "left": 9, "right": 12}     # name -> bit shift
+PICK_NONE = 4
+
+# ── bits 24..26: the COLLAR STYLE, a 3-bit index into the skater model's five collars ────────
+# The skater in global.iff (model 0x1323AF4) carries five collar meshes side by side, records
+# 16..20, each flagged with its own variant bit (0x40 << n). This field is which one the jersey
+# wears: 0 plain V, 1 the LACED collar (the tie-strings), 2 the V with the Reebok Edge tab,
+# 3/4 two more plain Vs. The XEX reads it as a 3-bit field (uniform getters at 0x840B63B8 and
+# 0x840B63E0 -- `rlwinm r3,r11,8,29,31` on +0x18) and the create-a-jersey menu steps it 0..4
+# (0x840A9138 caps the increment at 4). Cross-checked against the shipped rows: every 2009-10
+# kit that really has laces reads 1 -- NYI home/away/alt, BOS, CGY, NYR, PHO home/away, MIN home
+# and alt, ATL home, the BUF/PIT/SJS/STL/TOR alternates and the two Winter Classic kits -- and
+# every kit without them (NJD home/away among 313 rows) reads 0. ANA, BUF, COL and NSH read 2;
+# ATL's alternate 3; EDM's home 4.
+COLLAR_SHIFT = 24
+COLLAR_MASK = 7 << COLLAR_SHIFT
+COLLAR_LACED = 1
+COLLAR_STYLES = {0: "plain V", 1: "laced", 2: "V with tab", 3: "plain V (3)", 4: "plain V (4)"}
+
 # ── the palette ──────────────────────────────────────────────────────────────
 ACCENT_OFFS = (0x01C, 0x020, 0x024)     # ARGB, or 0x00000000 when unset
 TEAM_LO, TEAM_HI = 0x034, 0x0E4         # 44 slots, shared by all of a team's uniforms
@@ -252,6 +277,77 @@ def set_front_number(ros, i, mode: str):
     cur = struct.unpack_from(">I", ros.data, fo)[0] & ~FRONTNUM_MASK
     bit = FRONTNUM_BIG if mode == "big" else FRONTNUM_SMALL if mode == "small" else 0
     struct.pack_into(">I", ros.data, fo, cur | bit)
+
+
+def sleeve_numbers(ros, i) -> tuple:
+    """(left, right): whether each sleeve carries the player's number on this uniform."""
+    f = flags(ros, i)
+    return bool(f & SLEEVE_LEFT_BIT), bool(f & SLEEVE_RIGHT_BIT)
+
+
+def set_sleeve_numbers(ros, i, left: bool, right: bool):
+    fo = _off(ros, i) + SLOT_OFF
+    cur = struct.unpack_from(">I", ros.data, fo)[0] & ~(SLEEVE_LEFT_BIT | SLEEVE_RIGHT_BIT)
+    cur |= (SLEEVE_LEFT_BIT if left else 0) | (SLEEVE_RIGHT_BIT if right else 0)
+    struct.pack_into(">I", ros.data, fo, cur)
+
+
+def patch_picks(ros, i) -> dict:
+    """{'stanley'|'pants'|'left'|'right': table entry or None} -- which sheet cell each patch site
+    draws. None is the game's 4 = nothing there."""
+    f = flags(ros, i)
+    out = {}
+    for k, sh in PICK_FIELDS.items():
+        v = (f >> sh) & 7
+        out[k] = None if v == PICK_NONE else v
+    return out
+
+
+def set_patch_pick(ros, i, site: str, entry):
+    """Point one patch site at a table entry (1..3), or None for nothing."""
+    sh = PICK_FIELDS[site]
+    v = PICK_NONE if entry is None else int(entry)
+    if not 0 <= v <= 7:
+        raise UniformError(f"patch pick out of range: {entry!r}")
+    fo = _off(ros, i) + SLOT_OFF
+    cur = struct.unpack_from(">I", ros.data, fo)[0] & ~(7 << sh)
+    struct.pack_into(">I", ros.data, fo, cur | (v << sh))
+
+
+def collar_style(ros, i) -> int:
+    """0..4 -- which of the skater model's five collars this uniform wears (see COLLAR_STYLES)."""
+    return (flags(ros, i) >> COLLAR_SHIFT) & 7
+
+
+def set_collar_style(ros, i, style: int):
+    if not 0 <= int(style) <= 4:
+        raise UniformError(f"collar style must be 0..4, got {style!r}")
+    fo = _off(ros, i) + SLOT_OFF
+    cur = struct.unpack_from(">I", ros.data, fo)[0] & ~COLLAR_MASK
+    struct.pack_into(">I", ros.data, fo, cur | (int(style) << COLLAR_SHIFT))
+
+
+def collar_laces(ros, i) -> bool:
+    """Whether the collar carries the tie-strings (style 1, the Islanders' collar)."""
+    return collar_style(ros, i) == COLLAR_LACED
+
+
+def set_collar_laces(ros, i, on: bool):
+    """Put the laces on (style 1) or take them off. Taking them off goes back to the plain V
+    (style 0, the Devils' collar) -- the game has no 'style 1 without strings', the strings ARE
+    the mesh."""
+    if bool(on) == collar_laces(ros, i):
+        return
+    set_collar_style(ros, i, COLLAR_LACED if on else 0)
+
+
+def stamp_flags(ros, i) -> dict:
+    """Everything in +0x18 the stamp pass keys off, as the preview wants it -- plus the collar
+    style, which picks the collar MESH rather than a stamp."""
+    left, right = sleeve_numbers(ros, i)
+    return {"front": front_number(ros, i), "sleeve_left": left, "sleeve_right": right,
+            "captain_alt": bool(flags(ros, i) & CAPTAIN_STYLE_BIT), "picks": patch_picks(ros, i),
+            "collar": collar_style(ros, i)}
 
 
 def set_classic(ros, i, on: bool):

@@ -6,17 +6,20 @@ in a string pool (~0x24b000): per-team block [arena "X|TM|"][city][state?][CODE]
 then a nickname pool [Nickname][lowercase] (some teams add a short city-override
 token like "LA"/"NJ"/"SJ"/"TB" between Nickname and lowercase).
 
-The game resolves each string from its FIXED byte offset (read until the 00 00 terminator),
-so an edit is only safe if it stays within that string's existing byte slot (the gap to the
-next packed string). A shorter/equal name is written in place — the leftover bytes become
-harmless junk before the next string. A LONGER name CANNOT be written in place (the pool is
-tightly packed) and is NOT auto-grown here: doing so requires relocating the string into
-free space and repointing its stored offset reference, which is not yet implemented. Over-
-length edits are REFUSED rather than corrupting the save. A .bak backup is written first.
+The game resolves each string through SELF-RELATIVE POINTERS (value 0 = NULL, else
+target = field_offset + value - 1). A name that fits its byte slot (the gap to the next
+packed string) is written in place — leftover bytes are zero-filled. A LONGER name is
+RELOCATED: the text is written into free pool space and every pointer that referenced the
+old string is rewritten (the same machinery affiliates.py / expansion.py use). Nothing
+shifts and the file size never changes either way. The only strings that cannot grow are
+the two nothing points at — the State and the 'Carolina'-style team prefix — which are
+still capped at their slot. A .bak backup is written first.
 
 (History: an earlier version tried to grow by shifting the pool tail into the EOF padding.
 That corrupts the save — the records hold fixed offsets, not sequential indices, so moving
-the tail invalidates every reference after the edit. Removed.)
+the tail invalidates every reference after the edit. Removed. A later version wrote an
+in-slot grow over the OLD string's span, which byte-shifted the whole file and tripped the
+save-time size invariant — the write span must be the SLOT, not the old text.)
 
 Usage (standalone):
   python roster_editor.py "<Roster.ROS>" --export teams.csv
@@ -282,24 +285,23 @@ class RosterEditor:
             e.append((team.nick_lower, new_text.lower().replace(" ", "")))
         return self.apply_edits(e)
 
-    # --- write strings strictly IN PLACE (no byte shifting; see module docstring) ---
+    # --- write strings IN PLACE, or relocate+repoint (see module docstring) ---
     def apply_edits(self, edits):
         """edits: list of (Slot, new_text).
 
-        Writes each string IN PLACE within its existing byte slot (the gap to the next
-        packed string). Nothing is moved and the file size never changes, so all fixed
-        offset references the game holds stay valid. A name that does NOT fit its slot is
-        REFUSED (ValueError) — growing it would require relocating the string and repointing
-        its reference, which corrupts the save if done by shifting. Returns the count changed.
+        A name that fits its byte slot is written in place (leftover zero-filled). One that
+        doesn't is relocated into free pool space and every self-relative pointer that
+        referenced it is rewritten — see _relocate(). Either way nothing shifts and the
+        file size never changes. Returns the count changed.
         """
-        plan, too_long, shared = [], [], []
+        plan, reloc, shared = [], [], []
         for slot, new in edits:
             if slot is None or new == slot.text:
                 continue
             if slot.shared:                      # more than one team points at these bytes
                 shared.append((slot, new))
             elif len(new) > slot.cap_chars:      # cap_chars = bytes-to-next-string//2 - 1
-                too_long.append((slot, new))
+                reloc.append((slot, new))
             else:
                 plan.append((slot, new))
         if shared:
@@ -309,21 +311,149 @@ class RosterEditor:
                 "the others too (both New Yorks share one city string; a cloned expansion "
                 "team still shares its donor's arena):\n" + lines +
                 "\n\nGiving one team its own copy of a name isn't something this editor can do.")
-        if too_long:
+        if reloc:
+            self._relocate(reloc)                # raises ValueError if the pool has no room
+        for slot, new in plan:
+            span = (slot.cap_chars + 1) * 2                # the WHOLE slot, incl. terminator.
+            # NOT the old string's span: writing more bytes than the slice covers makes the
+            # bytearray INSERT, shifting the whole file (the old "size changed" save error).
+            nb = new.encode("utf-16-be") + b"\x00\x00"
+            self.data[slot.off:slot.off + span] = nb.ljust(span, b"\x00")
+            slot.text = new
+        return len(plan) + len(reloc)
+
+    # a created-team placeholder: "****************" + terminator, UTF-16BE (34 bytes)
+    _STAR_RX = re.compile(b'(?:\x00\\*){16}\x00\x00')
+    _STAR_STRIDE = 0x22
+
+    def _relocate(self, jobs):
+        """Grow each (slot, new_text) by moving it: write the text into free pool space and
+        repoint every self-relative pointer in the file that referenced the old string.
+
+        Free space, in spending order: zero holes between strings (free for nothing, small),
+        then the created-team placeholder array — hundreds of adjacent 34-byte
+        '****************' slots, so a long name takes N adjacent slots. Every referrer of a
+        consumed placeholder is RE-HOMED to a surviving one first (never left dangling into
+        the middle of the new text — the July relocation rule). The vacated string is zeroed
+        once every referrer is repointed, so the space is reclaimable later.
+
+        A slot nothing points at (State, team prefix — the two fields the record table has
+        no pointer for) cannot be moved and is refused with the keep-it-short message.
+        """
+        try:
+            import team_order as TO
+            import affiliates as AF
+        except ImportError:
+            from . import team_order as TO
+            from . import affiliates as AF
+        d = self.data
+        try:
+            base, count = TO.find_table(d)
+        except Exception as e:
+            raise ValueError(f"can't grow names in this save — team table not found ({e})")
+        snap = bytes(d)
+        pool = AF.Pool(snap, base, count)
+        for o, n in pool.zero_gaps():            # holes between strings — free for nothing
+            pool.free.append((o, n, set()))
+        pool.free.sort(key=lambda e: e[0])
+        stars = [m.start() for m in self._STAR_RX.finditer(snap)]
+
+        # ONE whole-file pointer scan, at ANY byte alignment (the team table sits at an odd
+        # base, so a 4-aligned scan would miss its own fields): referrers of the strings
+        # being moved, and of every placeholder slot (needed to re-home a swallowed one).
+        # Sites inside the string pool itself are skipped — it is all text, and only text
+        # bytes could fake a hit there.
+        sites = {slot.off: [] for slot, _ in jobs}
+        star_refs = {s: [] for s in stars}
+        p_lo = min(pool.starts)
+        p_hi = snap.find(b"\x00\x00", max(pool.starts)) + 2
+        for ph in range(4):                      # 4 phases of C-level unpacking ≫ per-byte calls
+            end = ph + (len(snap) - ph) // 4 * 4
+            for i, (v,) in enumerate(struct.iter_unpack(">I", snap[ph:end])):
+                if not v:
+                    continue
+                o = ph + i * 4
+                t = o + (v - 0x100000000 if v & 0x80000000 else v) - 1
+                r = sites.get(t)
+                if r is None:
+                    r = star_refs.get(t)
+                if r is not None and not (p_lo <= o < p_hi):
+                    r.append(o)
+        immovable = [(s, n) for s, n in jobs if not sites[s.off]]
+        if immovable:
             lines = "\n".join(f"  • '{s.text}' → '{n}'  "
                               f"(slot fits {s.cap_chars} chars, name is {len(n)})"
-                              for s, n in too_long)
+                              for s, n in immovable)
             raise ValueError(
-                "These names are longer than their fixed slot in the save and can't be "
-                "written without corrupting it:\n" + lines +
-                "\n\nKeep each name the same length as the one it replaces, or shorter.")
-        for slot, new in plan:
-            old_span = (len(slot.text) + 1) * 2           # bytes the old string occupied
-            nb = new.encode("utf-16-be") + b"\x00\x00"
-            nb = nb + b"\x00" * (old_span - len(nb))       # zero-fill leftover (no shift, no phantom)
-            self.data[slot.off:slot.off + old_span] = nb   # exact same span -> file size unchanged
-            slot.text = new
-        return len(plan)
+                "Nothing in the save points at these strings (State and the stored team "
+                "prefix are found by position, not by pointer), so they can't be moved to "
+                "make room:\n" + lines +
+                "\n\nKeep each one the same length as the name it replaces, or shorter.")
+
+        dead = set()                             # placeholder slots consumed this batch
+
+        def star_alloc(blob):
+            """A window of adjacent placeholder slots big enough for `blob`, its referrers
+            re-homed; returns the window's start offset, or None if no run is big enough."""
+            S = self._STAR_STRIDE
+            need = (len(blob) + S - 1) // S
+            avail = [s for s in stars if s not in dead]
+            runs, cur = [], []
+            for s in avail:
+                if cur and s == cur[-1] + S:
+                    cur.append(s)
+                else:
+                    if cur:
+                        runs.append(cur)
+                    cur = [s]
+            if cur:
+                runs.append(cur)
+            # cheapest window = fewest referrers to re-home; tie -> highest offsets (the
+            # create-a-team screen hands out low slots first)
+            best = None
+            for run in runs:
+                for k in range(len(run) - need, -1, -1):
+                    win = run[k:k + need]
+                    cost = sum(len(star_refs[s]) for s in win)
+                    if best is None or cost < best[0]:
+                        best = (cost, win)
+                    if cost == 0:
+                        break
+            if best is None:
+                return None
+            win = best[1]
+            home = next((s for s in avail if s not in win and not star_refs[s]),
+                        next((s for s in avail if s not in win), None))
+            for s in win:
+                for o in star_refs[s]:
+                    if home is None:
+                        return None              # nowhere to re-home — give up on this tier
+                    struct.pack_into(">I", d, o, TO._selfrel(home, o))
+                    star_refs[home].append(o)
+                dead.add(s)
+            w0, span = win[0], len(win) * S
+            d[w0:w0 + span] = blob.ljust(span, b"\x00")
+            return w0
+
+        for slot, new in sorted(jobs, key=lambda j: -len(j[1])):    # longest first
+            off = pool.reuse(new)
+            if off is not None and off in sites:
+                off = None                       # that string is itself being moved
+            if off is None:
+                blob = new.encode("utf-16-be") + b"\x00\x00"
+                try:
+                    off = pool.alloc(d, new)     # zero-gap holes (best fit)
+                except AF.AffiliateError:
+                    off = star_alloc(blob)
+                if off is None:
+                    raise ValueError(
+                        f"No free space left in the save's string pool for "
+                        f"'{slot.text}' → '{new}' ({len(new)} chars). Try a shorter name.")
+            for o in sites[slot.off]:
+                struct.pack_into(">I", d, o, TO._selfrel(off, o))
+            old_span = (len(slot.text) + 1) * 2  # every referrer is repointed -> reclaimable
+            d[slot.off:slot.off + old_span] = b"\x00" * old_span
+            slot.off, slot.text, slot.cap_chars = off, new, len(new)
 
     def set_string(self, slot: Slot, new_text: str):
         return self.apply_edits([(slot, new_text)])

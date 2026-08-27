@@ -4,32 +4,41 @@ chunked back-ref copies with overshoot, verified against Ghidra VMX128 decompile
 import struct
 
 def decompress_codec(src: bytes, decomp_size: int, off_mask: int, len_shift: int) -> bytes:
+    # Hot path (every pack decompress goes through here): the back-ref copy is inlined —
+    # the old domatch() closure alone cost ~60% of the runtime in call overhead — and a
+    # match whose source window can't touch its own output (off >= chunk-rounded length)
+    # collapses to ONE slice copy. That copy includes the 8-byte overshoot bytes, so the
+    # output is bit-identical to the chunked loop (later off<8 matches READ overshoot).
     out = bytearray(decomp_size + 16)   # +16 for 8-byte-chunk overshoot
+    osize = len(out)
     pos = 0; i = 0; n = len(src)
-    def domatch(p_pos):
-        val = (src[i_ref[0]] << 8) | src[i_ref[0]+1]   # BE16 token
-        off = val & off_mask
-        length = (val >> len_shift) + 3
-        i_ref[0] += 2
-        end = p_pos + length
-        p = p_pos
-        while p < end:
-            s = p - off
-            out[p:p+8] = out[s:s+8]
-            p += 8
-        return end
-    i_ref = [0]
-    while pos < decomp_size and i_ref[0] < n:
-        flag = src[i_ref[0]]; i_ref[0] += 1
+    while pos < decomp_size and i < n:
+        flag = src[i]; i += 1
         if flag == 0:
-            out[pos:pos+8] = src[i_ref[0]:i_ref[0]+8]; i_ref[0] += 8; pos += 8
-        else:
-            for bit in range(8):
-                if pos >= decomp_size: break
-                if (flag >> bit) & 1 == 0:
-                    out[pos] = src[i_ref[0]]; i_ref[0] += 1; pos += 1
-                else:
-                    pos = domatch(pos)
+            out[pos:pos+8] = src[i:i+8]; i += 8; pos += 8
+            continue
+        for bit in range(8):
+            if pos >= decomp_size:
+                break
+            if not (flag >> bit) & 1:
+                out[pos] = src[i]; i += 1; pos += 1
+            else:
+                val = (src[i] << 8) | src[i+1]; i += 2       # BE16 token
+                off = val & off_mask
+                length = (val >> len_shift) + 3
+                lc = (length + 7) & ~7                        # chunk-rounded (incl. overshoot)
+                if off >= lc and pos + lc <= osize:
+                    s = pos - off
+                    out[pos:pos+lc] = out[s:s+lc]
+                    pos += length
+                else:                                         # overlapping: exact chunk replay
+                    end = pos + length
+                    p = pos
+                    while p < end:
+                        s = p - off
+                        out[p:p+8] = out[s:s+8]
+                        p += 8
+                    pos = end
     return bytes(out[:decomp_size])
 
 def decompress_payload(payload: bytes) -> bytes:

@@ -45,16 +45,25 @@ REQUIRED = (
     "authored_sfx_labels.json",      # Audio tab: transcribed names for the PA banks (see above)
     "jersey_convert_profile.json",   # Jersey Conversion tab: UV calibration + slot layout
     "uniform_uv_regions.png",        # Jersey Conversion tab: the base's garment-island masks
-    # Stamp placement. Without these the preview still renders, but EVERY stamp silently vanishes
-    # -- no crest, no numbers -- because the shader path has no decal quads to evaluate against.
+    # Stamp placement. The figure and its decal channel are read off the game's own global.iff
+    # (player_model.py) whenever a game folder is configured; decal_atlas.npz / player_mesh.npz
+    # are the RenderDoc-baked FALLBACK for when none is. Without the config the preview still
+    # renders, but EVERY stamp silently vanishes -- no crest, no numbers -- because the shader
+    # path has no constants to evaluate.
     "stamp_shader.json",             # Jersey Editor: per-site shader constants and slot roles
-    "decal_atlas.npz",               # Jersey Editor: the mesh's baked decal channel (interp 3)
+    "decal_atlas.npz",               # Jersey Editor: decal channel fallback (no game folder)
     # The two vision models the head builder runs on the reference photographs. Between them they
     # are 20 MB, which is most of the install -- but without the landmarker there is no fit at all,
     # and without the segmenter every head gets the base head's hair recoloured (the projector has
     # no other way to tell hair from the arena behind it). See face_builder._detector/_segmenter.
     "face_landmarker.task",          # Head editor: 478-point face fit + head pose
     "selfie_multiclass.tflite",      # Head editor: hair / skin / clothing segmentation
+    # Jersey Editor > Normals. The relief is no longer synthesised from parameters -- it is
+    # measured off these reference crops at import time (normal_templates.py). Drop them and the
+    # stitcher raises on the first sheet instead of quietly producing a flat normal.
+    "normal_tmpl_base.png",          # Normals: the clean 2K10 garment normal, shipped UV layout
+    "normal_tmpl_seam.png",          # Normals: cross-section of a stripe's sewn edge
+    "normal_tmpl_weave.png",         # Normals: the cloth weave between the stitch rows
 )
 
 

@@ -2,7 +2,7 @@
 
 ## What this owns, and what it deliberately does not
 
-Five XEX patches are *launcher baseline*: they are what the launcher assumes the game is, they
+Six XEX patches are *launcher baseline*: they are what the launcher assumes the game is, they
 have no reason to be per-mod-pack, and a user who restores a clean default.xex should get them
 back without having to know they exist.
 
@@ -12,6 +12,11 @@ back without having to know they exist.
     title icon       archive_textures.ensure_game_icon()
     eye specular     shader_tuning.py    cfg["eye_specular_exponent"]: absent/"auto" = 3.0,
                                          a number pins it, "stock" restores the shipped 1.0848
+    mask slots       mask_shells.py      cfg["extra_mask_slots"]: RETIRED lane, default now
+                                         OFF (added styles rendered invisible in-game)
+    mask patterns    mask_pattern6.py    cfg["mask_pattern6"]: absent/true = style-1 patterns
+                                         0-63 (6-bit: +0xB8 low 5 + the +0xB4 bit-26 donor),
+                                         false/"stock" heals byte-for-byte back to stock
 
 The scoreclock patches (SOG bind rows + the mode-7 anchor) are NOT here on purpose. They belong
 to the scoreclock mod pack — modpack.apply_scoreclock() applies them and the pack's revert path
@@ -59,12 +64,16 @@ try:
     from . import game_date as GD
     from . import default_matchup as DM
     from . import shader_tuning as ST
+    from . import mask_shells as MS
+    from . import mask_pattern6 as MP6
 except ImportError:                       # loose-script use from launcher/
     import xex_patch as XP
     import roster_cap as RC
     import game_date as GD
     import default_matchup as DM
     import shader_tuning as ST
+    import mask_shells as MS
+    import mask_pattern6 as MP6
 
 MIN_SEASON_START_YEAR = 2026      # the season this mod's roster ships; never roll below it
 SEASON_ROLLOVER_MONTH = 7         # July 1 — the offseason, after the Cup and before camp
@@ -73,6 +82,8 @@ CFG_SEASON = "season_start_year"
 CFG_MATCHUP = "default_matchup"
 CFG_ICON_STAMP = "xex_icon_stamp"
 CFG_EYE = "eye_specular_exponent"
+CFG_MASKS = "extra_mask_slots"
+CFG_PAT6 = "mask_pattern6"
 
 AUTO = "auto"
 
@@ -198,6 +209,55 @@ def _step_eye_shader(xex: Path, cfg, log):
     return f"eye shader corneal specular exponent set to {want:g} (tight catchlight)"
 
 
+def wanted_mask_slots(cfg) -> bool:
+    """Whether the XEX should carry the extra-mask-slot clamp: on out of the box (it is inert for
+    stock rosters — shells 0-5 behave bit-for-bit identically), and an explicit false/"stock"/"off"
+    heals BACK to stock, the same contract as the eye shader. NOTE the revert caveat in
+    mask_shells.py: goalies wearing a g07+ mask go invisible until reassigned."""
+    # RETIRED lane (2026-08-18): every added/retargeted mask STYLE rendered invisible
+    # in-game (g07 clamp, precache widening, g06 retarget all failed). Default is now
+    # OFF; the replacement is the 6-bit pattern lane below (mask_pattern6.py).
+    v = cfg.get(CFG_MASKS, False)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("stock", "off", "false", "none", "0")
+    return bool(v)
+
+
+def _step_mask_shells(xex: Path, cfg, log):
+    want = wanted_mask_slots(cfg)
+    st = MS.read_state(xex)
+    if st == ("patched" if want else "stock"):
+        return None
+    if want:
+        MS.apply(xex, log=lambda *_: None)
+        return "extra goalie-mask slots enabled (styles g07-g16 render as the standard shape)"
+    MS.revert(xex, log=lambda *_: None)
+    return "extra goalie-mask slots patch removed (stock — g07-g16 masks are invisible again)"
+
+
+def wanted_pattern6(cfg) -> bool:
+    """6-bit style-1 mask patterns (mask_pattern6.py): on out of the box — bit-for-bit
+    inert for stock rosters (the donor bit at +0xB4 conv bit 26 is always 0 in shipped
+    data, and every patched accessor behaves identically when it is 0). false/"stock"
+    heals back; goalies assigned pattern 32-63 lose their mask art until reassigned."""
+    v = cfg.get(CFG_PAT6, True)
+    if isinstance(v, str):
+        return v.strip().lower() not in ("stock", "off", "false", "none", "0")
+    return bool(v)
+
+
+def _step_mask_pattern6(xex: Path, cfg, log):
+    want = wanted_pattern6(cfg)
+    st = MP6.read_state(xex)
+    if st == ("patched" if want else "stock"):
+        return None
+    if want:
+        MP6.apply(xex, log=lambda *_: None)
+        return "6-bit mask patterns enabled (style-1 patterns 0-63)"
+    MP6.revert(xex, log=lambda *_: None)
+    return "6-bit mask-pattern patch removed (stock — patterns 32-63 unavailable)"
+
+
 def _step_icon(xex: Path, cfg, icon_src, log):
     """Stamped: the only step whose verify is expensive (PNG decode out of a 39 MB file)."""
     try:
@@ -237,7 +297,9 @@ def sync(xex_path, cfg, icon_src=None, log=print) -> dict:
              ("roster cap", lambda: _step_roster_cap(xex, log)),
              ("game date", lambda: _step_game_date(xex, cfg, log)),
              ("default matchup", lambda: _step_matchup(xex, cfg, log)),
-             ("eye shader", lambda: _step_eye_shader(xex, cfg, log))]
+             ("eye shader", lambda: _step_eye_shader(xex, cfg, log)),
+             ("mask slots", lambda: _step_mask_shells(xex, cfg, log)),
+             ("mask patterns", lambda: _step_mask_pattern6(xex, cfg, log))]
     if icon_src and Path(icon_src).is_file():
         steps.append(("title icon", lambda: _step_icon(xex, cfg, icon_src, log)))
 
@@ -284,7 +346,8 @@ def status(xex_path, cfg=None) -> list[str]:
             ("game date", lambda: "game date: " + ", ".join(
                 f"{k} {v[0]}-{v[1]:02d}-{v[2]:02d}" for k, v in GD.read(xex).items())),
             ("matchup", lambda: "default matchup: home id {}, away id {}".format(*DM.read(xex))),
-            ("eye shader", lambda: ST.status(xex))):
+            ("eye shader", lambda: ST.status(xex)),
+            ("mask slots", lambda: MS.status(xex))):
         try:
             lines.append(fn())
         except Exception as e:

@@ -208,7 +208,22 @@ def find_sources(folder) -> dict[str, Path]:
             if rank is not None and rank > best.get(kind, (0, None))[0]:
                 best[kind] = (rank, f)
             break
-    return {k: v[1] for k, v in best.items()}
+    out = {k: v[1] for k, v in best.items()}
+
+    # The font atlas ships a NORMAL beside its colour (font_adidas_<team>_<kit>_normal.DDS), and
+    # it is EA's own embroidery for these exact glyphs -- the twill face, the bevel at the outline
+    # step, and the zig-zag chain stitch that runs the whole way round both edges. Nothing
+    # synthetic reproduces that, so when the file is there it is taken instead. `_source_rank`
+    # rejects every `_normal` map by design (they are not albedo), so it is found by name off the
+    # colour sheet that already won the slot rather than by another hint pass.
+    font = out.get("font")
+    if font is not None:
+        for cand in (font.with_name(font.name.replace("_color", "_normal")),
+                     font.with_name(font.stem + "_normal" + font.suffix)):
+            if cand != font and cand.exists():
+                out["font_normal"] = cand
+                break
+    return out
 
 
 # ── small image helpers ───────────────────────────────────────────────────────────────────────
@@ -639,10 +654,173 @@ def _arm_fit(out: np.ndarray, src: np.ndarray, mask: np.ndarray, spec: dict) -> 
         out[gap] = out[iy[gap], ix[gap]]
 
 
+_UV_MAP: tuple | None = None
+
+
+def uv_map() -> tuple:
+    """(sx, sy, valid) -- the baked NHL 23 -> 2K10 jersey correspondence.
+
+    One map for the whole shirt, from tools/build_jersey_uvmap.py. It replaces the three separate
+    island fits (a bounding-box stretch per torso panel, a mesh cylinder for the sleeves, a
+    rotated hem crop for the collar), which is what let the back and front disagree: each was
+    fitted to its own island's SILHOUETTE, and those differ -- the back island is 510 rows tall
+    and the front only 414, so the same hem band came out a fifth taller on one panel.
+    """
+    global _UV_MAP
+    if _UV_MAP is None:
+        from . import resources
+        z = np.load(resources.data_path("jersey_uvmap.npz"), allow_pickle=False)
+        _UV_MAP = (z["sx"], z["sy"], z["valid"])
+    return _UV_MAP
+
+
+def _uvmap_fit(out: np.ndarray, src: np.ndarray, mask: np.ndarray) -> None:
+    """Gather the warped base through the baked map, bilinearly."""
+    mx, my, valid = uv_map()
+    m = mask & valid
+    if not m.any():
+        return
+    sh, sw = src.shape[:2]
+    sx = np.clip(mx[m], 0, sw - 1.001)
+    sy = np.clip(my[m], 0, sh - 1.001)
+    ix, iy = sx.astype(np.int32), sy.astype(np.int32)
+    fx, fy = (sx - ix)[:, None], (sy - iy)[:, None]
+    ix1, iy1 = np.minimum(ix + 1, sw - 1), np.minimum(iy + 1, sh - 1)
+    out[m] = ((src[iy, ix] * (1 - fx) + src[iy, ix1] * fx) * (1 - fy)
+              + (src[iy1, ix] * (1 - fx) + src[iy1, ix1] * fx) * fy)
+
+    # The map is baked at texel centres, so an island's outermost rim can fall outside it. Carry
+    # the nearest gathered texel into the rim rather than leaving black specks along every seam.
+    gap = mask & ~valid
+    if gap.any():
+        from scipy import ndimage
+        _, (iy, ix) = ndimage.distance_transform_edt(~m, return_indices=True)
+        out[gap] = out[iy[gap], ix[gap]]
+
+
+def _collar_fill(out: np.ndarray, regions: dict, mask: np.ndarray) -> None:
+    """Fill the collar with the shoulder fabric it is sewn to.
+
+    NHL 23 has no collar texture to convert: its neck art is the collar rib, the adidas mark and
+    the NHL shield, all of which `patch_neck` has already painted out because 2K10 draws none of
+    them. A modern collar is a plain rib in the SHOULDER's colour, so that is what this makes --
+    the median of what has already been painted onto the arm islands' cap where it wraps the neck.
+
+    The shoulder, not the front hem, is the right place to read. St. Louis decides it: a navy yoke
+    over a royal body, so a sample taken low on the front panel comes back royal and paints a
+    collar that matches nothing on the garment. The cap next to the neck hole is navy, which is
+    what the real collar is. Pittsburgh (black over black) and Calgary (red over red) are
+    unaffected either way, which is why this was invisible until a two-colour kit showed up.
+    """
+    arms = regions.get("jersey_arms")
+    if arms is None or not arms.any() or not mask.any():
+        return
+    band = arms.copy()
+    cols = np.zeros(band.shape[1], bool)
+    mid = band.shape[1] // 2
+    cols[mid - 140:mid + 140] = True                          # the cap, either side of the neck
+    band &= cols[None, :]
+    if not band.any():
+        band = arms
+    out[mask] = np.median(out[band], axis=0)
+
+
+def patch_neck(body: Image.Image, profile: dict) -> Image.Image:
+    """Paint NHL 23's neck assembly out of the source before anything is gathered from it.
+
+    The collar rib, the neck hole, the adidas mark and the NHL shield are all drawn in one place
+    at the middle of the fold, and it is the SAME place on every kit -- they are part of the
+    garment, not part of the design, and the median of several kits' normal maps shows them as
+    one fixed cluster of seam ridges. 2K10 has no use for any of it: its neck is a hole in the UV
+    and its collar is its own island. But the fold is exactly where the two torso panels meet the
+    shoulder, so leaving it in drags a collar rib across the top of the back panel and over the
+    shoulder of both sleeves -- the "collar and shoulder look terrible" report.
+
+    Because the position is fixed, this does not detect anything: it takes the rect out and
+    diffuses the surrounding fabric across the hole. That keeps working on a kit whose shoulder is
+    a different colour from its body (St. Louis) or whose sleeves reach the neck (Pittsburgh),
+    where a blob detector has to decide whether a yoke is cloth or decal and gets it wrong either
+    way. lift_logos still handles the crest and the shoulder patches, which really are per-kit.
+    """
+    spec = profile.get("neck_patch")
+    if not spec:
+        return body
+    x0, y0, x1, y1 = [int(v) for v in spec["rect"]]
+    arr = _to_arr(body.convert("RGBA"))
+    x0, x1 = max(x0, 1), min(x1, arr.shape[1] - 1)
+
+    # Filled ROW BY ROW, as a straight ramp between the fabric just outside each end. A hockey
+    # jersey's shoulder is horizontal bands -- a yoke, a trim stripe, a hem -- and a row ramp
+    # carries every one of them across the hole unbroken. St. Louis is the case that decides it:
+    # its collar sits on a navy yoke with a white-and-gold band crossing the patch at both ends,
+    # and a diffusion fill, which has no idea the bands are horizontal, drags them into the middle
+    # as grey smears. The ramp leaves them where they were. A design with a VERTICAL feature
+    # through the collar would be the case this cannot do, and there is not one in the league.
+    left = arr[y0:y1, x0 - 1][:, None, :]
+    right = arr[y0:y1, x1][:, None, :]
+    t = np.linspace(0.0, 1.0, x1 - x0, dtype=np.float32)[None, :, None]
+    arr[y0:y1, x0:x1] = left * (1.0 - t) + right * t
+    return Image.fromarray(np.clip(arr, 0, 255).astype(np.uint8), "RGBA")
+
+
+def sample_collar_zones(base: Image.Image, profile: dict) -> dict[str, tuple]:
+    """Read the six custom-collar zone colours off the RAW NHL 23 base.
+
+    The custom collar meshes (project_custom_collar_4zone) are textured from six flat rects in
+    the base's collar-bar area instead of from the neck art itself, so the conversion has to
+    hand them a colour each: A back band, B side band, C V/placket, D inside face, E laces, F
+    eyelets. NHL 23 draws its collar assembly at ONE fixed place on every kit (see patch_neck),
+    which is what makes a fixed sample point per zone work: each is the median of a small
+    window at a point the user marked on the reference sheet. Must run BEFORE patch_neck --
+    the assembly is exactly what patch_neck removes.
+    """
+    spec = profile.get("collar_zones")
+    if not spec:
+        return {}
+    arr = _to_arr(base.convert("RGBA"))
+    h, w = arr.shape[:2]
+    sw, sh = profile["body"].get("src_size", (w, h))
+    kx, ky = w / float(sw), h / float(sh)
+    r = max(1, int(round(spec.get("radius", 4) * kx)))
+    out = {}
+    for zone, (x, y) in spec["samples"].items():
+        cx, cy = int(round(x * kx)), int(round(y * ky))
+        win = arr[max(cy - r, 0):cy + r + 1, max(cx - r, 0):cx + r + 1, :3]
+        if win.size == 0:
+            continue
+        out[zone] = tuple(int(v) for v in np.median(win.reshape(-1, 3), axis=0))
+    return out
+
+
+def paint_collar_zones(out: np.ndarray, profile: dict, colors: dict) -> None:
+    """Fill the collar-zone rects of the assembled base with flat colours (in place)."""
+    spec = profile.get("collar_zones")
+    if not spec or not colors:
+        return
+    h, w = out.shape[:2]
+    for zone, (x0, y0, x1, y1) in spec["rects"].items():
+        c = colors.get(zone)
+        if c is None:
+            continue
+        out[int(y0 * h):int(y1 * h) + 1, int(x0 * w):int(x1 * w) + 1, :3] = np.asarray(c[:3],
+                                                                                    np.float32)
+
+
 def build_base(sources: dict[str, Image.Image], profile: dict, regions: dict[str, np.ndarray],
-               logos_out: list | None = None, strip: bool = True) -> Image.Image:
-    """Assemble the 1024x1024 uniform_base from the NHL 23 base / pant / sock files."""
+               logos_out: list | None = None, strip: bool = True,
+               collar_colors: dict | None = None) -> Image.Image:
+    """Assemble the 1024x1024 uniform_base from the NHL 23 base / pant / sock files.
+
+    `collar_colors` (zone -> rgb) overrides the zones sampled off the source; pass a dict to
+    have the sampled values written back into it.
+    """
+    zones = sample_collar_zones(sources["base"], profile)   # BEFORE patch_neck removes it
+    if collar_colors is not None:
+        zones.update({k: v for k, v in collar_colors.items() if v is not None})
+        collar_colors.clear()
+        collar_colors.update(zones)
     body = body_transform(sources["base"], profile)
+    body = patch_neck(body, profile)
     if strip:
         body, lifted, _ = lift_logos(body, profile)
         if logos_out is not None:
@@ -674,6 +852,15 @@ def build_base(sources: dict[str, Image.Image], profile: dict, regions: dict[str
         # tools/build_arm_param.py for the mesh derivation and the ring test that validates it.
         if fit == "arm":
             _arm_fit(out, _to_arr(img.convert("RGBA")), mask, spec)
+            continue
+
+        # `uvmap` gathers through the one baked shirt-wide correspondence. See uv_map().
+        if fit == "uvmap":
+            _uvmap_fit(out, _to_arr(img.convert("RGBA")), mask)
+            continue
+
+        if fit == "neckline":
+            _collar_fill(out, regions, mask)
             continue
 
         # `per_island` maps the source onto EACH connected island separately instead of onto the
@@ -720,6 +907,10 @@ def build_base(sources: dict[str, Image.Image], profile: dict, regions: dict[str
         from scipy import ndimage
         _, (iy, ix) = ndimage.distance_transform_edt(~covered, return_indices=True)
         out[~covered] = out[iy[~covered], ix[~covered]]
+    # The custom collar's six flat zones live in the collar-bar area. Painted LAST: A-D sit on
+    # the collar bars, but E/F lie in UV space no garment covers, and the nearest-fill above
+    # would otherwise paint straight over them.
+    paint_collar_zones(out, profile, zones)
     out[:, :, 3] = 255.0                               # base is 565 in-game: no alpha channel
     return _to_img(out)
 
@@ -855,14 +1046,44 @@ def key_recolor(cell: Image.Image, colors: list, layers: int = 2) -> Image.Image
     return _to_img(out)
 
 
-def segment_font(font: Image.Image, profile: dict) -> tuple[dict[str, dict[str, Image.Image]], list]:
-    """Cut the NHL 23 font atlas into labelled glyphs. -> ({band: {label: image}}, warnings)."""
+FLAT_NORMAL = (128, 128, 255)
+
+
+def _font_normal_layer(normal: Image.Image, alpha: Image.Image) -> Image.Image:
+    """NHL 23's font normal, carrying the COLOUR sheet's alpha. -> RGBA, same size.
+
+    The normal map has no alpha of its own (it is a two-channel tangent map with B and A both
+    constant), so on its own it is one opaque rectangle and pasting a cell would stamp the fabric
+    around the glyph as well as the glyph. The colour sheet is the only thing that knows where a
+    glyph actually is, so its alpha is borrowed.
+
+    Everything outside the glyph is also REPAINTED flat before anything resamples it. A cell is
+    scaled to fit its 2K10 slot, and a filter that reaches across the silhouette would otherwise
+    drag the neighbouring fabric's slope into the glyph's outer rim -- a dark fringe all the way
+    round every number. Flat is the value that rim should tend to.
+    """
+    a = np.asarray(alpha.convert("RGBA"))[:, :, 3]
+    n = np.asarray(normal.convert("RGB").resize(alpha.size, Image.LANCZOS)).copy()
+    n[a <= 12] = FLAT_NORMAL
+    return Image.fromarray(np.dstack([n, a]), "RGBA")
+
+
+def segment_font(font: Image.Image, profile: dict,
+                 normal: Image.Image | None = None
+                 ) -> tuple[dict[str, dict[str, Image.Image]], list]:
+    """Cut the NHL 23 font atlas into labelled glyphs. -> ({band: {label: image}}, warnings).
+
+    With `normal`, every band is cut a SECOND time from the atlas's normal map and returned under
+    `<band>_n`. Same component boxes, so the two cuts are registered texel for texel and the
+    normal can ride through the identical placement the colour takes.
+    """
     from scipy import ndimage
 
     cfg = profile["nhl23_font"]
     img = font.convert("RGBA")
     if img.size != tuple(cfg["size"]):
         img = img.resize(tuple(cfg["size"]), Image.LANCZOS)
+    nrm = _font_normal_layer(normal, img) if normal is not None else None
     a = np.asarray(img)[:, :, 3]
     lab, n = ndimage.label(a > 16, structure=np.ones((3, 3)))
 
@@ -885,9 +1106,15 @@ def segment_font(font: Image.Image, profile: dict) -> tuple[dict[str, dict[str, 
         if len(got) != len(labels):
             warn.append(f"{band['name']}: found {len(got)} glyphs, expected {len(labels)}")
         cells: dict[str, Image.Image] = {}
+        ncells: dict[str, Image.Image] = {}
         for lb, c in zip(labels, got):
-            cells[lb] = img.crop((c[0], c[1], c[0] + c[2], c[1] + c[3]))
+            box = (c[0], c[1], c[0] + c[2], c[1] + c[3])
+            cells[lb] = img.crop(box)
+            if nrm is not None:
+                ncells[lb] = nrm.crop(box)
         out[band["name"]] = cells
+        if nrm is not None:
+            out[band["name"] + "_n"] = ncells
 
     # The diaeresis is two dots -- one glyph split into two components. Harmless (2K10 has no
     # diacritics to fill), but it would otherwise read as a count mismatch, so note it quietly.
@@ -984,6 +1211,100 @@ def build_letters(glyphs: dict, profile: dict, stock: Image.Image | None,
         place_set(out, cells, rects, stock, colors, layers, cfg.get("keyed", True))
     for k, r in rects.items():
         rescale_slot(out, r, scale_for(scales, k), anchor="bottom")
+    return out
+
+
+# How much bigger than it was authored an NHL 23 normal cell may be drawn before its own stitch is
+# worse than a synthesised one. See build_font_normal.
+MAX_FONT_UPSCALE = 1.6
+
+
+def build_font_normal(glyphs: dict, profile: dict, sheet: str, stock: Image.Image | None,
+                      scales: dict | None = None, enabled: dict | None = None,
+                      rects: dict | None = None) -> Image.Image | None:
+    """NHL 23's own font normal, placed exactly where the colour went. -> RGBA overlay, or None.
+
+    The atlas ships `font_adidas_<team>_<kit>_normal.DDS` -- EA's embroidery for these very
+    glyphs: a twill face, a bevelled step at the outline, and a zig-zag chain stitch running the
+    whole way round both the outer edge and the fill/outline join. The stitcher's synthetic relief
+    is a measured profile swept along a distance field, which can make the step but has no way to
+    make the stitch. So when the file is present it is transported instead of synthesised.
+
+    Transported, not re-derived: this runs the SAME `place_set` over the SAME slot rects with the
+    SAME stock ink boxes as `build_letters` / `build_stamps`, and the normal cells were cut with
+    the same component boxes as the colour cells. Alignment is therefore identical by
+    construction rather than by two paths agreeing -- which they would not, once a slot is
+    rescaled or a glyph falls back to its own box as an outlier.
+
+    Only the GLYPHS. The crest and the shoulder patches on the stamps sheet have no NHL 23 normal
+    to take (their art is lifted off the jersey base, which carries the garment's normal, not the
+    patch's), so they are left for the stitcher and the alpha here reads zero over them.
+
+    And only where it is not being MAGNIFIED, which is `MAX_FONT_UPSCALE`. An authored normal is
+    authored at one resolution: NHL 23's numbers are 136x237 on the atlas and go into a 128x256
+    cell, near enough 1:1, and they transport beautifully. Its nameplate letters are 36x76 and go
+    into the same 128x256 cell -- 3.4x -- and EA's 7 px stitch arrives as a 22 px blur with the
+    twill face mottled underneath it, visibly worse than the stitcher's own, which is synthesised
+    at the destination resolution. So an over-magnified cell is dropped and the stitcher keeps it.
+
+    Alpha marks where there IS data; the caller composites it over its own normal.
+    """
+    def sized(cells: dict, rect_of) -> dict:
+        """Drop the cells the placement would magnify past MAX_FONT_UPSCALE."""
+        keep = {}
+        for k, c in cells.items():
+            r = rect_of(k)
+            if min(r[2] / max(c.size[0], 1), r[3] / max(c.size[1], 1)) <= MAX_FONT_UPSCALE:
+                keep[k] = c
+        return keep
+
+    key = "letters" if sheet == "letters" else "stamps"
+    cfg = profile[key]
+    w, h = cfg["size"]
+    out = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    enabled, rects = enabled or {}, rects or {}
+    touched: list = []
+
+    if key == "letters":
+        src = dict(glyphs.get("letters_1_n", {}))
+        src.update(glyphs.get("letters_2_n", {}))
+        if not src:
+            return None
+        cw, ch = cfg["cell"]
+        cells = {k: src[k] for k in cfg["slots"] if k in src}
+        cells.update({k: src[k.upper()] for k in cfg["slots"]
+                      if k not in src and k.upper() in src})
+        slot_rects = {k: (slot * cw, 0, cw, ch) for k, slot in cfg["slots"].items()}
+        cells = sized(cells, lambda k: slot_rects[k])
+        if not cells:
+            return None
+        place_set(out, cells, slot_rects, stock, [], keyed=False)
+        touched = [(k, slot_rects[k], "bottom") for k in cells]
+    else:
+        slots = cfg["slots"]
+        digits = glyphs.get("digits_hi_n", {}) | glyphs.get("digits_lo_n", {})
+        dcells = {f"digit_{d}": c for d, c in digits.items()
+                  if f"digit_{d}" in slots and enabled.get(f"digit_{d}", True)}
+        caps = {n: (glyphs.get(n + "_n") or {}).get(n[-1].upper()) for n in ("capt_a", "capt_c")}
+        caps = {n: c for n, c in caps.items()
+                if c is not None and n in slots and enabled.get(n, True)}
+        rect_of = lambda n: rects.get(n, slots[n]["rect"])
+        dcells, caps = sized(dcells, rect_of), sized(caps, rect_of)
+        if not dcells and not caps:
+            return None
+        for group in (dcells, caps):
+            if group:
+                place_set(out, group, {k: rect_of(k) for k in group}, stock, [], keyed=False)
+        touched = [(k, rect_of(k),
+                    "bottom" if k.startswith(BASELINE_PREFIXES) else "center")
+                   for k in list(dcells) + list(caps)]
+
+    # Same resize pass the colour sheet gets, or a scaled-up number would sit on the unscaled
+    # normal of the one it replaced.
+    for name, rect, anchor in touched:
+        sc = scale_for(scales, name)
+        if sc != 1.0:
+            rescale_slot(out, rect, sc, anchor)
     return out
 
 
@@ -1168,6 +1489,25 @@ def build_stamps(glyphs: dict, logos: list, profile: dict, stock: Image.Image | 
             fitted, xy = fit_into(by_stamp["crest"].image, (x, y, sw, sh), pad=0.08)
             paste_rgba(out, fitted, xy)
 
+    # The shoulder patches are the game's own stamps (entries 2/3 of the slot table, placed by
+    # the SlvLft/SlvRgt material params in the kit's base asset), and most NHL 23 sources carry
+    # nothing for them -- Calgary's Canada/Alberta flags are not part of a modern atlas. Composing
+    # from a blank sheet therefore shipped those cells EMPTY and the figure lost both flags. As
+    # with the thigh patch above: composition only, only when nothing else filled the cell, and
+    # only the stock kit's own mark -- a kit that never wore one stays bare.
+    if canvas is None and stock is not None:
+        for name in ("shoulder_patch", "shoulder_right"):
+            if name not in slots or not on(name) or name in by_stamp:
+                continue
+            x, y, sw, sh = rect_of(name)
+            if out.crop((x, y, x + sw, y + sh)).getchannel("A").getbbox():
+                continue
+            sx, sy, ssw, ssh = slots[name]["rect"]
+            cell = stock.convert("RGBA").crop((sx, sy, sx + ssw, sy + ssh))
+            if cell.getchannel("A").getbbox():
+                fitted, xy = fit_into(cell, (x, y, sw, sh), pad=0.0)
+                paste_rgba(out, fitted, xy)
+
     digits = glyphs.get("digits_hi", {}) | glyphs.get("digits_lo", {})
     dcells = {f"digit_{d}": c for d, c in digits.items()
               if f"digit_{d}" in slots and on(f"digit_{d}")}
@@ -1264,6 +1604,9 @@ class Options:
     # sheet -> {slot name (or "*" for the whole sheet) -> size multiplier}. See rescale_slot: this
     # is how a crest or a number is made bigger, since where it lands on the body is fixed.
     scales: dict = field(default_factory=dict)
+    # Custom-collar zone overrides, zone letter -> (r, g, b). Zones absent here are sampled off
+    # the NHL 23 source (see sample_collar_zones).
+    collar_colors: dict = field(default_factory=dict)
 
 
 @dataclass
@@ -1276,6 +1619,12 @@ class Result:
     # this on every drag of a slot box).
     glyphs: dict = field(default_factory=dict)
     layers: dict = field(default_factory=dict)         # 'letters'/'helmet'/'stamps' -> layers used
+    # 'letters'/'stamps' -> RGBA overlay of NHL 23's OWN font normal, already placed. Present
+    # only when the source folder shipped font_..._normal.DDS. The normal stitcher composites
+    # these over its synthetic relief; see build_font_normal.
+    font_normals: dict = field(default_factory=dict)
+    # Zone letter -> (r, g, b) actually painted into the base's collar zones.
+    collar_colors: dict = field(default_factory=dict)
 
 
 def convert(sources: dict[str, Image.Image], stock: dict[str, Image.Image] | None = None,
@@ -1303,14 +1652,17 @@ def convert(sources: dict[str, Image.Image], stock: dict[str, Image.Image] | Non
 
     if "base" in sources:
         logos: list[Logo] = []
-        res.sheets["base"] = build_base(sources, profile, regions, logos, strip=opts.strip_logos)
+        zones = dict(opts.collar_colors)
+        res.sheets["base"] = build_base(sources, profile, regions, logos, strip=opts.strip_logos,
+                                        collar_colors=zones)
+        res.collar_colors = zones
         res.logos = logos
     else:
         res.warnings.append("no NHL 23 base supplied — base and crest were not built")
 
     glyphs: dict = {}
     if "font" in sources:
-        glyphs, warn = segment_font(sources["font"], profile)
+        glyphs, warn = segment_font(sources["font"], profile, sources.get("font_normal"))
         res.warnings.extend(warn)
     else:
         res.warnings.append("no NHL 23 font supplied — letters/numbers were not built")
@@ -1340,6 +1692,13 @@ def convert(sources: dict[str, Image.Image], stock: dict[str, Image.Image] | Non
                                             colors, res.layers.get("stamps", 2), opts.enabled,
                                             opts.rects, opts.art,
                                             scales=opts.scales.get("stamps"))
+    if "font_normal" in sources:
+        for name, kw in (("letters", {}),
+                         ("stamps", dict(enabled=opts.enabled, rects=opts.rects))):
+            ov = build_font_normal(glyphs, profile, name, stock.get(name),
+                                   scales=opts.scales.get(name), **kw)
+            if ov is not None:
+                res.font_normals[name] = ov
     return res
 
 

@@ -5,6 +5,11 @@ permanent.
 The flat XEX uses XEX2 BASIC compression (file_format_info key 0x3FF, comp_type 1): the image is
 a list of (data_size, zero_size) blocks. Each block stores data_size bytes in the file then
 zero_size zero-bytes that exist only in memory (BSS compaction) — so VA->offset is NOT linear.
+
+Every VA a caller passes in is a *canonical stock-v1.0* address. When the target image is Title
+Update #1, xex_version translates it here — the one chokepoint every patcher already funnels
+through — so no module needs to know which build it is patching. Pass `_translate=False` to
+address the file literally (xex_version itself does, to avoid recursing while it detects).
 """
 import functools
 import os
@@ -151,9 +156,15 @@ def parse_basic_blocks(xex_path):
     return header_size, image_base, list(blocks)
 
 
-def va_to_offset(xex_path, va):
+def _xlate(xex_path, va, enabled=True):
+    """Canonical v1.0 VA -> the VA it actually lives at in this image."""
+    return _xv().translate(xex_path, va) if enabled else va
+
+
+def va_to_offset(xex_path, va, _translate=True):
     """Guest VA -> flat-XEX file offset, or None if VA lands in a zero (BSS) gap / out of range."""
     data_start, image_base, blocks = parse_basic_blocks(xex_path)
+    va = _xlate(xex_path, va, _translate)
     img_off = va - image_base
     if img_off < 0:
         return None
@@ -168,28 +179,50 @@ def va_to_offset(xex_path, va):
     return None
 
 
-def read_va(xex_path, va, n=4):
+def _xv():
+    try:
+        from . import xex_version
+    except ImportError:
+        import xex_version
+    return xex_version
+
+
+def read_va(xex_path, va, n=4, _translate=True):
     """`n` bytes at `va`, or None if the VA isn't in the file. Seeks — never reads the whole XEX,
     so callers can resolve a dozen sites for free instead of a dozen 39 MB reads."""
-    off = va_to_offset(xex_path, va)
+    va_real = _xlate(xex_path, va, _translate)
+    off = va_to_offset(xex_path, va_real, _translate=False)
     if off is None:
         return None
     with open(xex_path, "rb") as f:
         f.seek(off)
         b = f.read(n)
-    return b if len(b) == n else None
+    if len(b) != n:
+        return None
+    # Read-side mirror of the patch_va fixup: a relative branch at a relocated site encodes a
+    # different displacement here, so hand it back in canonical v1.0 terms. Modules fingerprint
+    # sites against hardcoded stock words, and those must keep matching on either build.
+    return _xv().unfix_branch_bytes(xex_path, b, va, va_real) if va_real != va else b
 
 
-def read_u32(xex_path, va):
+def read_u32(xex_path, va, _translate=True):
     """The big-endian u32 at `va`, or None if the VA isn't in the file."""
-    b = read_va(xex_path, va, 4)
+    b = read_va(xex_path, va, 4, _translate)
     return None if b is None else struct.unpack(">I", b)[0]
 
 
 def patch_va(xex_path, va, new_bytes, expect=None, log=print):
     """Write new_bytes at the file offset for `va`. If `expect` (bytes) is given, verify the
     current file bytes match it first (safety). Returns the file offset patched."""
-    off = va_to_offset(xex_path, va)
+    va_real = _xlate(xex_path, va)
+    if va_real != va:
+        # A relative branch built from v1.0 addresses has to be re-aimed: both its site and its
+        # target moved, and independently. Applies to the stock `expect` word too, which encodes
+        # a different displacement in the retargeted image.
+        xv = _xv()
+        new_bytes = xv.fix_branch_bytes(xex_path, new_bytes, va, va_real)
+        expect = xv.fix_branch_bytes(xex_path, expect, va, va_real)
+    off = va_to_offset(xex_path, va_real, _translate=False)
     if off is None:
         raise ValueError(f"VA 0x{va:X} not patchable (out of range or in a zeroed BSS gap)")
     with open(xex_path, "r+b") as f:
@@ -198,7 +231,8 @@ def patch_va(xex_path, va, new_bytes, expect=None, log=print):
             raise ValueError(f"verify failed @0x{off:X}: file has {cur.hex()} not {expect.hex()} "
                              f"(VA mapping wrong or already patched)")
         f.seek(off); f.write(new_bytes)
-    log(f"  XEX patched @0x{off:X} (VA 0x{va:X}): {new_bytes.hex()}")
+    log(f"  XEX patched @0x{off:X} (VA 0x{va:X}"
+        + (f" -> 0x{va_real:X}" if va_real != va else "") + f"): {new_bytes.hex()}")
     return off
 
 

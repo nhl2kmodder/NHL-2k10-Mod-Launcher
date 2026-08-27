@@ -37,9 +37,18 @@ ALIGN = 0x800
 
 # filename shell -> shape family (mesh 0x27/0x28/0x29 via Goalie_GetMaskMeshId; shells >= 7 all
 # fall back to 0x27 = the standard g01/g04 shape, which is what makes them usable as extra slots)
-STANDARD_SHELLS = (1, 4) + tuple(range(7, 17))
-SHAPE_TEMPLATE = {s: ("helmet_g01_pattern_00.iff" if s in STANDARD_SHELLS
-                      else f"helmet_g{s:02d}_pattern_00.iff") for s in range(1, 17)}
+# g06 counts as STANDARD since the g06->standard XEX patch (mask_shells.py): its patterns 04..31
+# are the shipping "extra standard slots" lane, so new g06 clones must use the 512x512 standard
+# template. (Shells 7-16 kept for legacy configs; that lane never rendered in-game.)
+STANDARD_SHELLS = (1, 4, 6) + tuple(range(7, 17))
+
+# Clone template per family: a 512x512 DXT1 member, NOT pattern_00 — every family's pattern_00 is
+# a 64x64 placeholder, and the repaint path keeps the asset's own stored dimensions, so cloning it
+# would lock the new slot at 64x64 forever. (g01_pattern_05 is also the container whose two hash
+# sites were byte-verified — see the module docstring.)
+SHAPE_TEMPLATE = {s: ("helmet_g01_pattern_05.iff" if s in STANDARD_SHELLS
+                      else "helmet_g02_pattern_02.iff" if s in (2, 3)
+                      else "helmet_g05_pattern_02.iff") for s in range(1, 17)}
 
 
 def _read_header_slack(a0: Path, slack: int):
@@ -130,6 +139,7 @@ def add_custom_asset(game_dir, new_name: str, payload: bytes, log=print, flags_f
     del buf[-16:]                                              # the insert consumed 16 B of slack
     struct.pack_into(">I", buf, 0x10, cnt + 1)
     AT._write_header(a0, buf)
+    _tree_sync(game_dir)                 # a brand-new entry: the tree picks it up by TOC diff
     return (f"ADDED {new_name} -> {spill}:0x{new_local:X} ({len(payload)} bytes; TOC insert at "
             f"#{pos}/{cnt}, hash {h:08X}); count {cnt} -> {cnt + 1}")
 
@@ -255,18 +265,40 @@ def add_custom_mask(game_dir, model: int, pattern: int, edited_image=None,
                     template=None, fmt="8888", log=print) -> str:
     """Create helmet_g{model:02d}_pattern_{pattern:02d}.iff as a NEW slot: rebranded clone of a
     same-shape template, TOC-registered, then (if `edited_image`) repainted via the normal convert
-    path. model 7-16 = extra STANDARD-shape slots (need the mask_shells XEX patch to render).
-    Assign to a goalie as roster shell=model-1, pattern=pattern."""
+    path. model 6, patterns 04-31 = the extra STANDARD-shape slots (the mask_shells g06 XEX patch
+    renders them on the g01/g04 mesh). Assign to a goalie as roster shell=model-1, pattern=pattern."""
     if not (1 <= model <= 16):
         raise ValueError(f"model g{model:02d} out of range g01-g16")
-    if not (0 <= pattern <= 31):
-        raise ValueError(f"pattern {pattern} out of range 0-31 (5-bit roster field)")
+    if not (0 <= pattern <= 63):
+        # patterns 32-63 need the mask_pattern6 XEX patch (6-bit lane: +0xB8 low 5
+        # bits + the +0xB4 bit-26 donor); only style g01 (model 1) supports them.
+        raise ValueError(f"pattern {pattern} out of range 0-63")
+    if pattern > 31 and model != 1:
+        raise ValueError(f"patterns 32-63 are only available on the standard style g01")
     name = f"helmet_g{model:02d}_pattern_{pattern:02d}.iff"
     template = template or SHAPE_TEMPLATE[model]
     clone = build_rebranded_clone(template, name, game_dir, log)
     st = add_custom_asset(game_dir, name, clone, log, flags_from=template)
     log("  " + st)
     if edited_image:
-        st2 = AT.replace_primary_convert(name, edited_image, game_dir, fmt, log=log)
+        # Masks always go in at 2x native (1024x1024) 8888 -- see replace_primary_hires. The helmet
+        # streaming pool sizes on a runtime MAX over the whole helmet family, so this raises the
+        # ceiling once rather than per-slot, and there is no forever-Loading trap.
+        st2 = AT.replace_primary_hires(name, edited_image, game_dir, fmt, 2, log=log)
         log("  " + st2)
     return st
+
+
+# -- extracted-tree write-through ----------------------------------------------
+# archive_textures wraps its own replace_* entry points so every texture write lands in
+# ROOT/NHL2k10_Extracted as well as the archives. The writes in THIS module go straight to the
+# archive files, so they have to say so themselves or the tree quietly falls behind.
+def _tree_sync(game_dir, names=()):
+    try:
+        try:
+            from . import volume_store as _vs
+        except ImportError:
+            import volume_store as _vs
+        _vs.sync_after_op(game_dir, names)
+    except Exception:
+        pass          # the archives are already correct; a stale tree is not a failure

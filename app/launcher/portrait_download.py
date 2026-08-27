@@ -554,59 +554,154 @@ def _fill_opening(head_rgba, jersey_rgba, iters=200, darken=0.9985):
     return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8), "RGBA")
 
 
+def _align_jersey_to_neck(head, info, jersey, overlap_frac=0.035):
+    """Shift the jersey template UP so its collar overlaps the bottom of THIS player's neck.
+
+    The template is shot on a different body: if its collar starts even a few px below where the
+    source head/neck layer was cut (at the old jersey's collar), a bare band shows — the old collar
+    line, a gap, then the new jersey. Measured per column over the neck's columns: bottom of the
+    head layer vs top of the jersey, medians compared, and the jersey lifted until it tucks
+    `overlap_frac` of the frame UNDER the neck edge. Never shifts down (a collar that already
+    overlaps is correct as-is — pushing it down would open the very gap this closes)."""
+    ha = np.array(head.convert("RGBA"))[:, :, 3] > 150
+    ja = np.array(jersey.convert("RGBA"))[:, :, 3] > 40
+    H, W = ha.shape
+    nb = int(info.get("nb", 0.75 * H))
+    band = ha[max(0, nb - int(0.08 * H)):nb + 1]         # neck = head content just above its bottom
+    cols = np.where(band.any(0))[0]
+    if len(cols) == 0 or not ja.any():
+        return jersey, 0
+    head_bot = [np.where(ha[:, x])[0].max() for x in cols if ha[:, x].any()]
+    jer_top = [np.where(ja[:, x])[0].min() for x in cols if ja[:, x].any()]
+    if not head_bot or not jer_top:
+        return jersey, 0
+    delta = int(np.median(jer_top) - np.median(head_bot)) + int(overlap_frac * H)
+    if delta <= 0:
+        return jersey, 0
+    delta = min(delta, int(0.15 * H))
+    out = Image.new("RGBA", jersey.size, (0, 0, 0, 0))
+    out.paste(jersey, (0, -delta))
+    return out, delta
+
+
+def _collar_fit_score(head, info, jersey, delta):
+    """Lower = better: how naturally this (already aligned) donor collar wraps THIS neck.
+
+    Two penalties, both in pixels so they compose: a collar opening wider than the neck (the gap at
+    the neck sides is filled with synthesised in-paint skin — the most visible composite artefact),
+    and the alignment shift that was needed (a big shift means the donor's framing was far off, and
+    everything else about his pose likely is too)."""
+    ha = np.array(head.convert("RGBA"))[:, :, 3] > 150
+    ja = np.array(jersey.convert("RGBA"))[:, :, 3] > 40
+    H, W = ha.shape
+    nb = min(int(info.get("nb", 0.75 * H)), H - 1)
+    neck_w = 0
+    for y in range(nb, max(nb - int(0.06 * H), 0), -1):   # neck width at (or just above) its bottom
+        xs = np.where(ha[y])[0]
+        if len(xs):
+            neck_w = int(xs.max() - xs.min())
+            break
+    xs = np.where(ja[nb])[0]
+    if len(xs) < 2:
+        return 1e9                                        # collar doesn't even reach the neck bottom
+    opening = int((~ja[nb, xs.min():xs.max() + 1]).sum())  # the neck hole's width at that row
+    return max(0, opening - neck_w) + 0.5 * delta
+
+
 def composite_jersey(head_mug, jersey_templ):
-    """Put head_mug's head+neck into a jersey — 3 layers for a seamless join: (1) the head/neck, (2) its
-    neck skin inpainted into the jersey's collar opening (so the neck reads as continuing down under the
-    collar), (3) the jersey ON TOP so its unaltered collar wraps over the neck — no gap, no distortion.
-    Returns an unframed RGBA mug that reframe() crops to the game framing."""
-    head, _info = _clean_head_neck(head_mug)
-    jersey = jersey_templ.convert("RGBA").resize(head_mug.size)
-    filled = _fill_opening(head, jersey)
+    """Single-template compatibility wrapper around composite_jersey_best."""
+    return composite_jersey_best(head_mug, [jersey_templ])
+
+
+def composite_jersey_best(head_mug, templates):
+    """Put head_mug's head+neck into the best-fitting of several donor jerseys.
+
+    Collar geometry varies donor to donor (collar height, opening width, shoulder slope), so each
+    candidate is aligned to this player's neck and scored (_collar_fit_score); the winner is
+    composited in 3 layers for a seamless join: (1) the head/neck, (2) its neck skin inpainted into
+    the jersey's collar opening (so the neck reads as continuing down under the collar), (3) the
+    jersey ON TOP so its unaltered collar wraps over the neck — no gap, no distortion. Returns an
+    unframed RGBA mug that reframe() crops to the game framing, or None with no usable template."""
+    templates = [t for t in templates if t is not None]
+    if not templates:
+        return None
+    head, info = _clean_head_neck(head_mug)
+    best = best_s = None
+    for t in templates:
+        jersey, delta = _align_jersey_to_neck(head, info, t.convert("RGBA").resize(head_mug.size))
+        s = _collar_fit_score(head, info, jersey, delta)
+        if best is None or s < best_s:
+            best, best_s = jersey, s
+    filled = _fill_opening(head, best)
     canvas = Image.new("RGBA", head_mug.size, (0, 0, 0, 0))
     canvas.alpha_composite(filled)          # head/neck + neck-fill (under)
-    canvas.alpha_composite(jersey)          # jersey ON TOP — collar wraps the neck
+    canvas.alpha_composite(best)            # jersey ON TOP — collar wraps the neck
     return canvas
 
 
-_TEAM_TEMPLATE = {}                      # team abbrev -> isolated jersey RGBA (cached; None = failed)
+_TEAM_TEMPLATE = {}       # team abbrev -> list of isolated jersey RGBAs (cached; [] = fetch failed)
 
 
 def set_team_template(team, img):
-    """Override a team's jersey template with a hand-built PNG (RGBA, open neck-hole, rigidly framed
-    like an NHL mug). Bypasses the live-roster auto-template."""
-    _TEAM_TEMPLATE[team.upper()] = _build_jersey_template(img) if img is not None else None
+    """Override a team's jersey templates with a hand-built PNG (RGBA, open neck-hole, rigidly framed
+    like an NHL mug). Bypasses the live-roster auto-templates."""
+    t = _build_jersey_template(img) if img is not None else None
+    _TEAM_TEMPLATE[team.upper()] = [t] if t is not None else []
 
 
-def team_jersey_template(team):
-    """Isolated jersey (open neck-hole) for a team, from a live reference player's current mug. Cached;
-    None if it can't be built."""
+def team_jersey_templates(team, n=3):
+    """Up to n isolated jerseys (open neck-hole) for a team, from different reference players'
+    current mugs. Several donors because collar geometry varies (collar height, opening width,
+    shoulder slope) — the compositor scores each against the specific player's neck and keeps the
+    best fit. Cached per team; [] if none can be built."""
     team = team.upper()
     if team in _TEAM_TEMPLATE:
         return _TEAM_TEMPLATE[team]
-    tmpl = None
+    tmpls = []
     try:
         r = _session().get(f"https://api-web.nhle.com/v1/roster/{team}/current", timeout=_TIMEOUT)
         r.raise_for_status()
         j = r.json()
         for grp in ("forwards", "defensemen"):            # skip goalies (different framing/pads)
             for p in j.get(grp, []):
+                if len(tmpls) >= n:
+                    break
                 url = p.get("headshot")
                 if not url:
                     continue
+                # A newly-traded player's "current" mug can still show his OLD team's jersey — and
+                # the URL is no alibi: at the offseason roll the CDN re-homes the old photo under
+                # the NEW team's path (a TOR-URL mug of an ex-Canuck is a VAN photo). Only trust a
+                # donor whose most recent PLAYED season was with this team: that photo was shot in
+                # this jersey. Costs one landing call per rejected candidate, cached per team.
+                try:
+                    land = landing(p.get("id"))
+                    if season_team(land, most_recent_season(land)) != team:
+                        continue
+                except Exception:
+                    continue
                 img, sil = fetch_mug(url)
                 if img is not None and not sil:
-                    tmpl = _build_jersey_template(img)
-                    break
-            if tmpl is not None:
+                    t = _build_jersey_template(img)
+                    if t is not None:
+                        tmpls.append(t)
+            if len(tmpls) >= n:
                 break
     except Exception:
-        tmpl = None
-    _TEAM_TEMPLATE[team] = tmpl
-    return tmpl
+        pass
+    _TEAM_TEMPLATE[team] = tmpls
+    return tmpls
+
+
+def team_jersey_template(team):
+    """First available jersey template for a team (compat shim; prefer team_jersey_templates)."""
+    tmpls = team_jersey_templates(team)
+    return tmpls[0] if tmpls else None
 
 
 # ── high-level: name (+ options) -> reframed 256x256 RGBA + metadata ────────
-def resolve_image(name, season="current", cand=None, want_team=None, head_frac=None, composite=True):
+def resolve_image(name, season="current", cand=None, want_team=None, head_frac=None, composite=True,
+                  force_jersey=False):
     """Produce the reframed portrait image for a player name.
 
     Returns a dict:
@@ -621,6 +716,8 @@ def resolve_image(name, season="current", cand=None, want_team=None, head_frac=N
     duplicate. `want_team` (a mug abbrev) forces that team's jersey: a real mug if the player wore it,
     else (composite=True) their head/neck grafted onto that team's jersey template ('composited').
     `season` other than 'current' forces that season's jersey. `head_frac` overrides the head size.
+    `force_jersey` composites even when want_team IS the player's current team — for a just-traded
+    player whose "current" headshot PNG still shows the old team's jersey (mugs update at season start).
     """
     src = None
     if cand is None:
@@ -645,7 +742,7 @@ def resolve_image(name, season="current", cand=None, want_team=None, head_frac=N
     force_composite = False
     if want_team and land is not None:                # force a specific team's jersey
         cur_team = land.get("currentTeamAbbrev")
-        if want_team == cur_team and land.get("headshot"):
+        if want_team == cur_team and land.get("headshot") and not force_jersey:
             url = land["headshot"]; team = cur_team    # current team = the authoritative real mug (best)
             m = re.search(r"/mugs/nhl/(\d{8})/", url); season_used = m.group(1) if m else "current"
         else:
@@ -683,9 +780,9 @@ def resolve_image(name, season="current", cand=None, want_team=None, head_frac=N
         if land is not None and land.get("headshot"):
             hs, hsil = fetch_mug(land["headshot"])
             head_src = hs if (hs is not None and not hsil) else None
-        tmpl = team_jersey_template(want_team)
-        if head_src is not None and tmpl is not None:
-            comp = composite_jersey(head_src, tmpl)
+        tmpls = team_jersey_templates(want_team)
+        if head_src is not None and tmpls:
+            comp = composite_jersey_best(head_src, tmpls)
             return {"status": "composited", "candidates": [cand], "source": src,
                     "image": reframe(comp, head_frac), "team": want_team, "season": "composite",
                     "chosen": cand}

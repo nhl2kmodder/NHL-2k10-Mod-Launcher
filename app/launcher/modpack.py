@@ -74,6 +74,7 @@ Merge model per item:
 """
 
 import json
+import os
 import zipfile
 import hashlib
 import shutil
@@ -238,14 +239,14 @@ def load_audio_meta(root):
             meta[k] = e
     return meta
 
-def _catalog_index(root):
+def _catalog_index(root, manifest=None):
     """(name -> (fid, off), akey -> entry) from the extract manifest.
 
     `friendly_name`/`_fid` are kept as aliases because pack files written before the layout
     change carry those field names and still have to import.
     """
     name2off, off2entry = {}, {}
-    for key, e in AS.load_manifest(root).items():
+    for key, e in (manifest if manifest is not None else AS.load_manifest(root)).items():
         try:
             fid, off = AS.parse_akey(key)
         except Exception:
@@ -257,16 +258,62 @@ def _catalog_index(root):
         name2off[AS.stem_of(e)] = (fid, off)
     return name2off, off2entry
 
-def load_audio_wavs(root):
+_MTIME_EPS = 2.0    # FAT mtime granularity + copy2 rounding — same slack as the Audio tab
+
+
+def _wav_stat_sweep(root):
+    """normcase'd wav path -> (size, mtime) from ONE directory walk of Audio/Extracted.
+
+    scandir hands both back from the directory entry the walk already read, so this is ~0.2 s
+    for 80k files where per-file stat() calls would take seconds."""
+    stats = {}
+    base = AS.extracted_root(root)
+    for dirpath, _dirs, _files in os.walk(base):
+        with os.scandir(dirpath) as it:
+            for de in it:
+                if de.name.endswith(".wav") and de.is_file():
+                    try:
+                        st = de.stat()
+                        stats[os.path.normcase(de.path)] = (st.st_size, st.st_mtime)
+                    except OSError:
+                        pass
+    return stats
+
+
+def load_audio_wavs(root, fast=False, manifest=None):
     """akey -> WAV path, for streams the user has actually edited.
 
     Editing is in place now, so "edited" is the manifest sha1 comparison rather than
     "a file exists in Modified/Audio/".
-    """
+
+    `fast` swaps the SHA-1 comparison (a ~10 min sweep over a fully-extracted 24 GB tree) for
+    the same dirty -> size -> mtime test the Audio tab's ✓ Modified column uses: one stat walk,
+    no file reads. That is the right answer for pickers and diff listings; anything that must
+    PROVE bytes differ (Patch Game, Rescan Edits) keeps the hash."""
     out = {}
-    for key, e in AS.load_manifest(root).items():
+    man = manifest if manifest is not None else AS.load_manifest(root)
+    if not fast:
+        for key, e in man.items():
+            p = AS.wav_path(root, e)
+            if AS.is_edited(root, e, p):
+                out[key] = p
+        return out
+    stats = _wav_stat_sweep(root)
+    for key, e in man.items():
         p = AS.wav_path(root, e)
-        if AS.is_edited(root, e, p):
+        st = stats.get(os.path.normcase(str(p)))
+        if st is None:                                # no WAV on disk -> nothing to ship
+            continue
+        cur_size, cur_mtime = st
+        if e.get("dirty"):
+            out[key] = p; continue
+        base_size = e.get("size")
+        if base_size is None or cur_size != base_size:
+            out[key] = p; continue
+        base_mtime = e.get("mtime")
+        # No recorded mtime (pre-tracking extract) -> size-only, same fallback as the tab list;
+        # Rescan Edits on the Audio tab is how those entries get settled into `dirty`.
+        if base_mtime is not None and abs(cur_mtime - base_mtime) > _MTIME_EPS:
             out[key] = p
     return out
 
@@ -1314,8 +1361,13 @@ def _head_binding(t, head_id):
     }
 
 
-def head_payload(head_id, game_dir):
+def head_payload(head_id, game_dir, light=False):
     """({'geometry': bytes|None, 'maps': {label: png_bytes}}, {'geometry': sha|None, label: sha})
+
+    `light` answers only "WHICH parts differ" — map values in the sha dict become placeholders and
+    no PNG is encoded. That is all the export picker needs, and the PNG optimize pass is by far
+    the most expensive step here, so the picker must not pay for it. Anything that ships or
+    compares real bytes (diff on import, _collect_heads at pack-write time) uses the full mode.
 
     Only the parts that DIFFER from the artist's asset are carried. The Head Editor writes colour
     and normal and leaves occlusion alone, so a typical head ships two maps — but this asks the
@@ -1349,6 +1401,9 @@ def head_payload(head_id, game_dir):
             continue
         if now is None or was is None or now.tobytes() == was.tobytes():
             continue
+        if light:
+            shas[label] = "edited"                    # truthy placeholder — presence is the answer
+            continue
         buf = io.BytesIO()
         now.convert("RGB").save(buf, "PNG", optimize=True)
         blobs["maps"][label] = buf.getvalue()
@@ -1374,7 +1429,9 @@ def load_heads(game_dir, ros_path=None, ids=None, log=print):
     for hid in (sorted(int(i) for i in ids) if ids is not None
                 else edited_head_ids(game_dir, log)):
         _row, bind = _head_binding(t, hid)
-        _blobs, shas = head_payload(hid, game_dir)
+        # light: which parts differ is all a picker needs — _collect_heads re-reads the real
+        # payload (bytes + shas) for the rows the user actually ticked, at pack-write time.
+        _blobs, shas = head_payload(hid, game_dir, light=True)
         if not shas:                                  # bytes differ but nothing we can carry
             log(f"  heads: {head_asset(hid)} differs from stock but no geometry or map could be "
                 f"read out of it — skipped")
@@ -1674,6 +1731,236 @@ def revert_heads(head_ids, game_dir, log=print):
     return n
 
 
+# ── custom collars (skater collar meshes r16 / r17 inside global.iff) ─────────────────────────
+COLLARS_KEY = "collars"
+COLLARS_LABEL = "Custom collars — skater collar meshes (Collar strings ON = laced, OFF = plain V)"
+# The ROS uniform record's collar style (+0x18 bits 24-26, the editor's "Collar strings" box) picks
+# the collar submesh: style 0 -> rec 16, style 1 -> rec 17. Those two are what the custom collars
+# replace; recs 18-20 stay stock.
+COLLAR_RECS = (16, 17)
+COLLAR_STYLE = {16: "plain V (Collar strings off)", 17: "laced (Collar strings on)"}
+
+
+def _collar_mods():
+    try:
+        from . import char_model as C
+    except ImportError:
+        import char_model as C
+    return C
+
+
+def _skater(C, b):
+    m = C.rig_model(C.scan_models(b), "skater")
+    if m is None:
+        raise ValueError("global.iff: skater model not found in blob 0")
+    return m
+
+
+def _part_rows(b, m, part):
+    """(position rows, attribute rows, part-local index run) of one submesh — the raw bytes.
+
+    Raw rather than decoded: the rows carry the skin weights / bone slots replace_part inherited
+    by nearest, which an OBJ-shaped payload would have to re-derive on the other side. The model
+    is the same on every install (one global.iff), so the rows are portable as they are."""
+    import numpy as np
+    lo, n = part["first_vtx"], part["n_vtx"]
+    pos = bytes(b[m["pos_off"] + lo * m["pos_stride"]:m["pos_off"] + (lo + n) * m["pos_stride"]])
+    att = bytes(b[m["att_off"] + lo * m["att_stride"]:m["att_off"] + (lo + n) * m["att_stride"]])
+    ib = np.frombuffer(bytes(b[m["ib0"] + part["first_idx"] * 2:
+                              m["ib0"] + (part["first_idx"] + part["n_idx"]) * 2]),
+                       ">u2").astype(np.int64)
+    idx = np.where(ib == 0xFFFF, 0xFFFF, ib - lo)
+    return pos, att, idx
+
+
+def _collar_state(game_dir, current=True):
+    C = _collar_mods()
+    b = C.blob(current, game_dir)
+    m = _skater(C, b)
+    parts = {p["rec"]: p for p in C.submeshes(b, m)}
+    st = {"b": b, "m": m, "parts": {}}
+    for rec in COLLAR_RECS:
+        p = parts.get(rec)
+        if p is not None:
+            st["parts"][rec] = (p, _part_rows(b, m, p))
+    return st
+
+
+def _extra_rows(live, prist):
+    """Vertices OUTSIDE the collar parts whose rows differ from stock — the back sponsor decal
+    window the collar build re-homes under the collar. {vertex index: {"att": hex, "pos": hex}}."""
+    import numpy as np
+    m, b, m0, b0 = live["m"], live["b"], prist["m"], prist["b"]
+    nv, pst, ast = m["nvtx"], m["pos_stride"], m["att_stride"]
+    if (nv, pst, ast) != (m0["nvtx"], m0["pos_stride"], m0["att_stride"]):
+        return {}
+    A1 = np.frombuffer(b[m["att_off"]:m["att_off"] + nv * ast], np.uint8).reshape(nv, ast)
+    A0 = np.frombuffer(b0[m0["att_off"]:m0["att_off"] + nv * ast], np.uint8).reshape(nv, ast)
+    P1 = np.frombuffer(b[m["pos_off"]:m["pos_off"] + nv * pst], np.uint8).reshape(nv, pst)
+    P0 = np.frombuffer(b0[m0["pos_off"]:m0["pos_off"] + nv * pst], np.uint8).reshape(nv, pst)
+    da, dp = np.any(A1 != A0, axis=1), np.any(P1 != P0, axis=1)
+    for _rec, (p, _rows) in live["parts"].items():
+        da[p["first_vtx"]:p["first_vtx"] + p["n_vtx"]] = False
+        dp[p["first_vtx"]:p["first_vtx"] + p["n_vtx"]] = False
+    out = {}
+    for i in np.nonzero(da | dp)[0]:
+        e = {}
+        if da[i]:
+            e["att"] = A1[i].tobytes().hex()
+        if dp[i]:
+            e["pos"] = P1[i].tobytes().hex()
+        out[str(int(i))] = e
+    return out
+
+
+def load_collars(game_dir, log=print):
+    """The custom collar parts as they sit in the live global.iff, or {} when both are stock."""
+    live = _collar_state(game_dir, True)
+    try:
+        prist = _collar_state(game_dir, False)
+    except Exception as e:
+        prist = None
+        log(f"  collars: pristine global.iff not readable ({e}) — shipping both collar parts")
+    import numpy as np
+    m = live["m"]
+    parts = {}
+    for rec, (p, (pos, att, idx)) in live["parts"].items():
+        if prist is not None and rec in prist["parts"]:
+            _p0, (pos0, att0, idx0) = prist["parts"][rec]
+            if pos == pos0 and att == att0 and np.array_equal(idx, idx0):
+                continue                                    # stock collar — nothing to ship
+        parts[str(rec)] = {"style": COLLAR_STYLE.get(rec, ""), "n_vtx": p["n_vtx"],
+                           "n_idx": p["n_idx"], "pos": pos.hex(), "att": att.hex(),
+                           "idx": [int(v) for v in idx]}
+    if not parts:
+        return {}
+    extra = _extra_rows(live, prist) if prist is not None else {}
+    body = {"asset": "global.iff", "rig": "skater", "nvtx": m["nvtx"],
+            "pos_stride": m["pos_stride"], "att_stride": m["att_stride"],
+            "parts": parts, "extra": extra}
+    body["sha"] = _sha(json.dumps({"parts": parts, "extra": extra}, sort_keys=True).encode())
+    return body
+
+
+def _collars_label(c):
+    styles = [COLLAR_STYLE.get(int(r), f"rec {r}") for r in sorted(c.get("parts", {}), key=int)]
+    return "Custom collars — " + ", ".join(styles) if styles else COLLARS_LABEL
+
+
+def collars_export_item(game_dir, log=print):
+    """A picker row when at least one collar part is custom, else None."""
+    c = load_collars(game_dir, log)
+    if not c:
+        return None
+    return {"section": COLLARS_KEY, "key": COLLARS_KEY, "label": _collars_label(c),
+            "checked": True}
+
+
+def _collars_same(in_c, game_dir):
+    """Does the recipient's global.iff already carry exactly these rows?"""
+    live = _collar_state(game_dir, True)
+    for rec_s, e in in_c.get("parts", {}).items():
+        got = live["parts"].get(int(rec_s))
+        if got is None:
+            return False
+        _p, (pos, att, idx) = got
+        if pos.hex() != e["pos"] or att.hex() != e["att"] or [int(v) for v in idx] != e["idx"]:
+            return False
+    m, b = live["m"], live["b"]
+    for i_s, e in in_c.get("extra", {}).items():
+        i = int(i_s)
+        if "att" in e and b[m["att_off"] + i * m["att_stride"]:
+                           m["att_off"] + (i + 1) * m["att_stride"]].hex() != e["att"]:
+            return False
+        if "pos" in e and b[m["pos_off"] + i * m["pos_stride"]:
+                           m["pos_off"] + (i + 1) * m["pos_stride"]].hex() != e["pos"]:
+            return False
+    return True
+
+
+def diff_collars_item(in_c, game_dir=None):
+    status = "new"
+    if game_dir:
+        try:
+            status = "same" if _collars_same(in_c, game_dir) else "new"
+        except Exception:
+            status = "new"
+    return {"section": COLLARS_KEY, "key": COLLARS_KEY, "status": status, "incoming": in_c,
+            "label": _collars_label(in_c)}
+
+
+def _write_collar_rows(b, m, parts_by_rec, in_parts, extra):
+    import numpy as np
+    for rec_s, e in in_parts.items():
+        p = parts_by_rec.get(int(rec_s))
+        if p is None:
+            raise ValueError(f"skater model has no collar part {rec_s}")
+        if (p["n_vtx"], p["n_idx"]) != (e["n_vtx"], e["n_idx"]):
+            raise ValueError(f"collar part {rec_s}: slot is {p['n_vtx']} v / {p['n_idx']} idx, "
+                             f"the pack's is {e['n_vtx']} / {e['n_idx']}")
+        lo = p["first_vtx"]
+        b[m["pos_off"] + lo * m["pos_stride"]:m["pos_off"] + (lo + p["n_vtx"]) * m["pos_stride"]] = \
+            bytes.fromhex(e["pos"])
+        b[m["att_off"] + lo * m["att_stride"]:m["att_off"] + (lo + p["n_vtx"]) * m["att_stride"]] = \
+            bytes.fromhex(e["att"])
+        idx = np.asarray(e["idx"], np.int64)
+        stream = np.where(idx == 0xFFFF, 0xFFFF, idx + lo).astype(">u2")
+        ibp = m["ib0"] + p["first_idx"] * 2
+        b[ibp:ibp + p["n_idx"] * 2] = stream.tobytes()
+    for i_s, e in (extra or {}).items():
+        i = int(i_s)
+        if "att" in e:
+            b[m["att_off"] + i * m["att_stride"]:m["att_off"] + (i + 1) * m["att_stride"]] = \
+                bytes.fromhex(e["att"])
+        if "pos" in e:
+            b[m["pos_off"] + i * m["pos_stride"]:m["pos_off"] + (i + 1) * m["pos_stride"]] = \
+                bytes.fromhex(e["pos"])
+
+
+def apply_collars(game_dir, in_c, log=print) -> str:
+    """Write the pack's collar rows into the recipient's live global.iff and re-encode blob 0
+    (slow: the encoder is pure Python over 23 MB — minutes). Grows the slot when it has to."""
+    C = _collar_mods()
+    b = bytearray(C.blob(True, game_dir))
+    m = _skater(C, b)
+    if (m["nvtx"], m["pos_stride"], m["att_stride"]) != \
+            (in_c["nvtx"], in_c["pos_stride"], in_c["att_stride"]):
+        raise ValueError("the pack's skater model layout does not match this global.iff")
+    parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
+    _write_collar_rows(b, m, parts_by_rec, in_c["parts"], in_c.get("extra"))
+    st = C.write(bytes(b), game_dir, log)
+    return f"custom collars installed ({_collars_label(in_c)[len('Custom collars — '):]}) — {st}"
+
+
+def revert_collars(in_c, game_dir, log=print) -> str:
+    """Stock rows back for every part / vertex the pack touched (NOT a whole-blob restore — the
+    live blob is longer than the pristine one since the speech-DB growth)."""
+    C = _collar_mods()
+    live = _collar_state(game_dir, True)
+    prist = _collar_state(game_dir, False)
+    b, m = bytearray(live["b"]), live["m"]
+    m0, b0 = prist["m"], prist["b"]
+    parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
+    stock = {}
+    for rec_s in in_c.get("parts", {}):
+        p0, (pos0, att0, idx0) = prist["parts"][int(rec_s)]
+        stock[rec_s] = {"n_vtx": p0["n_vtx"], "n_idx": p0["n_idx"], "pos": pos0.hex(),
+                        "att": att0.hex(), "idx": [int(v) for v in idx0]}
+    extra = {}
+    for i_s, e in in_c.get("extra", {}).items():
+        i = int(i_s)
+        r = {}
+        if "att" in e:
+            r["att"] = b0[m0["att_off"] + i * m0["att_stride"]:
+                          m0["att_off"] + (i + 1) * m0["att_stride"]].hex()
+        if "pos" in e:
+            r["pos"] = b0[m0["pos_off"] + i * m0["pos_stride"]:
+                          m0["pos_off"] + (i + 1) * m0["pos_stride"]].hex()
+        extra[i_s] = r
+    _write_collar_rows(b, m, parts_by_rec, stock, extra)
+    return C.write(bytes(b), game_dir, log)
+
+
 # ── revert (undo what a pack applied, from the .orig backups) ─────────────────
 
 def read_pack_contents(pack_path):
@@ -1681,10 +1968,12 @@ def read_pack_contents(pack_path):
     'scoreclock': dict|{}, 'portraits': bool, 'heads': [ids]} — what a revert (or a preview of one)
     needs to know."""
     out = {"tex_rels": [], "audio_keys": [], "roster": False, "scoreclock": {}, "portraits": False,
-           "expansion": {}, "heads": []}
+           "expansion": {}, "heads": [], "collars": {}}
     with zipfile.ZipFile(pack_path, "r") as z:
         names = set(z.namelist())
         out["roster"] = "roster.json" in names
+        if "collars.json" in names:
+            out["collars"] = json.loads(z.read("collars.json"))
         if "expansion.json" in names:
             out["expansion"] = json.loads(z.read("expansion.json"))
         if "heads.json" in names:
@@ -1763,6 +2052,7 @@ def _revert_audio_slot(game_dir, key, off2entry, log):
         f.seek(off); blob = f.read(size)
     with open(live, "r+b") as f:
         f.seek(off); f.write(blob)
+    _tree_note(game_dir, fid, off, blob)
     log(f"  audio {e.get('friendly_name') or key}: original stream restored ({size} bytes)")
     return True
 
@@ -1783,8 +2073,17 @@ def revert_pack(root, game_dir, pack_path, log=print):
     root, game_dir = Path(root), Path(game_dir)
     inv = read_pack_contents(pack_path)
     counts = {"tex_assets": 0, "audio": 0, "scoreclock": 0, "portraits": 0, "heads": 0,
-              "notes": []}
+              "collars": 0, "notes": []}
     sc = inv["scoreclock"]
+
+    if inv.get("collars"):
+        log("  restoring the stock collar meshes (global.iff re-encode, a few minutes)…")
+        try:
+            log(f"  {revert_collars(inv['collars'], game_dir, log)}")
+            counts["collars"] = 1
+        except Exception as e:
+            log(f"  ERROR reverting collars: {e}")
+            counts["notes"].append(f"custom collars: revert FAILED ({e})")
 
     if inv.get("heads"):
         log(f"  restoring {len(inv['heads'])} stock head(s)…")
@@ -1905,11 +2204,12 @@ def _tex_catalog_map():
         pass
     return m
 
-def annotate(items, root):
+def annotate(items, root, meta=None, off2entry=None):
     root = Path(root)
     texmap = _tex_catalog_map()
-    meta = load_audio_meta(root)
-    _, off2entry = _catalog_index(root)
+    meta = load_audio_meta(root) if meta is None else meta
+    if off2entry is None:
+        _, off2entry = _catalog_index(root)
     for it in items:
         if it.get("section") == "roster":
             it.setdefault("team", "")
@@ -1923,6 +2223,9 @@ def annotate(items, root):
         elif it.get("section") == HEADS_KEY:
             it.setdefault("team", "")
             it["category"] = "Player head"
+        elif it.get("section") == COLLARS_KEY:
+            it.setdefault("team", "")
+            it["category"] = "Custom collars"
         elif it.get("section") == EXPANSION_KEY:
             inc = it.get("incoming") or {}
             it["team"] = it.get("team") or inc.get("code") or str(it.get("key") or "")
@@ -1938,24 +2241,29 @@ def annotate(items, root):
             it["category"] = (it.get("category") or inc.get("category") or e.get("category") or ce.get("category") or "")
     return items
 
-def local_items(root):
+def local_items(root, fast=False):
+    """`fast` = picker mode: cheap size+mtime edit detection for the WAVs (see load_audio_wavs)
+    and one manifest/names parse shared across the whole build, instead of three."""
     root = Path(root)
-    _, off2entry = _catalog_index(root)
+    manifest = AS.load_manifest(root)
+    _, off2entry = _catalog_index(root, manifest=manifest)
+    meta = load_audio_meta(root)
     items = []
-    for key in sorted(load_audio_meta(root)):
+    for key in sorted(meta):
         e = off2entry.get(key, {})
         items.append({"section": "meta", "key": key, "label": e.get("friendly_name") or e.get("stem") or key})
-    for key in sorted(load_audio_wavs(root)):
+    for key in sorted(load_audio_wavs(root, fast=fast, manifest=manifest)):
         e = off2entry.get(key, {})
         items.append({"section": "audio", "key": key, "label": (e.get("friendly_name") or e.get("stem") or key) + ".wav"})
     for rel in sorted(load_textures(root)):
         items.append({"section": "tex", "key": rel, "label": rel})
-    return annotate(items, root)
+    return annotate(items, root, meta=meta, off2entry=off2entry)
 
 def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author="",
-                portraits=b"", expansion=None, heads=None):
+                portraits=b"", expansion=None, heads=None, collars=None):
     """`heads`: {"<id>": (entry, {"geometry": bytes|None, "maps": {label: png_bytes}})}."""
     expansion = expansion or {}
+    collars = collars or {}
     roster = roster or {}
     scoreclock = scoreclock or {}
     portraits = portraits or b""
@@ -1976,7 +2284,8 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
                 "scoreclock": 1 if scoreclock else 0,
                 "portraits": AT.PORTRAIT_COUNT if portraits else 0,
                 "expansion": len(expansion),
-                "heads": len(heads)
+                "heads": len(heads),
+                "collars": len(collars.get("parts", {}))
             },
         }, indent=1))
         if meta:
@@ -2000,6 +2309,8 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
             z.writestr("roster.json", json.dumps(roster, indent=1))
         if scoreclock:
             z.writestr("scoreclock.json", json.dumps(scoreclock, indent=1))
+        if collars:
+            z.writestr("collars.json", json.dumps(collars))
         if heads:
             z.writestr("heads.json", json.dumps({k: v[0] for k, v in heads.items()}, indent=1))
             for k, (_entry, blobs) in heads.items():
@@ -2020,7 +2331,7 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
     return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs),
             "roster": len(roster), "scoreclock": 1 if scoreclock else 0,
             "portraits": AT.PORTRAIT_COUNT if portraits else 0, "expansion": len(expansion),
-            "heads": len(heads)}
+            "heads": len(heads), "collars": len(collars.get("parts", {}))}
 
 def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
                 game_dir=None, author="", log=print):
@@ -2034,7 +2345,8 @@ def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
     exp = load_expansion(ros_path) if (EXPANSION_KEY in include and ros_path) else {}
     heads = (_collect_heads(load_heads(game_dir, ros_path, log=log), game_dir, log)
              if (HEADS_KEY in include and game_dir) else {})
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads)
+    col = load_collars(game_dir, log) if (COLLARS_KEY in include and game_dir) else {}
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads, col)
 
 
 def _collect_heads(entries, game_dir, log=print):
@@ -2054,9 +2366,17 @@ def _collect_heads(entries, game_dir, log=print):
 def export_selected(root, out_path, selected, ros_path=None, game_dir=None, author="", log=print):
     root = Path(root)
     sel = {(s, k) for s, k in selected}
-    meta = {k: v for k, v in load_audio_meta(root).items() if ("meta",  k) in sel}
-    wavs = {k: v for k, v in load_audio_wavs(root).items() if ("audio", k) in sel}
-    texs = {k: v for k, v in load_textures(root).items()   if ("tex",   k) in sel}
+    meta = ({k: v for k, v in load_audio_meta(root).items() if ("meta", k) in sel}
+            if any(s == "meta" for s, _ in sel) else {})
+    # The ticked keys ARE the answer to "which WAVs" — resolve them straight off the manifest
+    # instead of re-running the edit sweep over the whole extract tree.
+    sel_audio = {k for s, k in sel if s == "audio"}
+    wavs = {}
+    if sel_audio:
+        man = AS.load_manifest(root)
+        wavs = {k: AS.wav_path(root, man[k]) for k in sel_audio if k in man}
+    all_texs = load_textures(root)
+    texs = {k: v for k, v in all_texs.items() if ("tex", k) in sel}
     roster = {}
     if any(s == "roster" for s, _ in sel) and ros_path:
         full_roster = load_roster(ros_path)
@@ -2066,7 +2386,7 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
             # texture. Force-include every mask asset the shipped goalies point at, the same way
             # the scoreclock section drags its overlay_static art along.
             folders = goalie_mask_tex_folders(roster[GOALIE_MASKS_KEY])
-            extra = {rel: p for rel, p in load_textures(root).items()
+            extra = {rel: p for rel, p in all_texs.items()
                      if rel.lower().startswith(tuple(f + "/" for f in folders)) and rel not in texs}
             if extra:
                 log(f"  goalie masks: auto-including {len(extra)} mask texture file(s) "
@@ -2085,7 +2405,7 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
             # Self-contained scoreclock: force-include the overlay_static texture files (the
             # scorebug art) even when their rows weren't individually selected — the layout
             # without its textures is only half the mod.
-            extra = {rel: p for rel, p in load_textures(root).items()
+            extra = {rel: p for rel, p in all_texs.items()
                      if rel.split("/")[0].lower() == "overlay_static.iff" and rel not in texs}
             if extra:
                 log(f"  scoreclock: auto-including {len(extra)} overlay_static texture file(s)")
@@ -2119,7 +2439,13 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
                                game_dir, log)
     elif head_keys:
         log("  heads skipped: no game files folder set (Settings tab)")
-    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads)
+    col = {}
+    if (COLLARS_KEY, COLLARS_KEY) in sel and game_dir:
+        log("  capturing the custom collar meshes…")
+        col = load_collars(game_dir, log)
+        if not col:
+            log("  collars: both collar parts are stock — section skipped")
+    return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads, col)
 
 
 # ── diff (incoming vs local) ──────────────────────────────────────────────────
@@ -2155,7 +2481,9 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
         raise ValueError(f"'{zip_path.name}' is not a valid zip archive (.n2kpack).")
     root = Path(root)
     local_meta = load_audio_meta(root)
-    local_wavs = load_audio_wavs(root)
+    # fast: this map only says "the recipient has an edited WAV at this key" for the status
+    # column — the pack members themselves are what gets hashed, a few streams not 80k.
+    local_wavs = load_audio_wavs(root, fast=True)
     local_texs = load_textures(root)
     _, off2entry = _catalog_index(root)
     items = []
@@ -2168,6 +2496,7 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
         in_sc = json.loads(z.read("scoreclock.json")) if "scoreclock.json" in names else {}
         in_exp = json.loads(z.read("expansion.json")) if "expansion.json" in names else {}
         in_heads = json.loads(z.read("heads.json")) if "heads.json" in names else {}
+        in_col = json.loads(z.read("collars.json")) if "collars.json" in names else {}
         cuemap = json.loads(z.read(CUEMAP_ARC)) if CUEMAP_ARC in names else {}
 
         items += _meta_items(in_meta, local_meta, off2entry, cuemap)
@@ -2178,6 +2507,8 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
             items.append(diff_scoreclock_item(in_sc))
         if PORTRAITS_ARC in names:
             items.append(diff_portraits_item(z, game_dir))
+        if in_col.get("parts"):
+            items.append(diff_collars_item(in_col, game_dir))
 
         for n in sorted(names):
             if n.startswith("audio_wav/") and n.endswith(".wav"):
@@ -2303,13 +2634,14 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                 head_targets=None):
     """`head_targets` = {head key: row|None} — see `apply_heads`; it overrides the pack's binding.
 
-    game_dir enables the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
+    game_dir enables the COLLARS section (slow: a global.iff blob-0 re-encode, minutes) and
+    the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
     in a worker thread when items may include it) and the PORTRAITS section (~65MB read + one
     archive relocate, a few seconds). game_dir=None skips both with a log line, so a GUI can strip
     scoreclock rows out and replay them itself on a background thread."""
     root = Path(root)
     counts = {"meta": 0, "audio": 0, "tex": 0, "roster": 0, "scoreclock": 0, "portraits": 0,
-              "expansion": 0, "heads": 0, "skipped": 0}
+              "expansion": 0, "heads": 0, "collars": 0, "skipped": 0}
 
     # Cue slots BEFORE audio. Growing the speech DB relocates wave banks, and a relocated bank's
     # streams change physical address — so both the catalog index the WAVs are written through and
@@ -2378,6 +2710,14 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                 else:
                     log("  portraits skipped: no game files folder")
                     counts["skipped"] += 1
+            elif it["section"] == COLLARS_KEY:
+                if game_dir and Path(game_dir).is_dir():
+                    log("  installing the custom collars (global.iff re-encode, a few minutes)…")
+                    log("  " + apply_collars(game_dir, it["incoming"], log))
+                    counts["collars"] += 1
+                else:
+                    log("  collars skipped: no game files folder")
+                    counts["skipped"] += 1
             elif it["section"] == "scoreclock":
                 if game_dir and Path(game_dir).is_dir():
                     log("  applying scoreclock (~2-4 min)…")
@@ -2415,3 +2755,19 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
             counts["heads"] = apply_heads(zh, heads, decisions, game_dir, ros_path, log,
                                           targets=head_targets)
     return counts
+
+
+# -- extracted-tree write-through ----------------------------------------------
+# Reverting an audio stream writes raw packets at a byte offset in an archive, which is not a
+# path archive_textures wraps, so the tree has to be told directly. A slot is fixed-size, so
+# this is always the in-place case note_write handles.
+def _tree_note(game_dir, fid, off, data):
+    try:
+        try:
+            from . import volume_store as _vs
+        except ImportError:
+            import volume_store as _vs
+        if _vs.note_write(game_dir, fid, off, data):
+            _vs.save(game_dir)
+    except Exception:
+        pass

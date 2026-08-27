@@ -63,21 +63,25 @@ class NamePool:
         v = struct.unpack_from(">i", self.d, fo)[0]
         return None if v == 0 else fo + v - 1
 
+    def _end(self, a) -> int:
+        """First terminator at or after `a`. 0xFFFF ends a string exactly as 0x0000 does — it
+        is this module's OWN filler marker (see `set`, which hands a shortened tail back as
+        0xFF), so a reader that only looks for 0x0000 reads the reclaimed tail back as text."""
+        e = a
+        n = len(self.d)
+        while e + 1 < n and self.d[e:e + 2] not in (b"\x00\x00", b"\xff\xff"):
+            e += 2
+        return e
+
     def read(self, row, off) -> str:
         a = self._target(row, off)
         if a is None:
             return ""
-        e = self.d.find(b"\x00\x00", a)
-        while e > a and (e - a) % 2:                    # keep the terminator 2-byte aligned
-            e = self.d.find(b"\x00\x00", e + 1)
-        return bytes(self.d[a:e]).decode("utf-16-be", "replace")
+        return bytes(self.d[a:self._end(a)]).decode("utf-16-be", "replace")
 
     def _size(self, a) -> int:
         """Bytes the string at `a` occupies, terminator included."""
-        e = self.d.find(b"\x00\x00", a)
-        while e > a and (e - a) % 2:
-            e = self.d.find(b"\x00\x00", e + 1)
-        return e + 2 - a
+        return self._end(a) + 2 - a
 
     # ── writing ──────────────────────────────────────────────────────────────
     def alloc(self, n: int) -> int:

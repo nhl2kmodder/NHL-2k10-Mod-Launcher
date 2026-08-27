@@ -1398,6 +1398,17 @@ def replace_part(b: bytearray, m: dict, part: dict, mesh: dict, log=print) -> st
         half = np.clip(np.round(UV / 2.0 * 32767.0), -32767, 32767)
         _put16(Ra, m["f_u"], half[:, 0:1])
         _put16(Ra, m["f_v"], half[:, 1:2])
+    # The decal channel -- (decalU, decalV, slot) two bytes past the base V, snorm16 x2/x2/x16
+    # (player_model.decal_channel). Inherited-by-nearest it smears whatever quad the original
+    # carried (the collar's NHL shield) across the new mesh, so a caller that models its own
+    # quad passes mesh["decal"] = (n, 3); mesh["zero_decal"] = True parks every vertex at
+    # (0, 0, 0), which the shader treats as "no decal" whatever the slot.
+    dc = mesh.get("decal")
+    if (dc is not None or mesh.get("zero_decal")) and m.get("f_v") is not None             and m["f_v"] + 8 <= ast:
+        dc = np.zeros((len(P), 3)) if dc is None else np.asarray(dc, np.float64)
+        q = np.clip(np.round(dc * np.array([32767.0 / 2, 32767.0 / 2, 32767.0 / 16])),
+                    -32767, 32767)
+        _put16(Ra, m["f_v"] + 2, q)
     if Ra is not R:
         b[aoff + lo * ast:aoff + (lo + len(P)) * ast] = Ra.tobytes()
     else:
@@ -1579,9 +1590,10 @@ def replace_model_obj(b: bytearray, models: list[dict], path, mi: int = None,
 
 
 # ───────────────────────────── write-back ─────────────────────────────
-def write(new_blob: bytes, game_dir, log=print, asset: str = ASSET) -> str:
-    """Put the edited blob 0 back into the archive (in place, no TOC edit)."""
-    return AM.write_dram(asset, bytes(new_blob), game_dir, log=log)
+def write(new_blob: bytes, game_dir, log=print, asset: str = ASSET, grow: bool = True) -> str:
+    """Put the edited blob 0 back into the archive — in place when the re-encode fits its slot,
+    relocated (bigger slot) when it does not and `grow` is on."""
+    return AM.write_dram(asset, bytes(new_blob), game_dir, log=log, grow=grow)
 
 
 def restore(game_dir, log=print, asset: str = ASSET) -> str:

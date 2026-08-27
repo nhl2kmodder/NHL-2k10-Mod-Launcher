@@ -198,10 +198,126 @@ def _pal(c0,c1,p):
     if p and c0<=c1: return [a+(255,),b+(255,),tuple((a[i]+b[i])//2 for i in range(3))+(255,),(0,0,0,0)]
     return [a+(255,),b+(255,),tuple((2*a[i]+b[i])//3 for i in range(3))+(255,),tuple((a[i]+2*b[i])//3 for i in range(3))+(255,)]
 def _at(a0,a1): return [a0,a1]+([((7-i)*a0+i*a1)//7 for i in range(1,7)] if a0>a1 else [((5-i)*a0+i*a1)//5 for i in range(1,5)]+[0,255])
+def _np_gto(x,y,pitch,bl):
+    """gto() on whole numpy int64 arrays — same expression, ~1000x fewer Python ops."""
+    pitch=(pitch+31)&~31
+    macro=((x>>5)+(y>>5)*(pitch>>5))<<(bl+7)
+    micro=((x&7)+((y&0xE)<<2))<<bl
+    o=macro+((micro&~0xF)<<1)+(micro&0xF)+((y&1)<<4)
+    return ((o&~0x1FF)<<3)+((y&16)<<7)+((o&0x1C0)<<2)+(((((y&8)>>2)+(x>>3))&3)<<6)+(o&0x3F)
+
+def _np_565(w):                                     # (n,) uint16 -> (n,3) uint8
+    import numpy as np
+    return np.stack([(w>>11&31)*255//31,(w>>5&63)*255//63,(w&31)*255//31],-1).astype(np.uint8)
+
+def _np_atab(a0,a1):
+    """BC4 alpha table, vectorized: (n,) -> (n,8). Same //7 // //5 integer interps as _at()."""
+    import numpy as np
+    n=len(a0); a0=a0.astype(np.int64); a1=a1.astype(np.int64)
+    hi=np.stack([a0,a1]+[((7-i)*a0+i*a1)//7 for i in range(1,7)],-1)
+    lo=np.stack([a0,a1]+[((5-i)*a0+i*a1)//5 for i in range(1,5)]
+                +[np.zeros(n,np.int64),np.full(n,255,np.int64)],-1)
+    return np.where((a0>a1)[:,None],hi,lo)
+
+def _np_bc4(B,off):
+    """One BC4 half-block -> (n,16) values. B=(n,16) block bytes, off=byte offset of the half."""
+    import numpy as np
+    t=_np_atab(B[:,off],B[:,off+1])
+    ai=np.zeros(len(B),np.uint64)
+    for k in range(6): ai|=B[:,off+2+k].astype(np.uint64)<<np.uint64(8*k)
+    idx=np.stack([(ai>>np.uint64(3*i)).astype(np.int64)&7 for i in range(16)],-1)
+    return np.take_along_axis(t,idx,1)
+
+def _decode_np(v,W,H,fmt,bpu,block,tiled,pu,bl):
+    """Vectorized decode for the common formats; None -> caller falls back to the scalar loop.
+    Bit-identical to the scalar path (verified) — same integer interps, same bounds rule
+    (a unit whose bytes run off the end of `v` stays transparent black)."""
+    try:
+        import numpy as np
+    except Exception:
+        return None
+    buf=np.frombuffer(bytes(v),np.uint8)
+    if block:
+        if fmt not in ("DXT1","DXT4_5","DXT2_3","DXT5A","DXN"): return None
+        Hb,Wb=H//4,W//4
+        by,bx=np.mgrid[0:Hb,0:Wb]
+        o=(_np_gto(bx.astype(np.int64),by.astype(np.int64),pu,bl) if tiled
+           else (by.astype(np.int64)*pu+bx)*bpu).ravel()
+        ok=(o>=0)&(o+bpu<=len(buf))
+        B=buf[np.where(ok,o,0)[:,None]+np.arange(bpu)]        # (nb, bpu)
+        B[~ok]=0
+        n=len(B)
+        out=np.zeros((n,16,4),np.uint8)
+        if fmt in ("DXT1","DXT4_5","DXT2_3"):
+            co=0 if fmt=="DXT1" else 8                        # colour half offset
+            c0=B[:,co+1].astype(np.uint16)|B[:,co].astype(np.uint16)<<8
+            c1=B[:,co+3].astype(np.uint16)|B[:,co+2].astype(np.uint16)<<8
+            bits=(B[:,co+4].astype(np.uint32)|B[:,co+5].astype(np.uint32)<<8
+                  |B[:,co+6].astype(np.uint32)<<16|B[:,co+7].astype(np.uint32)<<24)
+            a=_np_565(c0).astype(np.int64); b=_np_565(c1).astype(np.int64)
+            P=np.zeros((n,4,4),np.int64); P[...,3]=255
+            P[:,0,:3]=a; P[:,1,:3]=b
+            if fmt=="DXT1":
+                pt=(c0<=c1)[:,None]                            # punch-through blocks
+                P[:,2,:3]=np.where(pt,(a+b)//2,(2*a+b)//3)
+                P[:,3,:3]=np.where(pt,0,(a+2*b)//3)
+                P[:,3,3]=np.where(pt[:,0],0,255)
+            else:
+                P[:,2,:3]=(2*a+b)//3; P[:,3,:3]=(a+2*b)//3
+            idx=np.stack([(bits>>np.uint32(2*i)).astype(np.int64)&3 for i in range(16)],-1)
+            out=np.take_along_axis(P,idx[...,None],1).astype(np.uint8)
+            if fmt=="DXT4_5":
+                out[...,3]=_np_bc4(B,0).astype(np.uint8)
+            elif fmt=="DXT2_3":
+                ab=np.zeros(n,np.uint64)
+                for k in range(8): ab|=B[:,k].astype(np.uint64)<<np.uint64(8*k)
+                out[...,3]=np.stack([((ab>>np.uint64(4*i)).astype(np.int64)&0xF)*17
+                                     for i in range(16)],-1).astype(np.uint8)
+        elif fmt=="DXT5A":
+            g=_np_bc4(B,0).astype(np.uint8)
+            out[...,0]=out[...,1]=out[...,2]=g; out[...,3]=255
+        else:                                                  # DXN / BC5
+            rx=_np_bc4(B,0).astype(np.float64); ry=_np_bc4(B,8).astype(np.float64)
+            nx=rx/127.5-1; ny=ry/127.5-1
+            nz=np.sqrt(np.maximum(0.0,1-nx*nx-ny*ny))
+            out[...,0]=rx.astype(np.uint8); out[...,1]=ry.astype(np.uint8)
+            out[...,2]=((nz+1)*127.5).astype(np.int64).astype(np.uint8); out[...,3]=255
+        out[~ok]=0
+        px=out.reshape(Hb,Wb,4,4,4).transpose(0,2,1,3,4).reshape(H,W,4)
+    else:
+        if fmt not in ("8888","565","1555","4444","8","8_8"): return None
+        yy,xx=np.mgrid[0:H,0:W]
+        o=(_np_gto(xx.astype(np.int64),yy.astype(np.int64),pu,bl) if tiled
+           else (yy.astype(np.int64)*pu+xx)*bpu)
+        ok=(o>=0)&(o+bpu<=len(buf))
+        o=np.where(ok,o,0)
+        px=np.zeros((H,W,4),np.uint8)
+        if fmt=="8888":
+            px[...,0]=buf[o+1]; px[...,1]=buf[o+2]; px[...,2]=buf[o+3]; px[...,3]=buf[o]
+        elif fmt=="8":
+            px[...,0]=px[...,1]=px[...,2]=buf[o]; px[...,3]=255
+        elif fmt=="8_8":
+            px[...,0]=buf[o]; px[...,1]=buf[o+1]; px[...,3]=255
+        else:
+            w=buf[o+1].astype(np.uint16)|buf[o].astype(np.uint16)<<8
+            if fmt=="565":
+                px[...,:3]=_np_565(w.ravel()).reshape(H,W,3); px[...,3]=255
+            elif fmt=="1555":
+                px[...,0]=(w>>10&31)*255//31; px[...,1]=(w>>5&31)*255//31
+                px[...,2]=(w&31)*255//31; px[...,3]=np.where(w&0x8000,255,0)
+            else:                                              # 4444
+                px[...,0]=(w>>8&15)*17; px[...,1]=(w>>4&15)*17
+                px[...,2]=(w&15)*17; px[...,3]=(w>>12&15)*17
+        px[~ok]=0
+    return Image.frombytes("RGBA",(W,H),px.tobytes())
+
 def decode(v,W,H,fmt,bpu,block,tiled,pitch_field):
     bl=bpu.bit_length()-1; px=bytearray(W*H*4)
     pu=(pitch_field*8 if block else pitch_field*32) if pitch_field else 0
     pu=max(pu, W//4 if block else W)
+    if (W%4==0 and H%4==0) or not block:
+        img=_decode_np(v,W,H,fmt,bpu,block,tiled,pu,bl)
+        if img is not None: return img
     def put(x,y,c):
         if 0<=x<W and 0<=y<H: p=(y*W+x)*4; px[p:p+4]=bytes(c)
     if block:

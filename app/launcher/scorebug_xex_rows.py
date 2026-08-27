@@ -27,7 +27,8 @@ OLD_TABLE_VA    = 0x8499FE50
 OLD_TABLE_ROWS  = 15                 # rows before the null terminator @0x8499FF40
 REGISTRY_PTR_VA = 0x849A0E7C         # scorebug registry entry +0x20 (root hash @+0x1C)
 SCOREBUG_HASH   = 0x41267075
-CB_TEXT         = 0x83BE6018
+CB_TEXT         = 0x83BE6018         # stock v1.0; TU #1 relinks it to 0x83BE5FA8, so apply()
+                                     # reads the live value out of the stock table instead
 NEW_TABLE_VA    = 0x851A7000         # .reloc tail padding (zeros to 0x851A8000)
 
 # (bind hash, string-bank id) — hashes = crc32(upper name), ids exist in english bank
@@ -61,10 +62,22 @@ def apply(xex_path):
 
     old_off = xex_patch.va_to_offset(xex_path, OLD_TABLE_VA)
     rows = bytes(data[old_off:old_off + OLD_TABLE_ROWS * 16])
+    # Take the text callback out of the stock table rather than hardcoding it: TU #1 relinked
+    # that function (0x83BE6018 -> 0x83BE5FA8), so whichever build this is, the live table
+    # already holds the right one. A text row is a scorebug row with a live slot pointer —
+    # row 13 (365A707C) shares the root hash but has a null slot and a different callback,
+    # so it is not one. Self-validating: the 10 remaining rows must all agree.
+    cbs = {struct.unpack_from(">I", rows, r * 16 + 8)[0] for r in range(OLD_TABLE_ROWS)
+           if struct.unpack_from(">I", rows, r * 16)[0] == SCOREBUG_HASH
+           and struct.unpack_from(">I", rows, r * 16 + 12)[0]}
+    if len(cbs) != 1:
+        raise RuntimeError(f"stock bind table has inconsistent text callbacks for the scorebug "
+                           f"root: {sorted(f'{c:08X}' for c in cbs)}")
+    cb_text = cbs.pop()
     ids_va = NEW_TABLE_VA + (OLD_TABLE_ROWS + len(NEW_ROWS) + 1) * 16
     out = bytearray(rows)
     for i, (bh, _sid) in enumerate(NEW_ROWS):
-        out += struct.pack(">4I", SCOREBUG_HASH, bh, CB_TEXT, ids_va + i * 4)
+        out += struct.pack(">4I", SCOREBUG_HASH, bh, cb_text, ids_va + i * 4)
     out += b"\x00" * 16
     for _bh, sid in NEW_ROWS:
         out += struct.pack(">I", sid)

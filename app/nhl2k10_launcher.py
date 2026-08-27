@@ -33,6 +33,7 @@ from launcher import uiscroll
 from launcher import roster_editor as rost
 from launcher import team_colors as tcol
 from launcher import archive_textures as archtex
+from launcher import volume_store as voltree
 from launcher import bank_parser as bankparse
 from launcher import audio_names as audnames
 from launcher import team_tag
@@ -1205,12 +1206,18 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                     raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
                     log(f"    Padded {-excess} spare packets")
                 f.seek(off); f.write(raw_new)
+                # Audio goes straight into the archives at a byte offset, so it never passes
+                # through archive_textures' replace_* wrappers and the extracted tree would not
+                # hear about it. Mirror it here; a slot is fixed-size, so this is always the
+                # in-place case note_write handles.
+                voltree.note_write(root.parent, fid, off, raw_new)
                 # Stamped only after the write succeeded, so an encode that failed or a slot
                 # that was skipped for overrunning stays pending and gets picked up next time.
                 astore.mark_patched(entry, wp)
                 log(f"    Written {n_new} pkts"); patched += 1
     if patched:
         astore.save_manifest(root, man)
+        voltree.save(root.parent)          # persist the tree stamps the writes above updated
     return patched, skipped_trunc, 0
 
 
@@ -1378,6 +1385,8 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
         log(f"  Padded {-excess} pkts")
     with open(arc, "r+b") as f:
         f.seek(off); f.write(raw_new)
+    if voltree.note_write(root.parent, fid, off, raw_new):
+        voltree.save(root.parent)
     # Record the install against the manifest's own copy of the entry, not the one passed in:
     # the caller hands us a row's entry, which may not be the dict `load_manifest` returns.
     man = astore.load_manifest(root)
@@ -1469,7 +1478,9 @@ class App(tk.Tk):
         if not (self.cfg.get("root_path") and Path(self.cfg["root_path"]).is_dir()):
             self._log("Welcome!  Set the game folder in Settings to get started.")
             self._open_settings()
-        elif self._dev:
+        else:
+            self.after(400, self._offer_volume_tree)
+        if self.cfg.get("root_path") and Path(self.cfg["root_path"]).is_dir() and self._dev:
             # Catalog loads are deferred to the tab that needs them (see _ensure_tab) -- at
             # startup only the first visible tab pays. Apply All / mod-pack import call
             # _ensure_iff_catalog() themselves, so nothing depends on this having run.
@@ -1808,6 +1819,7 @@ class App(tk.Tk):
         self._tab_arenaed  = self._new_tab()         # Arena — models/textures/lighting
         self._tab_players  = self._new_tab()         # Players — character models (global.iff)
         self._tab_jersey   = self._new_tab()         # Jersey Conversion — NHL 23 kit -> 2K10
+        self._tab_ice      = self._new_tab()         # Ice Conversion — thefaceoff.net sheet -> ice
         self._tab_teams    = self._new_tab()
         self._tab_goalie   = self._new_tab()
         self._tab_portrait = self._new_tab()
@@ -1838,7 +1850,8 @@ class App(tk.Tk):
             (self._tab_arena,    None,                          self._build_arena_tab),
             (self._tab_arenaed,  "  Arena Models / Lighting  ", self._build_arena_editor_tab),
             (self._tab_players,  "  Models  ",                  self._build_players_tab),
-            (self._tab_jersey,   "  Jersey Conversion  ",       self._build_jersey_convert_tab),
+            (self._tab_jersey,   "  Uniform Editor  ",          self._build_jersey_convert_tab),
+            (self._tab_ice,      "  Ice Conversion  ",          self._build_ice_convert_tab),
             (self._tab_anim,     "  Animations  ",              self._build_anim_tab),
             (self._tab_gameplay, "  Gameplay Tuners  ",         self._build_gameplay_tab),
             (self._tab_settings, "  Settings  ",                self._build_settings_tab),
@@ -1946,6 +1959,8 @@ class App(tk.Tk):
             builder()
         except Exception as e:
             self._log(f"[ui] the {label or 'tab'} tab failed to build: {e}")
+            import traceback
+            self._log("[ui] " + traceback.format_exc().strip().replace("\n", "\n[ui] "))
         finally:
             ms = int((time.perf_counter() - t0) * 1000)
             if label and abs(timings.get(label, -1) - ms) > 250:
@@ -2418,10 +2433,10 @@ class App(tk.Tk):
         outer = ttk.Frame(t, padding=(12, 8)); outer.pack(fill=BOTH, expand=True)
         ttk.Label(outer, text="Goalie Masks", font=("Segoe UI", 13, "bold")).pack(anchor=W)
         ttk.Label(outer, text=(
-            "Repaint an existing goalie-mask slot with your own design, then assign it to goalies. "
-            "(The game's mask set is a fixed grid — new slots can't be added, so custom masks repaint "
-            "shipped patterns in place.) Set your Roster.ROS on the Roster Editor tab first, then press "
-            "“Refresh goalies”. Assignments are saved and re-applied every time you press Launch."),
+            "Repaint an existing goalie-mask slot, or ADD brand-new slots (up to 320 extra "
+            "standard-shape patterns), then assign them to goalies. Set your Roster.ROS on the "
+            "Roster Editor tab first, then press “Refresh goalies”. Assignments are saved and "
+            "re-applied every time you press Launch."),
             foreground="#bdbdbd", wraplength=800, justify=LEFT).pack(anchor=W, pady=(2, 10))
 
         # 1 ── Create ───────────────────────────────────────────────────────────
@@ -2438,22 +2453,49 @@ class App(tk.Tk):
         ttk.Label(r1, text="Pattern").pack(side=LEFT)
         self._v_gm_pat = StringVar(value="1")
         ttk.Spinbox(r1, from_=1, to=31, width=4, textvariable=self._v_gm_pat).pack(side=LEFT, padx=(2, 12))
-        ttk.Label(r1, text="Quality").pack(side=LEFT)
-        self._v_gm_fmt = StringVar(value="8888 (best)")
-        ttk.Combobox(r1, textvariable=self._v_gm_fmt, width=14, state="readonly",
-                     values=["8888 (best)", "4444 (half size)"]).pack(side=LEFT, padx=(2, 0))
         r2 = ttk.Frame(cm); r2.pack(fill=X)
         self._v_gm_img = StringVar()
         ttk.Entry(r2, textvariable=self._v_gm_img, width=52).pack(side=LEFT, padx=(0, 4))
         ttk.Button(r2, text="Image…", command=self._goalie_pick_image).pack(side=LEFT)
         ttk.Button(cm, text="Repaint Slot", style="Accent.TButton", command=self._goalie_create_mask).pack(anchor=W, pady=(8, 0))
-        ttk.Label(cm, text="Overwrites that pattern's design — pick one no goalie wears. Styles g01/g04, g02/g03 and "
-                           "g05/g06 are the three mask shapes. 8888 is the best quality; 4444 is half the file size "
-                           "with faint gradient banding. Any image size works.",
+        ttk.Label(cm, text="Overwrites that pattern's design — pick one no goalie wears. g01/g04 (and now g06) are "
+                           "the standard shape; g02/g03 and g05 are the other two shapes. Any image size works — "
+                           "masks are installed at maximum quality automatically.",
                   foreground="#888", font=("Segoe UI", 8), wraplength=800, justify=LEFT).pack(anchor=W, pady=(4, 0))
 
-        # 2 ── Assign ───────────────────────────────────────────────────────────
-        asg = ttk.LabelFrame(outer, text="2.  Assign a mask to goalies", padding=8)
+        # 2 ── Add a NEW slot ───────────────────────────────────────────────────
+        am = ttk.LabelFrame(outer, text="2.  Add a NEW mask slot  (expands the game's mask list — nothing is overwritten)", padding=8)
+        am.pack(fill=X, pady=(0, 10))
+        ra = ttk.Frame(am); ra.pack(fill=X, pady=(0, 5))
+        ttk.Label(ra, text="Name").pack(side=LEFT)
+        self._v_gadd_name = StringVar()
+        ttk.Entry(ra, textvariable=self._v_gadd_name, width=22).pack(side=LEFT, padx=(4, 12))
+        ttk.Label(ra, text="Shape").pack(side=LEFT)
+        self._v_gadd_shape = StringVar(value="Standard (g01/g04)")
+        ttk.Combobox(ra, textvariable=self._v_gadd_shape, width=17, state="readonly",
+                     values=list(self._GADD_SHAPES)).pack(side=LEFT, padx=(2, 12))
+        ttk.Label(ra, text="Slot").pack(side=LEFT)
+        self._v_gadd_slot = StringVar(value="(next free)")
+        self._gadd_slot_map = {}
+        self._gadd_slot_cb = ttk.Combobox(ra, textvariable=self._v_gadd_slot, width=28, state="readonly",
+                                          values=["(next free)"])
+        self._gadd_slot_cb.pack(side=LEFT, padx=(2, 12))
+        rb = ttk.Frame(am); rb.pack(fill=X)
+        self._v_gadd_img = StringVar()
+        ttk.Entry(rb, textvariable=self._v_gadd_img, width=52).pack(side=LEFT, padx=(0, 4))
+        ttk.Button(rb, text="Image…", command=self._goalie_pick_add_image).pack(side=LEFT)
+        rc = ttk.Frame(am); rc.pack(fill=X, pady=(8, 0))
+        ttk.Button(rc, text="Add New Slot", style="Accent.TButton", command=self._goalie_add_slot).pack(side=LEFT)
+        ttk.Button(rc, text="Remove added slot…", command=self._goalie_remove_slot).pack(side=LEFT, padx=(8, 0))
+        ttk.Label(am, text="Creates a brand-new pattern slot instead of overwriting a shipped one. Standard-shape "
+                           "slots continue the g01/g04 list as “Standard pattern #33” and up (28 available); the "
+                           "other two shapes have a few spare slots of their own. “(next free)” takes the lowest "
+                           "open slot; pick one of your added slots instead to repaint it. Fully revertible with "
+                           "“Remove added slot…”.",
+                  foreground="#888", font=("Segoe UI", 8), wraplength=800, justify=LEFT).pack(anchor=W, pady=(4, 0))
+
+        # 3 ── Assign ───────────────────────────────────────────────────────────
+        asg = ttk.LabelFrame(outer, text="3.  Assign a mask to goalies", padding=8)
         asg.pack(fill=BOTH, expand=True)
         bar = ttk.Frame(asg); bar.pack(fill=X)
         ttk.Label(bar, text="Mask:").pack(side=LEFT)
@@ -2470,14 +2512,17 @@ class App(tk.Tk):
         self._ga_mask_cb.bind("<<ComboboxSelected>>", lambda e: self._goalie_show_mask_preview())
         mid = ttk.Frame(asg); mid.pack(fill=BOTH, expand=True, pady=(6, 0))
         tvf = ttk.Frame(mid); tvf.pack(side=LEFT, fill=BOTH, expand=True)
-        tv = ttk.Treeview(tvf, columns=("name", "mask", "saved"), show="headings", height=11, selectmode="extended")
-        for c, w, txt, anc in (("name", 250, "Goalie", W),
-                               ("mask", 160, "Current mask", W), ("saved", 170, "Assigned (saved)", W)):
+        tv = ttk.Treeview(tvf, columns=("name", "mask", "cage", "saved"), show="headings", height=11,
+                          selectmode="extended")
+        for c, w, txt, anc in (("name", 230, "Goalie", W),
+                               ("mask", 150, "Current mask", W), ("cage", 90, "Cage", W),
+                               ("saved", 160, "Assigned (saved)", W)):
             tv.heading(c, text=txt); tv.column(c, width=w, anchor=anc)
         tv.tag_configure("assigned", foreground="#4ec26b")
         sb = ttk.Scrollbar(tvf, command=tv.yview); tv.configure(yscrollcommand=sb.set)
         sb.pack(side=RIGHT, fill=Y); tv.pack(side=LEFT, fill=BOTH, expand=True)
         self._goalie_tv = tv
+        tv.bind("<<TreeviewSelect>>", lambda e: self._goalie_sync_cage_swatch())
         prev = ttk.LabelFrame(mid, text="Selected mask", padding=6); prev.pack(side=LEFT, fill=Y, padx=(10, 0))
         self._ga_mask_preview = ttk.Label(prev, text="(select a mask)", anchor="center", width=22)
         self._ga_mask_preview.pack()
@@ -2491,6 +2536,16 @@ class App(tk.Tk):
                    command=self._goalie_apply_saved).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear selected", command=self._goalie_clear_selected).pack(side=LEFT, padx=(8, 0))
         ttk.Button(ab, text="Clear ALL saved", command=self._goalie_clear_saved).pack(side=LEFT, padx=(8, 0))
+        cg = ttk.Frame(asg); cg.pack(fill=X, pady=(6, 0))
+        ttk.Label(cg, text="Cage colour (per goalie):").pack(side=LEFT)
+        self._ga_cage_sw = tk.Label(cg, text="   ", relief="solid", bd=1, background="#bfbfbf")
+        self._ga_cage_sw.pack(side=LEFT, padx=(6, 6))
+        ttk.Button(cg, text="Pick…", command=self._goalie_pick_cage).pack(side=LEFT)
+        ttk.Button(cg, text="White", command=lambda: self._goalie_set_cage(0xE1FFFF)).pack(side=LEFT, padx=(6, 0))
+        ttk.Button(cg, text="Black", command=lambda: self._goalie_set_cage(0x000000)).pack(side=LEFT, padx=(6, 0))
+        ttk.Label(cg, text="Applies to the selected goalies. Most stock cages are white; "
+                           "the mask art itself is unaffected.",
+                  foreground="#888", font=("Segoe UI", 8)).pack(side=LEFT, padx=(12, 0))
         self._goalie_status = ttk.Label(asg, text="Press “Refresh goalies” to list the goalies in your "
                                                   "Roster.ROS.",
                                         foreground="#888", font=("Consolas", 8))
@@ -2500,6 +2555,28 @@ class App(tk.Tk):
             self.after(0, self._goalie_refresh)
 
     # ── mask list / free-slot helpers ───────────────────────────────────────────
+    # Shape choice for "Add New Slot" -> the filename shells that shape can take. New standard-
+    # shape slots live in style g06: nobody wears it, only 4 of its 32 patterns shipped art, and
+    # New slots ride the 6-bit pattern lane (launcher/mask_pattern6.py): style g01 keeps its
+    # mesh and style number, and patterns 32-63 become 32 extra slots via a donor bit in the
+    # roster shell field. Every earlier approach that ADDED or RETARGETED a mask STYLE
+    # (g07 clamp, precache widening, g06->standard) rendered invisible in-game -- only the
+    # pattern number is safe to extend, so Standard is the only shape offered here.
+    _GADD_SHAPES = {"Standard (g01)": (1,)}
+
+    @staticmethod
+    def _mask_slot_label(file_shell: int, pat: int) -> str:
+        """UI name for a mask slot. g06 renders as the standard shape (XEX patch), so its added
+        patterns 04..31 continue the standard numbering — g01's 32 patterns are #1-#32, so
+        g06 pattern 04 is #33 — instead of leaking the internal style number."""
+        if file_shell == 1 and pat >= 32:
+            return f"Standard pattern #{pat + 1}"     # 6-bit lane: pattern 32 = #33 ... 63 = #64
+        if file_shell == 6 and pat >= 4:              # legacy g06 numbering, stale configs only
+            return f"Standard pattern #{29 + pat}"
+        if file_shell >= 7:                       # legacy pre-g06 numbering, kept for stale configs
+            return f"Standard pattern #{353 + (file_shell - 7) * 32 + pat}"
+        return f"g{file_shell:02d} pattern {pat:02d}"
+
     def _goalie_mask_choices(self):
         """[(label, filename_shell, filename_pattern)] — created customs first, then built-ins."""
         import re
@@ -2507,7 +2584,7 @@ class App(tk.Tk):
         for cmk in self.cfg.get("custom_masks", []):
             s, p = int(cmk.get("shell", 0)), int(cmk.get("pattern", 0))
             nm = cmk.get("name") or cmk.get("file", "")
-            choices.append((f"★ {nm}   (g{s:02d} · slot {p})", s, p)); seen.add((s, p))
+            choices.append((f"★ {nm}   ({self._mask_slot_label(s, p)})", s, p)); seen.add((s, p))
         rx = re.compile(r"helmet_g0*(\d+)_pattern_0*(\d+)\.iff$", re.I)
         built = set()
         for r in getattr(self, "_iff_catalog", []):
@@ -2517,7 +2594,7 @@ class App(tk.Tk):
                 if sp not in seen:
                     built.add(sp)
         for s, p in sorted(built):
-            choices.append((f"Built-in   g{s:02d} pattern {p:02d}", s, p))
+            choices.append((f"Built-in   {self._mask_slot_label(s, p)}", s, p))
         return choices
 
     def _goalie_refresh_masklist(self):
@@ -2528,8 +2605,23 @@ class App(tk.Tk):
         self._ga_mask_cb["values"] = [lbl for lbl, _, _ in ch]
         if ch and self._v_ga_mask.get() not in self._ga_mask_map:
             self._v_ga_mask.set(ch[0][0])
+        if hasattr(self, "_gadd_slot_cb"):   # the Add section's slot picker: next-free + added slots
+            added = [m for m in self.cfg.get("custom_masks", []) if m.get("added")]
+            self._gadd_slot_map = {
+                f"★ {m.get('name') or m['file']}   "
+                f"({self._mask_slot_label(int(m['shell']), int(m['pattern']))})": m for m in added}
+            self._gadd_slot_cb["values"] = ["(next free)"] + list(self._gadd_slot_map)
+            if self._v_gadd_slot.get() not in ("(next free)", *self._gadd_slot_map):
+                self._v_gadd_slot.set("(next free)")
         if hasattr(self, "_ga_mask_preview"):
             self._goalie_show_mask_preview()
+
+    def _goalie_select_custom(self, shell: int, pat: int):
+        """Point the Assign combobox at the ★ custom entry for (shell, pat), if it exists."""
+        for lbl, sp in self._ga_mask_map.items():
+            if sp == (shell, pat) and lbl.startswith("★"):
+                self._v_ga_mask.set(lbl)
+                break
 
     def _goalie_show_mask_preview(self, *a):
         """Decode + show the currently-selected mask as it exists in the CURRENT game files, so a
@@ -2614,13 +2706,24 @@ class App(tk.Tk):
             f.seek(coff); f.write(data)
         h = zlib.crc32(name.upper().encode("ascii")) & 0xffffffff
         a0 = os.path.join(game_dir, "0A")
-        d = bytearray(open(a0, "rb").read(0x9800))
-        for i in range(archtex._BE(d, 0x10)):
-            e = 0x58 + i * 16
+        # header-driven: archive count -> entry-table base (0x68 in the live 5-archive world, NOT
+        # 0x58), entry count -> how much to read; a hardcoded base/length misparses the live TOC
+        head = open(a0, "rb").read(0x18)
+        ebase = archtex.entry_base(head)
+        cnt = archtex._BE(head, 0x10)
+        d = bytearray(open(a0, "rb").read(ebase + cnt * 16))
+        for i in range(cnt):
+            e = ebase + i * 16
             if archtex._BE(d, e + 8) == h:
                 struct.pack_into(">IIII", d, e, archtex._BE(d, e + 0), csize, h, cf3); break
         with open(a0, "r+b") as f:
             f.seek(0); f.write(d)
+        # In-place entry + hand-written TOC row: neither goes through the replace_* wrappers,
+        # so the extracted tree has to be told about this one explicitly.
+        try:
+            voltree.sync_after_op(game_dir, (name,))
+        except Exception:
+            pass
 
     def _goalie_create_mask(self):
         if self._op_busy():
@@ -2643,7 +2746,6 @@ class App(tk.Tk):
                 f"Repaint {name} with:\n{Path(img).name}\n\nThis overwrites that pattern's design — "
                 f"any goalie already wearing it will change too.  Continue?"):
             return
-        new_fmt = "4444" if self._v_gm_fmt.get().startswith("4444") else "8888"
         self._gm_pending = {"name": friendly, "shell": shell, "pattern": pat, "file": name}
         self._gm_ok = False
         def work():
@@ -2652,8 +2754,8 @@ class App(tk.Tk):
             # 4444 = half the storage (2 B/px), block-free too, ~4-bit gradient banding. Grows/relocates
             # fine on g01–g06.
             self._restore_mask_clean_inplace(name, game_dir)
-            status = archtex.replace_primary_convert(name, img, game_dir, new_fmt,
-                                                     log=lambda m: self._log_q.put(m))
+            status = archtex.replace_primary_hires(name, img, game_dir, "8888", 2,
+                                                   log=lambda m: self._log_q.put(m))
             self._log_q.put(status)
             self._gm_ok = True
         self._run_in_thread(work, op_label=f"Repainting {name}…", on_done=self._goalie_create_done)
@@ -2668,14 +2770,204 @@ class App(tk.Tk):
         self._ga_prev_cache.pop(f, None)                 # repainted -> re-decode its preview
         save_config(self.cfg)
         self._goalie_refresh_masklist()
-        self._v_ga_mask.set(f"★ {self._gm_pending['name']}   "
-                            f"(g{self._gm_pending['shell']:02d} · pattern {self._gm_pending['pattern']})")
+        self._goalie_select_custom(self._gm_pending["shell"], self._gm_pending["pattern"])
         self._goalie_show_mask_preview()
         self._v_gm_name.set(""); self._v_gm_img.set("")
         messagebox.showinfo("Repaint Slot",
                             f"Repainted “{self._gm_pending['name']}” (g{self._gm_pending['shell']:02d} "
                             f"pattern {self._gm_pending['pattern']}).\nIt's selected in the Assign list "
                             f"below — check goalies, then Assign.")
+
+    def _goalie_pick_add_image(self):
+        p = filedialog.askopenfilename(title="Mask image",
+                                       filetypes=[("Images", "*.png *.dds *.tga *.jpg *.jpeg *.bmp"),
+                                                  ("All", "*.*")])
+        if p:
+            self._v_gadd_img.set(p)
+
+    @staticmethod
+    def _goalie_free_mask_slot(shells, game_dir):
+        """First (file_shell, pattern) in `shells` x 0..31 with no TOC entry — one TOC load, not
+320 resolve() calls. None when the shape is full."""
+        import zlib
+        toc, _bounds = archtex.load_toc(game_dir, False)
+        for s in shells:
+            # g01 keeps its 32 shipped patterns; the 6-bit lane opens 32..63 above them
+            for p in (range(32, 64) if s == 1 else range(32)):
+                h = zlib.crc32(f"HELMET_G{s:02d}_PATTERN_{p:02d}.IFF".encode("ascii")) & 0xFFFFFFFF
+                if h not in toc:
+                    return s, p
+        return None
+
+    def _goalie_add_slot(self):
+        if self._op_busy():
+            return
+        img = self._v_gadd_img.get().strip()
+        game_dir = self._get_game_root()
+        if not img or not Path(img).exists():
+            messagebox.showerror("Add New Slot", "Pick a valid image first.")
+            return
+        if not game_dir:
+            messagebox.showerror("Add New Slot", "Set the game-files folder in Settings first.")
+            return
+        existing = self._gadd_slot_map.get(self._v_gadd_slot.get())
+        if existing:
+            s, p = int(existing["shell"]), int(existing["pattern"])
+            mode = "repaint"
+        else:
+            shells = self._GADD_SHAPES.get(self._v_gadd_shape.get(), self._GADD_SHAPES["Standard (g01/g04)"])
+            try:
+                slot = self._goalie_free_mask_slot(shells, game_dir)
+            except Exception as e:
+                messagebox.showerror("Add New Slot", f"Couldn't read the archive TOC: {e}")
+                return
+            if not slot:
+                messagebox.showerror("Add New Slot", "That shape has no free slots left.")
+                return
+            s, p = slot
+            mode = "add"
+        name = f"helmet_g{s:02d}_pattern_{p:02d}.iff"
+        lbl = self._mask_slot_label(s, p)
+        friendly = self._v_gadd_name.get().strip() or (existing or {}).get("name") or lbl
+        verb = f"Repaint your added slot \u201c{lbl}\u201d" if mode == "repaint" else f"Create NEW slot \u201c{lbl}\u201d"
+        extra = ("" if not (s == 1 and p >= 32) else
+                 "\n\nPatterns #33-#64 use a small patch to default.xex (6-bit pattern index); it's applied automatically now and re-checked at every Launch.")
+
+        if not messagebox.askyesno("Add New Slot",
+                                   f"{verb} ({name}) with:\n{Path(img).name}{extra}\n\nContinue?"):
+            return
+        self._gadd_pending = {"name": friendly, "shell": s, "pattern": p, "file": name, "added": True}
+        self._gadd_ok = False
+
+        def work():
+            try:
+                from launcher import customasset as CA
+            except ImportError:
+                import customasset as CA
+            if mode == "add":
+                CA.add_custom_mask(game_dir, s, p, edited_image=img, fmt="8888",
+                                   log=self._log_q.put)
+            else:
+                self._log_q.put(archtex.replace_primary_hires(name, img, game_dir, "8888", 2,
+                                                              log=self._log_q.put))
+            if s == 1 and p >= 32:
+                try:
+                    from launcher import mask_pattern6 as MP6
+                except ImportError:
+                    import mask_pattern6 as MP6
+                xex = self._sb_xex()
+                if xex:
+                    try:
+                        MP6.apply(xex, log=self._log_q.put)
+                    except Exception as e:
+                        self._log_q.put(f"[mask] XEX patch deferred to the next Launch ({e})")
+            self._gadd_ok = True
+
+        self._run_in_thread(work, op_label=f"{'Repainting' if mode == 'repaint' else 'Adding'} {lbl}\u2026",
+                            on_done=self._goalie_add_done)
+
+    def _goalie_add_done(self):
+        if not getattr(self, "_gadd_ok", False):
+            messagebox.showerror("Add New Slot", "Failed \u2014 see the Operation Log for details.")
+            return
+        pend = self._gadd_pending
+        masks = self.cfg.setdefault("custom_masks", [])
+        masks[:] = [m for m in masks if m.get("file") != pend["file"]] + [pend]
+        if pend["shell"] >= 6:
+            # only the retired g06 lane needs the style patch; the 6-bit lane on g01 is applied
+            # by the worker above and tracked by mask_pattern6 itself
+            self.cfg[xbase.CFG_MASKS] = True
+        self._ga_prev_cache.pop(pend["file"], None)
+        save_config(self.cfg)
+        self._goalie_refresh_masklist()
+        self._goalie_select_custom(pend["shell"], pend["pattern"])
+        self._goalie_show_mask_preview()
+        self._v_gadd_name.set(""); self._v_gadd_img.set(""); self._v_gadd_slot.set("(next free)")
+        messagebox.showinfo("Add New Slot",
+                            f"\u201c{pend['name']}\u201d is ready as {self._mask_slot_label(pend['shell'], pend['pattern'])}."
+                            "\nIt's selected in the Assign list below \u2014 check goalies, then Assign.")
+
+    def _goalie_remove_slot(self):
+        if self._op_busy():
+            return
+        game_dir = self._get_game_root()
+        if not game_dir:
+            messagebox.showerror("Remove added slot", "Set the game-files folder in Settings first.")
+            return
+        added = [m for m in self.cfg.get("custom_masks", []) if m.get("added")]
+        if not added:
+            messagebox.showinfo("Remove added slot",
+                                "Nothing to remove \u2014 only slots created with \u201cAdd New Slot\u201d can be removed. (Repaints of shipped slots aren't removable; repaint them again to change them.)")
+            return
+        win = Toplevel(self); win.title("Remove added slot"); win.transient(self); win.grab_set()
+        frm = ttk.Frame(win, padding=10); frm.pack(fill=BOTH, expand=True)
+        ttk.Label(frm, text="Pick the added slot to remove:").pack(anchor=W)
+        lb = Listbox(frm, height=min(10, max(3, len(added))), width=52, exportselection=False)
+        for m in added:
+            lb.insert(END, f"{m.get('name') or m['file']}   ("
+                           f"{self._mask_slot_label(int(m['shell']), int(m['pattern']))})")
+        lb.selection_set(0); lb.pack(fill=BOTH, expand=True, pady=(4, 8))
+
+        def go():
+            i = lb.curselection()
+            if not i:
+                return
+            m = added[i[0]]
+            win.destroy()
+            self._goalie_do_remove_slot(m, game_dir)
+
+        bt = ttk.Frame(frm); bt.pack(fill=X)
+        ttk.Button(bt, text="Remove", style="Accent.TButton", command=go).pack(side=LEFT)
+        ttk.Button(bt, text="Cancel", command=win.destroy).pack(side=LEFT, padx=(8, 0))
+
+    def _goalie_do_remove_slot(self, m, game_dir):
+        s, p = int(m["shell"]), int(m["pattern"])
+        name, lbl = m["file"], self._mask_slot_label(int(m["shell"]), int(m["pattern"]))
+        wearers = [g["name"] for g in self._goalie_rows
+                   if (g["shell"], g["pattern"]) == (s - 1, p)]
+        warn = ""
+        if wearers:
+            shown = ", ".join(wearers[:4]) + ("\u2026" if len(wearers) > 4 else "")
+            warn = (f"\n\n{len(wearers)} goalie(s) currently wear it ({shown})"
+                    " \u2014 their mask will show BLANK until you assign them another one.")
+
+        if not messagebox.askyesno("Remove added slot",
+                                   f"Remove \u201c{m.get('name') or name}\u201d ({lbl})?\n"
+                                   "This deletes the slot from the game's asset list. Only the "
+                                   "launcher's own additions can be removed \u2014 shipped slots "
+                                   "are never touched."
+                                   f"{warn}"):
+            return
+        self._grm_pending = m
+        self._grm_ok = False
+
+        def work():
+            try:
+                from launcher import customasset as CA
+            except ImportError:
+                import customasset as CA
+            self._log_q.put(CA.remove_custom_asset(game_dir, name, log=self._log_q.put))
+            self._grm_ok = True
+
+        self._run_in_thread(work, op_label=f"Removing {lbl}\u2026", on_done=self._goalie_remove_done)
+
+    def _goalie_remove_done(self):
+        if not getattr(self, "_grm_ok", False):
+            messagebox.showerror("Remove added slot", "Remove failed \u2014 see the Operation Log for details.")
+            return
+        m = self._grm_pending
+        s, p = int(m["shell"]), int(m["pattern"])
+        masks = self.cfg.setdefault("custom_masks", [])
+        masks[:] = [x for x in masks if x.get("file") != m["file"]]
+        # any goalie still pointing at the slot would render blank, so drop those saved picks
+        # too — the roster keeps whatever it holds until the user assigns something else
+        self.cfg["goalie_masks"] = {k: v for k, v in self.cfg.get("goalie_masks", {}).items()
+                                    if not (v[0] == s - 1 and v[1] == p)}
+        self._ga_prev_cache.pop(m["file"], None)
+        save_config(self.cfg)
+        self._goalie_refresh_masklist()
+        self._goalie_populate()
+        self._goalie_status.config(text=f"Removed added slot {self._mask_slot_label(s, p)}.")
 
     def _goalie_refresh(self):
         """List goalies for the tab — from the selected Roster.ROS, or the running game if none.
@@ -2729,14 +3021,17 @@ class App(tk.Tk):
             if q and q not in g["name"].lower():
                 continue
             seen.add(key)
-            mask = f"g{g['shell'] + 1:02d}  pattern {g['pattern']:02d}"
+            mask = self._mask_slot_label(g["shell"] + 1, g["pattern"])
             _k, sv = pid.resolve_saved(saved, g)
-            svtxt = f"→ g{sv[0] + 1:02d} slot {sv[1]}" if sv else ""
-            tv.insert("", END, iid=key, values=(pid.label(g) or "(unnamed)", mask, svtxt),
+            svtxt = f"→ {self._mask_slot_label(sv[0] + 1, sv[1])}" if sv else ""
+            _ck, cv = pid.resolve_saved(self.cfg.get("goalie_cages", {}), g)
+            cage = self._cage_name(cv if cv is not None else g.get("cage"))
+            tv.insert("", END, iid=key, values=(pid.label(g) or "(unnamed)", mask, cage, svtxt),
                       tags=("assigned",) if sv else ())
         restore = [k for k in prev if tv.exists(k)]
         if restore:
             tv.selection_set(restore)
+        self._goalie_sync_cage_swatch()
 
     def _goalie_assign(self):
         sel = list(self._goalie_tv.selection())
@@ -2779,6 +3074,81 @@ class App(tk.Tk):
                      f"Reload the roster in-game to see it.")
         self._goalie_populate()
 
+    # ── cage colour ───────────────────────────────────────────────────────────
+    # The mask and the cage are separate fields in the roster record; a goalie can
+    # keep a stock mask and still get a custom cage, so this rides alongside the
+    # mask picker rather than inside it.
+    @staticmethod
+    def _cage_name(rgb):
+        # the two the game ships are worth naming; anything else is just the hex
+        if rgb is None:
+            return ""
+        r, g, b = (rgb >> 16) & 255, (rgb >> 8) & 255, rgb & 255
+        if min(r, g, b) >= 200:
+            return "White"
+        if max(r, g, b) <= 48:
+            return "Black"
+        return "#%06X" % rgb
+
+    def _goalie_selected_cage(self):
+        """Cage colour of the first selected goalie (a saved override wins), or None."""
+        tv = getattr(self, "_goalie_tv", None)
+        sel = list(tv.selection()) if tv else []
+        if not sel:
+            return None
+        saved = self.cfg.get("goalie_cages", {})
+        pid = self._pids()
+        for g in self._goalie_rows:
+            if pid.player_id(g) == sel[0]:
+                _k, sv = pid.resolve_saved(saved, g)
+                return sv if sv is not None else g.get("cage")
+        return None
+
+    def _goalie_sync_cage_swatch(self):
+        sw = getattr(self, "_ga_cage_sw", None)
+        if sw is None:
+            return
+        rgb = self._goalie_selected_cage()
+        sw.configure(background=("#%06X" % rgb) if rgb is not None else "#bfbfbf")
+
+    def _goalie_pick_cage(self):
+        from tkinter.colorchooser import askcolor
+        if not self._goalie_tv.selection():
+            messagebox.showinfo("Cage colour", "Select one or more goalies in the list first."); return
+        cur = self._goalie_selected_cage()
+        rgb = askcolor(color="#%06X" % (cur if cur is not None else 0xFFFFFF), title="Cage colour")[0]
+        if rgb:
+            self._goalie_set_cage((int(rgb[0]) << 16) | (int(rgb[1]) << 8) | int(rgb[2]))
+
+    def _goalie_set_cage(self, rgb):
+        sel = list(self._goalie_tv.selection())
+        if not sel:
+            messagebox.showinfo("Cage colour", "Select one or more goalies in the list first."); return
+        cages = dict(self.cfg.get("goalie_cages", {}))
+        for key in sel:
+            cages[key] = rgb
+        self.cfg["goalie_cages"] = cages
+        save_config(self.cfg)
+        if not self._goalie_rows:
+            self._goalie_status.config(text="Saved, but nothing was written: press "
+                                            "\u201cRefresh goalies\u201d once so names can be matched to rows in your save.")
+            return
+        n, nplayers, err = self._ros_write_by_name(self._goalie_rows,
+                                                   {k: {"cage": rgb} for k in sel},
+                                                   "mask")
+        if err:
+            self._goalie_status.config(text=f"Cage colour saved, but the roster write failed: {err}")
+        else:
+            pid = self._pids()
+            for g in self._goalie_rows:
+                if pid.player_id(g) in sel:
+                    g["cage"] = rgb
+            self._goalie_status.config(
+                text=f"Cage colour {self._cage_name(rgb)} \u2192 {nplayers} goalie(s) \u2014 "
+                     f"{self._wrote_phrase(n)}. Reload the roster in-game to see it.")
+        self._goalie_populate()
+        self._goalie_sync_cage_swatch()
+
     def _goalie_clear_selected(self):
         sel = list(self._goalie_tv.selection())
         if not sel:
@@ -2807,7 +3177,7 @@ class App(tk.Tk):
         different save (or one the game has since rewritten) and press this to put your masks back.
         Fully offline now that the name->row listing comes from the save itself."""
         saved = self.cfg.get("goalie_masks", {})
-        if not saved:
+        if not saved and not self.cfg.get("goalie_cages"):
             messagebox.showinfo("Apply saved", "There are no saved mask assignments yet."); return
         if not self._goalie_rows:
             messagebox.showinfo("Apply saved",
@@ -2819,6 +3189,8 @@ class App(tk.Tk):
             if len(v) > 2 and v[2]:
                 look["colors"] = [c & 0xFFFFFF for c in self._pa().IDENTITY_COLORS]
             looks[key] = look
+        for key, rgb in self.cfg.get("goalie_cages", {}).items():
+            looks.setdefault(key, {})["cage"] = rgb
         n, nplayers, err = self._ros_write_by_name(self._goalie_rows, looks, "mask")
         if err:
             messagebox.showerror("Apply saved", err)
@@ -3447,7 +3819,8 @@ class App(tk.Tk):
             def work():
                 try:
                     res = pd.resolve_image(row["name"], season=season, cand=cand,
-                                           want_team=want_team, head_frac=hf)
+                                           want_team=want_team, head_frac=hf,
+                                           force_jersey=st.get("force_jersey", False))
                 except Exception as e:
                     res = {"status": "error", "error": str(e)}
                 if not st["closed"]:
@@ -3469,7 +3842,9 @@ class App(tk.Tk):
                 info.config(text="No NHL headshot found — a gray silhouette will be applied.")
             elif res["status"] == "composited":
                 wt = res.get("team") or "?"
-                info.config(text=f"No real {wt} photo of {row['name']} — grafted his head onto a {wt} "
+                why = (f"Forced {wt} jersey" if st.get("force_jersey")
+                       else f"No real {wt} photo of {row['name']}")
+                info.config(text=f"{why} — grafted their head onto a {wt} "
                                  f"jersey (composite). Lower quality than a real mug.")
             else:
                 src = "retired" if res.get("source") == "inactive" else "active"
@@ -3537,6 +3912,20 @@ class App(tk.Tk):
                 jcb.bind("<<ComboboxSelected>>",
                          lambda e: resolve_async(cand=st["cand"], want_team=labels.get(v.get())))
                 ttk.Label(side, text="any team — real photo if they played there, else a jersey composite",
+                          foreground="#888", font=("Segoe UI", 8), wraplength=210, justify=LEFT).pack(anchor=W)
+                # A real photo wins by default, which is wrong when the only photo shows the old
+                # club. Ticking this skips the search and always builds the composite.
+                fv = BooleanVar(value=st.get("force_jersey", False))
+                def _force_toggle():
+                    st["force_jersey"] = fv.get()
+                    wt = (st["team_labels"].get(st["team_var"].get())
+                          if st.get("team_var") is not None else None)
+                    resolve_async(cand=st["cand"], want_team=wt)
+                ttk.Checkbutton(side, text="Force this jersey (composite)", variable=fv,
+                                command=_force_toggle).pack(anchor=W, pady=(4, 0))
+                st["force_var"] = fv
+                ttk.Label(side, text="always rebuild in the selected team's jersey — use when "
+                                     "the real photo shows the wrong (old) team",
                           foreground="#888", font=("Segoe UI", 8), wraplength=210, justify=LEFT).pack(anchor=W)
             # Head-size fine-tune (per player): smaller = more neck/shoulder; release the slider to re-render.
             hrow = ttk.Frame(side); hrow.pack(anchor=W, fill=X, pady=(8, 0))
@@ -5360,6 +5749,18 @@ class App(tk.Tk):
             ttk.Label(self._tab_jersey, padding=20, foreground="#c66",
                       text=f"The Jersey Conversion tab could not be built:\n\n{e}").pack()
 
+    def _build_ice_convert_tab(self):
+        """A thefaceoff.net rink sheet -> both of a team's 1024x4096 ice textures.
+        Engine in launcher/ice_convert.py, tab in launcher/ice_convert_gui.py; same
+        degrade-to-a-message contract as the Arena and Players tabs."""
+        try:
+            from launcher import ice_convert_gui
+            ice_convert_gui.build_tab(self, self._tab_ice)
+        except Exception as e:
+            self._log_q.put(f"[ice] tab unavailable: {e}")
+            ttk.Label(self._tab_ice, padding=20, foreground="#c66",
+                      text=f"The Ice Conversion tab could not be built:\n\n{e}").pack()
+
     # ── Gameplay tab ──────────────────────────────────────────────────────────
 
     def _build_gameplay_tab(self):
@@ -6596,6 +6997,28 @@ class App(tk.Tk):
                   font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
         self._rs_refresh()
 
+        # -- Extracted game files (the container tree) ------------------------
+        # Offered once on startup; this is the "later" the offer points at, and the only place
+        # the tree can be rebuilt from. Shown in both shells: a release ships as the changed
+        # files in this folder, so someone who only installs packs still ends up here.
+        heading("Game Files (extracted copy)")
+        blurb("Unpacks the archives into a folder with one file per asset, beside them. It gives "
+              "every asset a pristine copy to revert to, and lets a finished mod travel as just "
+              "the files that changed instead of six gigabytes of archives.\n"
+              "The launcher keeps the two in step by itself — every change lands in both — so "
+              "Rebuild is only for a folder something else has edited.")
+        vt = ttk.Frame(outer); vt.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+        self._vol_status = StringVar(value="")
+        ttk.Button(vt, text="Unpack game files", style="Accent.TButton",
+                   command=self._start_volume_tree).pack(side=LEFT, padx=(0, 4))
+        ttk.Button(vt, text="Rebuild archives from folder...",
+                   command=self._vol_repack).pack(side=LEFT, padx=4)
+        ttk.Button(vt, text="Open folder", command=self._vol_open_folder).pack(side=LEFT, padx=4)
+        ttk.Button(vt, text="Refresh", command=self._vol_refresh).pack(side=LEFT, padx=4)
+        ttk.Label(outer, textvariable=self._vol_status, foreground="#888888",
+                  font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
+        self._vol_refresh()
+
         # ── Developer mode ───────────────────────────────────────────────────
         heading("Developer Mode")
         blurb("Unlocks the full authoring interface — roster, textures, audio, speech, models, "
@@ -7089,32 +7512,50 @@ class App(tk.Tk):
         dlg.wait_window()
         return picks if result["ok"] else None
 
-    def _pick_items_dialog(self, title, subtitle, items, show_status=False):
-        """Unity-style checkbox picker with Type / Team / Category filters. Returns the SELECTED
-        items (default: all checked), or None if cancelled. `items` = [{section,key,label,team,
-        category, status?}]. Click the ✔ column (or press Space) to toggle a row; the filters narrow
-        the view; Check All / Uncheck All apply to the CURRENTLY VISIBLE rows. An item may carry
-        "checked": False to start unchecked (opt-in rows, e.g. the slow scoreclock capture)."""
+    def _pick_items_dialog(self, title, subtitle, items, show_status=False,
+                           default_checked=True):
+        """Unity-style checkbox picker with a Type tab bar plus Team / Category filters. Returns
+        the SELECTED items, or None if cancelled. `items` = [{section,key,label,team,
+        category, status?}]. Click the ✔ column (or press Space) to toggle a row; the tabs and
+        filters narrow the view; Check All / Uncheck All apply to the CURRENTLY VISIBLE rows.
+        An item may carry "checked" to override `default_checked` for that row."""
         if not items:
             return []
         dlg = Toplevel(self); dlg.title(title)
         dlg.geometry("900x600"); dlg.transient(self); dlg.grab_set()
-        checked = [bool(it.get("checked", True)) for it in items]
+        checked = [bool(it.get("checked", default_checked)) for it in items]
         result = {"ok": False}
 
         top = ttk.Frame(dlg, padding=(12, 10)); top.pack(fill=X)
         ttk.Label(top, text=title, font=("Segoe UI", 11, "bold")).pack(anchor=W)
         ttk.Label(top, text=subtitle, foreground="#999").pack(anchor=W)
 
-        # ── filter bar ──
+        # ── type tabs, then the Team / Category filters ──
+        import re as _re
+        from collections import OrderedDict
+
+        _TYPE_SECTIONS = OrderedDict([
+            ("Audio", ("meta", "audio")),
+            ("Textures", ("tex",)),
+            ("Roster", ("roster",)),
+            ("Expansion", (mp.EXPANSION_KEY,)),
+            ("Heads", (mp.HEADS_KEY,)),
+            ("Scoreclock", ("scoreclock",)),
+            ("Portraits", ("portraits",)),
+        ])
+        present = {it["section"] for it in items}
+        tabs = ["All"] + [t for t, secs in _TYPE_SECTIONS.items()
+                          if any(s in present for s in secs)]
         teams = ["All"] + sorted({it.get("team", "") for it in items if it.get("team")})
         cats  = ["All"] + sorted({it.get("category", "") for it in items if it.get("category")})
         v_type = StringVar(value="All"); v_team = StringVar(value="All"); v_cat = StringVar(value="All")
+        tb = ttk.Frame(dlg, padding=(12, 0, 12, 4)); tb.pack(fill=X)
+        for t in tabs:
+            n = len(items) if t == "All" else sum(
+                1 for it in items if it["section"] in _TYPE_SECTIONS[t])
+            ttk.Radiobutton(tb, text=f"{t} ({n})", value=t, variable=v_type,
+                            style="Toolbutton").pack(side=LEFT, padx=(0, 2))
         fb = ttk.Frame(dlg, padding=(12, 0, 12, 6)); fb.pack(fill=X)
-        ttk.Label(fb, text="Type:").pack(side=LEFT)
-        ttk.Combobox(fb, textvariable=v_type,
-                     values=["All", "Audio", "Texture", "Roster", "Scoreclock", "Portraits"],
-                     state="readonly", width=10).pack(side=LEFT, padx=(3, 12))
         ttk.Label(fb, text="Team:").pack(side=LEFT)
         ttk.Combobox(fb, textvariable=v_team, values=teams, state="readonly",
                      width=8).pack(side=LEFT, padx=(3, 12))
@@ -7123,46 +7564,74 @@ class App(tk.Tk):
                      width=18).pack(side=LEFT, padx=(3, 12))
         count_lbl = ttk.Label(fb, text="", foreground="#999"); count_lbl.pack(side=RIGHT)
 
-        # ── tree grouped by ASSET (.iff) / audio bank — textures shown as t{id} children ──
-        import re as _re
-        from collections import OrderedDict
+        # ── the tree is grouped by the extract-tree path, so a texture key like
         try:
             _labelmap = {archtex.asset_iff(r["iff"]): (r.get("label") or r["iff"])
                          for r in archtex.load_catalog()}
         except Exception:
             _labelmap = {}
 
-        def _group_of(i):
+        def _chain_of(i):
+            """Tree path for item i: (kind, (level1, level2, ...)). Texture keys are real
+            extract-tree paths (Uniform/VAN/HOME/base.dds), so every folder level becomes its
+            own tree level -- that is what groups uniforms/ice/rinks by TEAM (and kit)."""
             it = items[i]
             if it["section"] == "roster":
-                return ("roster", "Roster")                          # league-wide field groups
+                return ("roster", ("Roster",))
             if it["section"] == "scoreclock":
-                return ("scoreclock", "Scoreclock")                  # single whole-mod row
+                return ("scoreclock", ("Scoreclock",))
             if it["section"] == "portraits":
-                return ("portraits", "Portraits")                    # single whole-pack row
+                return ("portraits", ("Portraits",))
+            if it["section"] == mp.EXPANSION_KEY:
+                return ("expansion", ("Expansion",))
+            if it["section"] == mp.HEADS_KEY:
+                return ("heads", ("Heads",))
+            if it["section"] == mp.COLLARS_KEY:
+                return ("collars", ("Collars",))
             if it["section"] == "tex":
-                return ("tex", str(it["key"]).split("/")[0])          # the .iff folder
-            return ("aud", it.get("category") or "Audio")
-        def _group_label(g):
-            kind, gid = g
+                parts = str(it["key"]).replace("\\", "/").split("/")
+                return ("tex", tuple(parts[:-1]) if len(parts) > 1 else (parts[0],))
+            return ("aud", (it.get("category") or "Audio",))
+        def _node_label(node):
+            kind, chain = node
+            if len(chain) > 1:
+                return chain[-1]
+            gid = chain[0]
             if kind == "roster":
                 return "Roster (applied over your Roster.ROS)"
             if kind == "scoreclock":
                 return "Scoreclock (applied onto your game files)"
             if kind == "portraits":
                 return "Player Portraits (whole pack — replaces yours)"
+            if kind == "expansion":
+                return "Expansion Teams (record + art assets)"
+            if kind == "heads":
+                return "Custom Player Heads"
+            if kind == "collars":
+                return "Custom Collars (skater collar meshes in global.iff)"
             if kind == "tex":
-                return _labelmap.get(gid, gid)                        # friendly asset name
+                return _labelmap.get(gid, gid)
             return f"Audio — {gid}" if gid != "Audio" else "Audio"
         def _leaf_label(i):
             it = items[i]
             if it["section"] == "tex":
-                stem = Path(str(it["key"])).stem                     # t10 / cover / (legacy) t10_256x64
-                return _re.sub(r"_\d+x\d+$", "", stem)               # -> just the texture id
+                stem = Path(str(it["key"])).stem
+                return _re.sub(r"_\d+x\d+$", "", stem)
             return it["label"]
         groups = OrderedDict()
         for i in range(len(items)):
-            groups.setdefault(_group_of(i), []).append(i)
+            groups.setdefault(_chain_of(i), []).append(i)
+        node_items = {}
+        childmap = {}
+        roots = OrderedDict()
+        for (kind, chain), idxs in groups.items():
+            for d in range(1, len(chain) + 1):
+                node = (kind, chain[:d])
+                node_items.setdefault(node, []).extend(idxs)
+                if d == 1:
+                    roots.setdefault(node, None)
+                else:
+                    childmap.setdefault((kind, chain[:d - 1]), OrderedDict()).setdefault(node, None)
 
         cols = ("chk", "team", "cat") + (("status",) if show_status else ())
         body = ttk.Frame(dlg); body.pack(fill=BOTH, expand=True, padx=12)
@@ -7179,65 +7648,112 @@ class App(tk.Tk):
         tv.tag_configure("conflict", foreground="#ffb74d")
         tv.tag_configure("same", foreground="#888")
         BOX = {"all": "☑", "none": "☐", "some": "◪"}
-        pmap = {}                                        # parent-row iid -> group key
-
+        pmap = {}                                        # row iid -> node key
         def matches(i):
             it = items[i]; t = v_type.get()
-            if t == "Audio" and it["section"] not in ("meta", "audio"): return False
-            if t == "Texture" and it["section"] != "tex": return False
-            if t == "Roster" and it["section"] != "roster": return False
-            if t == "Scoreclock" and it["section"] != "scoreclock": return False
-            if t == "Portraits" and it["section"] != "portraits": return False
+            if t != "All" and it["section"] not in _TYPE_SECTIONS[t]: return False
             if v_team.get() != "All" and it.get("team", "") != v_team.get(): return False
             if v_cat.get() != "All" and it.get("category", "") != v_cat.get(): return False
             return True
         def visible():
             return [i for i in range(len(items)) if matches(i)]
-        def _pstate(g):
-            cs = [checked[i] for i in groups[g] if matches(i)]
+        def _pstate(node):
+            cs = [checked[i] for i in node_items[node] if matches(i)]
             return None if not cs else ("all" if all(cs) else "none" if not any(cs) else "some")
-            
-        def refresh(*_):
-            # 1. Save which category IDs (pmap values) were currently expanded before wiping
-            expanded_groups = {
-                pmap[child] for child in tv.get_children() 
-                if child in pmap and tv.item(child, "open")
-            }
 
-            tv.delete(*tv.get_children()); pmap.clear()
-            for g, idxs in groups.items():
-                vis = [i for i in idxs if matches(i)]
-                if not vis:
-                    continue
-                st = _pstate(g)
-                pid = "G%d" % len(pmap); pmap[pid] = g
-                
-                # 2. Keep it open if it was previously open (defaults to True on initial load)
-                is_open = pid not in pmap or g in expanded_groups if expanded_groups or len(pmap) == 1 else True
-                # Alternatively, use: is_open = (g in expanded_groups) if expanded_groups else True
-
-                tv.insert("", END, iid=pid, open=(g in expanded_groups) if expanded_groups else True,
-                          text=f"{_group_label(g)}   ({len(vis)})",
-                          values=(BOX[st], "", "") + (("",) if show_status else ()))
-                for i in vis:
-                    it = items[i]
-                    vals = (BOX["all" if checked[i] else "none"], it.get("team", ""),
-                            it.get("category", "")) + ((it.get("status", ""),) if show_status else ())
-                    tv.insert(pid, END, iid=str(i), text="    " + _leaf_label(i), values=vals,
-                              tags=(it.get("status", ""),) if show_status else ())
+        # Rows are built LAZILY: a group starts closed with a single "…" placeholder child and
+        # only materialises its real children the first time it is opened. A modpack can carry
+        # thousands of texture rows, and inserting them all up front is what made this dialog
+        # take seconds to appear. `expanded` remembers what the user had open across a filter
+        # change; `loaded` is per-rebuild bookkeeping so a group is never filled twice.
+        expanded = set()
+        loaded = set()
+        gmap = {}
+        _seq = [0]
+        def _new_pid(node):
+            _seq[0] += 1
+            pid = "G%d" % _seq[0]; pmap[pid] = node; gmap[node] = pid
+            return pid
+        def _leaf_vals(i):
+            it = items[i]
+            return ((BOX["all" if checked[i] else "none"], it.get("team", ""),
+                     it.get("category", "")) + ((it.get("status", ""),) if show_status else ()))
+        def _insert_group(parent_iid, node):
+            vis_n = sum(1 for i in node_items[node] if matches(i))
+            if not vis_n:
+                return
+            st = _pstate(node)
+            pid = _new_pid(node)
+            tv.insert(parent_iid, END, iid=pid, open=False,
+                      text=f"{_node_label(node)}   ({vis_n})",
+                      values=(BOX[st], "", "") + (("",) if show_status else ()))
+            if node in expanded:
+                _load_children(pid)
+                tv.item(pid, open=True)
+            else:
+                # the placeholder is what makes the expander arrow appear; opening the group
+                # deletes it and loads the real rows
+                tv.insert(pid, END, iid=pid + "_dummy", text="    …")
+        def _load_children(pid):
+            if pid in loaded:
+                return
+            loaded.add(pid)
+            # mark it loaded FIRST: _insert_group can recurse back in here for a nested group
+            # and we do not want the same rows inserted twice
+            if tv.exists(pid + "_dummy"):
+                tv.delete(pid + "_dummy")
+            node = pmap[pid]
+            for child in sorted(childmap.get(node, ()), key=lambda n: str(n[1][-1]).lower()):
+                _insert_group(pid, child)
+            for i in groups.get(node, ()):
+                if not matches(i): continue
+                it = items[i]
+                tv.insert(pid, END, iid=str(i), text="    " + _leaf_label(i),
+                          values=_leaf_vals(i),
+                          tags=(it.get("status", ""),) if show_status else ())
+        def _update_ancestors(node):
+            kind, chain = node
+            for d in range(len(chain), 0, -1):
+                n = (kind, chain[:d])
+                pid = gmap.get(n)
+                if pid and tv.exists(pid):
+                    st = _pstate(n)
+                    tv.set(pid, "chk", BOX[st] if st else BOX["none"])
+        def _update_count():
             count_lbl.config(text=f"{sum(checked)} of {len(items)} checked")
-            
+        def refresh(*_):
+            # a filter change rebuilds the whole tree, so remember what was open before wiping
+            # it — by NODE, not by row iid, since the iids are handed out fresh every time
+            for pid, node in pmap.items():
+                if not tv.exists(pid): continue
+                (expanded.add if tv.item(pid, "open") else expanded.discard)(node)
+            tv.delete(*tv.get_children()); pmap.clear(); gmap.clear(); loaded.clear()
+            for node in roots:
+                _insert_group("", node)
+            _update_count()
+        tv.bind("<<TreeviewOpen>>",
+                lambda _e: _load_children(tv.focus()) if tv.focus() in pmap else None)
         for v in (v_type, v_team, v_cat):
             v.trace_add("write", refresh)
 
         def toggle_leaf(i):
-            checked[i] = not checked[i]; refresh()
-        def toggle_group(g):
-            vis = [i for i in groups[g] if matches(i)]
+            checked[i] = not checked[i]
+            if tv.exists(str(i)):
+                tv.set(str(i), "chk", BOX["all" if checked[i] else "none"])
+            _update_ancestors(_chain_of(i)); _update_count()
+        def toggle_group(node):
+            vis = [i for i in node_items[node] if matches(i)]
             target = not all(checked[i] for i in vis)    # all on -> turn all off, else turn all on
             for i in vis:
                 checked[i] = target
-            refresh()
+                if not tv.exists(str(i)): continue
+                tv.set(str(i), "chk", BOX["all" if target else "none"])
+            kind, chain = node
+            for n, pid in gmap.items():
+                if n[0] == kind and n[1][:len(chain)] == chain and tv.exists(pid):
+                    st = _pstate(n)
+                    tv.set(pid, "chk", BOX[st] if st else BOX["none"])
+            _update_ancestors(node); _update_count()
         def _toggle_row(row):
             if row in pmap:
                 toggle_group(pmap[row])
@@ -7254,14 +7770,33 @@ class App(tk.Tk):
                 _toggle_row(sel[0])
         tv.bind("<Button-1>", on_click)
         tv.bind("<space>", on_space)
+        tv._toggle_row = _toggle_row
         def set_all(val):                                # applies to VISIBLE leaves only
             for i in visible():
                 checked[i] = val
             refresh()
 
+        def expand_all(val):
+            if val:
+                busy = True
+                while busy:                              # loading one group can reveal nested ones
+                    busy = False
+                    for pid in list(pmap):
+                        if pid not in loaded:
+                            _load_children(pid); busy = True
+                for pid, node in pmap.items():
+                    expanded.add(node); tv.item(pid, open=True)
+            else:
+                expanded.clear()
+                for pid in list(pmap):
+                    if tv.exists(pid):
+                        tv.item(pid, open=False)
+
         btn = ttk.Frame(dlg, padding=(12, 10)); btn.pack(fill=X, side=BOTTOM)
         ttk.Button(btn, text="Check All", command=lambda: set_all(True)).pack(side=LEFT)
         ttk.Button(btn, text="Uncheck All", command=lambda: set_all(False)).pack(side=LEFT, padx=4)
+        ttk.Button(btn, text="Expand All", command=lambda: expand_all(True)).pack(side=LEFT, padx=(8, 0))
+        ttk.Button(btn, text="Collapse All", command=lambda: expand_all(False)).pack(side=LEFT, padx=4)
         ttk.Label(btn, text="(Check/Uncheck All affects the filtered view)",
                   foreground="#777").pack(side=LEFT, padx=8)
         def ok(): result["ok"] = True; dlg.destroy()
@@ -7273,58 +7808,84 @@ class App(tk.Tk):
         if not result["ok"]:
             return None
         return [items[i] for i in range(len(items)) if checked[i]]
-
     def _export_modpack(self):
         root = self._get_root()
         if not root: return
-        try:
-            items = mp.local_items(root)
-        except Exception as e:
-            messagebox.showerror("Export", f"Could not scan modified files:\n{e}"); return
         ros_path = self._current_roster_path()
-        if ros_path:
+        game_dir0 = self._get_game_root()
+        scan = {}
+        def scan_work():
+            # Every scan below walks the whole mod tree (and, for heads, the archives), so this
+            # runs OFF the UI thread — the picker used to sit behind a frozen window for minutes.
+            note = lambda s: self._log_q.put(f"__PROGRESS__-1|{s}")
+            note("Scanning edited audio + textures…")
+            # fast=True: size+mtime edit detection and one shared manifest parse. The picker only
+            # needs to know WHICH files changed; export_selected re-reads them properly.
+            items = mp.local_items(root, fast=True)
+            if ros_path:
+                note("Scanning roster edits…")
+                try:                                         # Team Colours / Arena / Team Names
+                    items += mp.local_roster_items(ros_path)
+                except Exception as e:
+                    self._log_q.put(f"[modpack] roster scan skipped: {e}")
+                try:                                         # expansion clubs (record + art family)
+                    items += mp.local_expansion_items(ros_path)
+                except Exception as e:
+                    self._log_q.put(f"[modpack] expansion scan skipped: {e}")
+            note("Scanning custom heads…")
+            try:                                             # Custom heads (model + maps + slot)
+                head_items = mp.local_head_items(game_dir0, ros_path, log=self._log_q.put)
+            except Exception as e:
+                head_items = []
+                self._log_q.put(f"[modpack] head scan skipped: {e}")
+            items += head_items                              # all checked = "every head I edited"
+            note("Checking scoreclock + portraits…")
+            try:                                             # the iff lives INSIDE the archives -> TOC lookup
+                sc_ok = bool(game_dir0) and bool(archtex.resolve("overlay_static.iff", game_dir0))
+            except Exception:
+                sc_ok = False
+            if sc_ok:
+                sc_item = mp.scoreclock_export_item()
+                sc_item["checked"] = False                   # opt-in: capture costs ~2 min
+                sc_item["label"] += "   [auto-includes overlay_static textures; adds ~2 min]"
+                items.append(sc_item)
+            por_item = None                                  # Portraits (whole ~65 MB pack)
             try:
-                items += mp.local_roster_items(ros_path)     # Team Colours / Arena / Team Names
+                por_item = mp.portraits_export_item(game_dir0)
             except Exception as e:
-                self._log(f"[modpack] roster scan skipped: {e}")
-            try:                                             # expansion clubs (record + art family)
-                items += mp.local_expansion_items(ros_path)
-            except Exception as e:
-                self._log(f"[modpack] expansion scan skipped: {e}")
-        game_dir = self._get_game_root()                     # Scoreclock (captured at export time)
-        try:                                                 # Custom heads (model + maps + slot)
-            head_items = mp.local_head_items(game_dir, ros_path, log=self._log)
-        except Exception as e:
-            head_items = []
-            self._log(f"[modpack] head scan skipped: {e}")
-        items += head_items                                  # all checked = "every head I edited"
-        try:                                                 # the iff lives INSIDE the archives -> TOC lookup
-            sc_ok = bool(game_dir) and bool(archtex.resolve("overlay_static.iff", game_dir))
-        except Exception:
-            sc_ok = False
-        if sc_ok:
-            sc_item = mp.scoreclock_export_item()
-            sc_item["checked"] = False                       # opt-in: capture costs ~2 min
-            sc_item["label"] += "   [auto-includes overlay_static textures; adds ~2 min]"
-            items.append(sc_item)
-        por_item = None                                      # Portraits (whole ~65 MB pack)
-        try:
-            por_item = mp.portraits_export_item(game_dir)
-        except Exception as e:
-            self._log(f"[modpack] portrait scan skipped: {e}")
-        if por_item:
-            por_item["checked"] = False                      # opt-in: adds ~65 MB to the pack
-            por_item["label"] += ("   [whole pack, ~65 MB — recipients should take your "
-                                  "Roster.ROS too]")
-            items.append(por_item)
-        if not sc_ok and not por_item and not head_items:
-            game_dir = None
+                self._log_q.put(f"[modpack] portrait scan skipped: {e}")
+            if por_item:
+                por_item["checked"] = False                  # opt-in: adds ~65 MB to the pack
+                por_item["label"] += ("   [whole pack, ~65 MB — recipients should take your "
+                                      "Roster.ROS too]")
+                items.append(por_item)
+            col_item = None                                  # custom collar meshes (global.iff)
+            if game_dir0:
+                note("Checking custom collars…")
+                try:
+                    col_item = mp.collars_export_item(game_dir0, log=self._log_q.put)
+                except Exception as e:
+                    self._log_q.put(f"[modpack] collar scan skipped: {e}")
+            if col_item:
+                col_item["label"] += "   [skater collar meshes; recipients get them on Import]"
+                items.append(col_item)
+            scan["items"] = items
+            scan["game_dir"] = game_dir0 if (sc_ok or por_item or head_items or col_item) else None
+        self._run_in_thread(scan_work, op_label="Scanning modified files…",
+                            on_done=lambda: self._export_modpack_pick(root, ros_path, scan))
+
+    def _export_modpack_pick(self, root, ros_path, scan):
+        """Second half of Export Mod Pack — back on the UI thread with the scan results."""
+        if "items" not in scan:
+            messagebox.showerror("Export", "Could not scan modified files — see the log."); return
+        items, game_dir = scan["items"], scan["game_dir"]
         if not items:
             messagebox.showinfo("Export Mod Pack",
-                "No modified files to export.\n\nEdit some textures/audio (or set a Roster.ROS on the "
-                "Roster Editor tab for roster edits) first, then try again."); return
+                "No modified files to export.\n\nEdit some textures/audio (or set a Roster.ROS on the Roster Editor tab for roster edits) first, then try again.")
+            return
         sel = self._pick_items_dialog(
-            "Export Mod Pack", "Choose the items to include (all checked by default):", items)
+            "Export Mod Pack", "Tick the items to include (nothing is included by default):",
+            items, default_checked=False)
         if sel is None:
             return
         if not sel:
@@ -7487,7 +8048,8 @@ class App(tk.Tk):
         # background finalize so the dialog thread doesn't stall on them
         sc_rows = [it for it in sel if it["section"] == "scoreclock"]
         por_rows = [it for it in sel if it["section"] == "portraits" and it["status"] != "same"]
-        rest = [it for it in sel if it["section"] not in ("scoreclock", "portraits")]
+        col_rows = [it for it in sel if it["section"] == mp.COLLARS_KEY and it["status"] != "same"]
+        rest = [it for it in sel if it["section"] not in ("scoreclock", "portraits", mp.COLLARS_KEY)]
         decisions = {f'{it["section"]}|{it["key"]}': "theirs" for it in sel if it["status"] == "conflict"}
         # Faces get a second dialog: the pack's row/portrait/name binding is a guess about a roster
         # its author never saw, so the person who owns the roster gets to point at the player.
@@ -7534,10 +8096,12 @@ class App(tk.Tk):
                               if it["section"] == "tex" and it["status"] != "same"})
         sc = sc_rows[0]["incoming"] if sc_rows else None
         por = bool(por_rows)
+        col = col_rows[0]["incoming"] if col_rows else None
         bg_note = ""
-        if tex_folders or sc or por:
+        if tex_folders or sc or por or col:
             parts = []
             if tex_folders: parts.append("imported textures are being applied to the game archives")
+            if col:         parts.append("the custom collar meshes are being written into global.iff")
             if sc:          parts.append("the scoreclock is being replayed onto your game files")
             if por:         parts.append("the portrait pack is being installed")
             bg_note = ("\n\nNow finishing in the background (a few minutes): " + "; ".join(parts) +
@@ -7556,10 +8120,10 @@ class App(tk.Tk):
                 Path(self._v_roster.get().strip() or "x").is_file():
             try: self._teams_load()          # refresh the Teams grid from the patched save
             except Exception: pass
-        if tex_folders or sc or por:
-            self._import_finalize(sc, tex_folders, zip_path, portraits=por)
+        if tex_folders or sc or por or col:
+            self._import_finalize(sc, tex_folders, zip_path, portraits=por, collars=col)
 
-    def _import_finalize(self, sc, tex_folders, zip_path, portraits=False):
+    def _import_finalize(self, sc, tex_folders, zip_path, portraits=False, collars=None):
         """Background finish of a mod-pack import: (1) apply the just-imported texture files of
         every touched asset into the game archives (same clean-base path as Apply All), then
         (2) install the portrait pack, then (3) replay the scoreclock section (DRAM rebuild +
@@ -7587,6 +8151,7 @@ class App(tk.Tk):
         preset_name = f"Imported — {Path(zip_path).stem}" if zip_path else "Imported scoreclock"
         def work():
             applied, sc_status, por_status, err = 0, None, None, None
+            col_status = None
             try:
                 for iff in cand:
                     recs, edits = self._iff_all_edits(iff, root)
@@ -7623,12 +8188,22 @@ class App(tk.Tk):
                         self._log_q.put(f"  portrait pack {por_status}")
                 if sc:
                     sc_status = mp.apply_scoreclock(game_dir, sc, self._log_q.put)
+                if collars:
+                    # AFTER the texture pass: applying a uniform texture resets global.iff's
+                    # blobs from the clean base, which would drop a collar written before it.
+                    self._log_q.put("  installing the custom collars (global.iff re-encode, a few minutes)…")
+                    try:
+                        col_status = mp.apply_collars(game_dir, collars, self._log_q.put)
+                        self._log_q.put(f"  {col_status}")
+                    except Exception as ce:
+                        col_status = f"FAILED — {ce}"
+                        self._log_q.put(f"  custom collars {col_status}")
             except Exception as e:
                 err = str(e)
-            self._imp_fin_result = (applied, sc_status, por_status, err)
+            self._imp_fin_result = (applied, sc_status, por_status, err, col_status)
         def done():
-            applied, sc_status, por_status, err = getattr(self, "_imp_fin_result",
-                                                          (0, None, None, "unknown"))
+            applied, sc_status, por_status, err, col_status = getattr(
+                self, "_imp_fin_result", (0, None, None, "unknown", None))
             self._imp_fin_result = None
             if err:
                 self._log(f"[modpack] import finish FAILED — {err}")
@@ -7640,6 +8215,11 @@ class App(tk.Tk):
                 lines.append("Portrait pack installed — all faces replaced."
                              if "FAILED" not in por_status else
                              "⚠ Portrait pack FAILED — your portraits were left alone (check the log).")
+            if col_status:
+                lines.append("Custom collars installed into global.iff — Collar strings ON wears "
+                             "the laced one, OFF the plain V."
+                             if "FAILED" not in col_status else
+                             "⚠ Custom collars FAILED — global.iff was left alone (check the log).")
             if sc_status:
                 self._log(f"[modpack] scoreclock: {sc_status}")
                 try:                              # save the imported look as a loadable preset
@@ -7909,6 +8489,7 @@ class App(tk.Tk):
         r = (self._v_root.get().strip() or self.cfg.get("root_path", "")).strip()
         if r and Path(r).is_dir():
             archtex.set_game_dir(r)
+            voltree.forget()                  # the manifest cache is keyed to the old folder
             archtex.LIVE_CATALOG = Path(r) / "live_capture" / "live_offsets.json"
             archtex.reload_live_catalog()
             # A wave bank that has been GROWN cannot stay where the disc put it, so it gets
@@ -7922,6 +8503,121 @@ class App(tk.Tk):
                 live_capture.set_out_root(r)          # captures land beside the game files
             except Exception:
                 pass
+
+    # -- extracted container tree ---------------------------------------------
+    def _offer_volume_tree(self):
+        """One-time: unpack the archives into ROOT/NHL2k10_Extracted, one file per asset.
+
+        Asked rather than assumed, because it is minutes of disk and a few GB. Declining costs
+        nothing: every tab reads and writes the archives exactly as it always has, and the tree
+        is a mirror kept in step afterwards, never something anything depends on.
+        """
+        root = (self.cfg.get("root_path") or "").strip()
+        if not root or self.cfg.get("volume_tree_declined") or voltree.is_ready(root):
+            return
+        if self._op_thread and self._op_thread.is_alive():
+            self.after(3000, self._offer_volume_tree)   # something else is using the archives
+            return
+        msg = (
+            "The launcher can unpack the game archives into\n\n"
+            "    " + str(Path(root) / voltree.TREE_NAME) + "\n\n"
+            "one file per asset. That gives every asset its own pristine copy to revert to, "
+            "and lets a finished mod be shared as just the files that changed instead of six "
+            "gigabytes of archives.\n\n"
+            "It takes a few minutes and about the same space again on this drive. You can do "
+            "it later from Settings; nothing else changes either way.\n\n"
+            "Unpack now?")
+        if not messagebox.askyesno("Unpack the game files?", msg, parent=self):
+            self.cfg["volume_tree_declined"] = True
+            save_config(self.cfg)
+            self._log("Skipped unpacking the game files. (Settings can do it later.)")
+            return
+        self._start_volume_tree()
+
+    def _start_volume_tree(self):
+        if self._op_busy():
+            return
+        root = (self.cfg.get("root_path") or "").strip()
+        if not root or not Path(root).is_dir():
+            messagebox.showwarning("No game folder", "Set the game folder in Settings first.")
+            return
+        log = self._log_q.put
+
+        def work():
+            log("--- Unpacking the game files ---")
+            def prog(n, total):
+                log(f"  {n}/{total} assets")
+            if voltree.ensure_extracted(root, log=log, progress=prog):
+                self.cfg["volume_tree_declined"] = False
+                log(f"Done - {Path(root) / voltree.TREE_NAME}")
+            else:
+                log("Unpacking did not verify; the archives were not touched.")
+
+        self._run_in_thread(work, op_label="Unpacking the game files...")
+
+    def _vol_refresh(self):
+        """Describe the extracted tree in one line: absent, or how many assets and how many
+        of them the archives no longer agree with."""
+        if not hasattr(self, "_vol_status"):
+            return
+        root = (self.cfg.get("root_path") or "").strip()
+        if not root or not Path(root).is_dir():
+            self._vol_status.set("Set the game files folder first.")
+            return
+        if not voltree.is_ready(root):
+            self._vol_status.set("Not unpacked yet — the launcher works fine without it.")
+            return
+        try:
+            man = voltree.manifest(root)
+            n = len(man.get("entries") or [])
+            self._vol_status.set(f"{n:,} assets in {Path(root) / voltree.TREE_NAME}")
+        except Exception as e:
+            self._vol_status.set(f"Unpacked, but the manifest could not be read: {e}")
+
+    def _vol_open_folder(self):
+        root = (self.cfg.get("root_path") or "").strip()
+        p = Path(root) / voltree.TREE_NAME if root else None
+        if not p or not p.is_dir():
+            messagebox.showinfo("Extracted game files", "Nothing unpacked yet.")
+            return
+        try:
+            os.startfile(str(p))
+        except Exception as e:
+            self._log(f"Could not open {p}: {e}")
+
+    def _vol_repack(self):
+        """Rebuild the archives from the extracted tree.
+
+        Normally unnecessary — every launcher write already goes into both — so this is for a
+        tree that changed underneath us: a hand-edited asset, or one restored from a release.
+        """
+        root = (self.cfg.get("root_path") or "").strip()
+        if not root or not voltree.is_ready(root):
+            messagebox.showinfo("Rebuild archives", "There is nothing unpacked to rebuild from.")
+            return
+        if self._op_busy():
+            return
+        if not messagebox.askyesno(
+                "Rebuild archives",
+                "This rewrites 0A/0B/1A/1B from\n\n    "
+                + str(Path(root) / voltree.TREE_NAME) +
+                "\n\nEvery asset in the archives is replaced by the file of the same name in "
+                "that folder. Anything changed in the archives but NOT in the folder is lost.\n\n"
+                "Rebuild now?", parent=self):
+            return
+        log = self._log_q.put
+
+        def work():
+            log("--- Rebuilding the archives from the extracted files ---")
+            try:
+                out = voltree.repack(root, log=log,
+                                     progress=lambda n, t: log(f"  {n}/{t} assets"))
+                log(f"Done - {out}")
+            except Exception as e:
+                log(f"Rebuild failed: {e}")
+            self.after(0, self._vol_refresh)
+
+        self._run_in_thread(work, op_label="Rebuilding the archives...")
 
     def _reload_all(self):
         """Re-read everything the CURRENTLY LIVE UI is showing.
@@ -11473,7 +12169,7 @@ class App(tk.Tk):
             ed.apply_edits(edits)          # raises ValueError if the grow exceeds the free budget
             ed.save()                      # writes <ROS>.bak then patches
         except ValueError as e:
-            messagebox.showerror("Names too long", str(e)); return
+            messagebox.showerror("Team names", str(e)); return
         except Exception as e:
             messagebox.showerror("Roster", f"Write failed:\n{e}"); return
         self._log(f"[teams] applied {n} change(s) to {Path(p).name} (backup: {Path(p).name}.bak)")

@@ -94,46 +94,21 @@
   ],
   "jersey_back": {
    "src": "base",
-   "fit": "rect",
-   "src_rect": [
-    321,
-    0,
-    702,
-    512
-   ],
-   "_": "Runs to the EDGE of the warped 1024 space on purpose. The NHL 23 base stacks the two torso panels, back over front, and each ends in a plain red hem below its last stripe -- measured on the warped Calgary home base, the back's stripe block is rows 33..144 with red above it to row 0, and the front's is rows 880..979 with red below it to row 1023. Stopping at 20 and 998 clipped most of both hems, so the rect fit stretched the stripe block to fill the island and the garment ended ON a stripe instead of on red. 512 is the panel split, and the two blocks sit 33 and 45 rows in from their own edges, which is as symmetric as the source art actually is."
+   "fit": "uvmap",
+   "_": "Gathered through data/jersey_uvmap.npz -- ONE map for the whole shirt, baked by tools/build_jersey_uvmap.py from the NHL 23 sheet, the 2K10 region map and the captured mesh. Both games flatten the same tube; the shared coordinate is DISTANCE FROM THE HEM, the same number of pixels on the back and the front. That is why back and front now line up: they are driven by one scale off one landmark instead of each being stretched to fill its own island. The sleeve is anchored on the cuff and on the armhole (mesh column 390) and is LINEAR along the arm, which is what both games' art says -- every stock 2K10 cuff ring is a straight vertical bar. Past the armhole the 2K10 island is RAGLAN and keeps going over the shoulder to the neck; that sixth is fed from the TORSO at the fold, not by clamping the last sleeve column, which was the shoulder smear.",
+   "__superseded": "Runs to the EDGE of the warped 1024 space on purpose. The NHL 23 base stacks the two torso panels, back over front, and each ends in a plain red hem below its last stripe -- measured on the warped Calgary home base, the back's stripe block is rows 33..144 with red above it to row 0, and the front's is rows 880..979 with red below it to row 1023. Stopping at 20 and 998 clipped most of both hems, so the rect fit stretched the stripe block to fill the island and the garment ended ON a stripe instead of on red. 512 is the panel split, and the two blocks sit 33 and 45 rows in from their own edges, which is as symmetric as the source art actually is."
   },
   "jersey_front": {
    "src": "base",
-   "fit": "rect",
-   "src_rect": [
-    321,
-    512,
-    702,
-    1024
-   ]
+   "fit": "uvmap",
+   "_": "Gathered through data/jersey_uvmap.npz -- ONE map for the whole shirt, baked by tools/build_jersey_uvmap.py from the NHL 23 sheet, the 2K10 region map and the captured mesh. Both games flatten the same tube; the shared coordinate is DISTANCE FROM THE HEM, the same number of pixels on the back and the front. That is why back and front now line up: they are driven by one scale off one landmark instead of each being stretched to fill its own island. The sleeve is anchored on the cuff and on the armhole (mesh column 390) and is LINEAR along the arm, which is what both games' art says -- every stock 2K10 cuff ring is a straight vertical bar. Past the armhole the 2K10 island is RAGLAN and keeps going over the shoulder to the neck; that sixth is fed from the TORSO at the fold, not by clamping the last sleeve column, which was the shoulder smear.",
+   "__superseded": "rect"
   },
   "jersey_arms": {
    "src": "base",
-   "fit": "arm",
-   "src_panels": [
-    [
-     41,
-     353,
-     341,
-     671
-    ],
-    [
-     983,
-     353,
-     683,
-     671
-    ]
-   ],
-   "_": "Sampled through the sleeve's cylinder parameterisation, not resized onto the island's bounding box -- the 2K10 arm unwrap tapers to the cuff and runs diagonally, so a rect fit both widens the stripe ring and rides it up the arm. Each panel is [x_at_t0, y_at_s0, x_at_t1, y_at_s1] in the WARPED body's 1024 space (src is 'base', so build_base has already run body_transform); x_at_t0 is the cuff end, so the right sleeve's mirrored panel is written x_at_t0 > x_at_t1 instead of needing a flip flag.",
-   "__anchor": "BOTH ends are ANATOMICAL and MEASURED -- nothing here is fitted to how a stripe happens to look. x_at_t0 = 41 is the NHL 23 sleeve panel's cuff seam and x_at_t1 = 341 its armhole seam, both read off the jersey normal map as the two vertical seam ridges that are present in EVERY kit's normal (Calgary home and Anaheim away agree to a pixel: ridges at 31..33 / 39..41 = the cuff trim bar, and the armhole curve crossing 330 at the panel's ends and ~350 at its middle). They bracket the same fabric the 2K10 arm island does: build_arm_param puts t=0 at the island's cuff-most vertex and t=1 at its shoulder-most, and the seam ring shared with the torso is the t=1 edge. Corroborated independently: with this window the NHL 23 stripe band (warped x 157..228) lands at t 0.38..0.62, and the STOCK 2K10 Calgary ring -- measured off the game's own art through this same parameterisation -- sits at t 0.39..0.52. The band STARTS in the same place to within 0.01 of t; it runs higher only because the NHL 23 design's band is genuinely wider (23% of the sleeve against 2K10's 15%).",
-   "__dead_end": "Do NOT re-solve x0/x1 by matching the source band to the stock ring at BOTH ends. The two eras' bands are different widths, so forcing them equal inflates the window to [-68, 505] -- off the left edge of the texture at one end and deep inside the torso panel at the other. Measured twice now (Anaheim away, then Calgary home); era art is an anchor for one end only.",
-   "__superseded": "The old window was [125, 429] with an `src_armholes` clamp at 333. Both are gone: 429 ran 88 px PAST the armhole into the torso panel (which is what dragged Anaheim's black neck yoke down the upper arm), and the clamp only papered over that by holding one column, which smeared the torso's side piping into streaks. 125 was worse -- it started a third of the way UP the panel, so the cuff third of every NHL 23 sleeve was thrown away and the stripe ring landed at t 0.10..0.33, down inside the glove. That is the 'arms are coming way too low' report. With x_at_t1 now AT the armhole there is nothing left to clamp."
+   "fit": "uvmap",
+   "_": "Gathered through data/jersey_uvmap.npz -- ONE map for the whole shirt, baked by tools/build_jersey_uvmap.py from the NHL 23 sheet, the 2K10 region map and the captured mesh. Both games flatten the same tube; the shared coordinate is DISTANCE FROM THE HEM, the same number of pixels on the back and the front. That is why back and front now line up: they are driven by one scale off one landmark instead of each being stretched to fill its own island. The sleeve is anchored on the cuff and on the armhole (mesh column 390) and is LINEAR along the arm, which is what both games' art says -- every stock 2K10 cuff ring is a straight vertical bar. Past the armhole the 2K10 island is RAGLAN and keeps going over the shoulder to the neck; that sixth is fed from the TORSO at the fold, not by clamping the last sleeve column, which was the shoulder smear.",
+   "__superseded": "Sampled through the sleeve's cylinder parameterisation, not resized onto the island's bounding box -- the 2K10 arm unwrap tapers to the cuff and runs diagonally, so a rect fit both widens the stripe ring and rides it up the arm. Each panel is [x_at_t0, y_at_s0, x_at_t1, y_at_s1] in the WARPED body's 1024 space (src is 'base', so build_base has already run body_transform); x_at_t0 is the cuff end, so the right sleeve's mirrored panel is written x_at_t0 > x_at_t1 instead of needing a flip flag."
   },
   "pants": {
    "src": "pant",
@@ -149,15 +124,20 @@
   },
   "collar": {
    "src": "base",
-   "fit": "borrow",
-   "src_rect": [
-    344,
-    873,
-    696,
-    990
-   ],
-   "rotate": 90,
-   "per_island": true
+   "fit": "neckline",
+   "_": "NHL 23 has no collar texture, so there is nothing to convert. Filled with the fabric the collar is sewn to -- the median along the top of the front panel. The old 'borrow' fit rotated a crop of the HEM TRIM into the collar bars, which read as a piece of some other garment.",
+   "__superseded": {
+    "src": "base",
+    "fit": "borrow",
+    "src_rect": [
+     344,
+     873,
+     696,
+     990
+    ],
+    "rotate": 90,
+    "per_island": true
+   }
   },
   "socks": {
    "src": "sock",
@@ -215,10 +195,10 @@
    {
     "name": "crest",
     "window": [
-     396,
-     609,
-     624,
-     848
+     386,
+     599,
+     642,
+     858
     ],
     "stamp": "crest"
    },
@@ -239,36 +219,6 @@
      446,
      690,
      571
-    ],
-    "stamp": null
-   },
-   {
-    "name": "maker_mark",
-    "window": [
-     477,
-     415,
-     543,
-     468
-    ],
-    "stamp": null
-   },
-   {
-    "name": "league_mark",
-    "window": [
-     483,
-     571,
-     537,
-     620
-    ],
-    "stamp": null
-   },
-   {
-    "name": "neck",
-    "window": [
-     442,
-     424,
-     580,
-     613
     ],
     "stamp": null
    }
@@ -889,5 +839,35 @@
    255,
    0
   ]
+ },
+ "collar_zones": {
+  "_": "The CUSTOM collar meshes (see build_collar.py / project_custom_collar_4zone) read six flat-colour rects in the collar-bar area of the base: A back band, B side band, C V + placket, D inside face, E laces, F eyelets. NHL 23 draws the collar assembly at one fixed place on every kit, so each zone is the MEDIAN of a small window at a fixed source point (2048-space, scaled to the file), taken from the RAW base before patch_neck paints the assembly out. The points are the user's reference squares on nhl23-collar-ref-with-laces.png. rects are fractions of the 1024 base; they lie inside the collar region only (checked against every UV region mask).",
+  "radius": 4,
+  "samples": {
+   "A": [1024, 948],
+   "B": [946, 1129],
+   "C": [1025, 1149],
+   "D": [1023, 1045],
+   "E": [1010, 1256],
+   "F": [997, 1218]
+  },
+  "rects": {
+   "A": [0.015, 0.665, 0.085, 0.815],
+   "B": [0.015, 0.830, 0.085, 0.980],
+   "C": [0.095, 0.665, 0.165, 0.815],
+   "D": [0.095, 0.830, 0.165, 0.980],
+   "E": [0.182, 0.740, 0.250, 0.860],
+   "F": [0.182, 0.875, 0.250, 0.985]
+  }
+ },
+ "neck_patch": {
+  "rect": [
+   430,
+   406,
+   580,
+   618
+  ],
+  "iters": 220,
+  "_": "The collar rib, neck hole, adidas mark and NHL shield, in the halved source's own space. Measured off the MEDIAN normal map of several kits, where only the geometry survives: the collar seam ridges run x 437..571 and y 425..607, the adidas mark sits just above at y 415..468 and the shield just below at y 571..620. See patch_neck -- this is painted out by POSITION, not detected, because it is in the same place on every kit and a detector cannot tell a shoulder yoke from a decal."
  }
 }

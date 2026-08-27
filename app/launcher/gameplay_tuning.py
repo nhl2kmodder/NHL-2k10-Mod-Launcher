@@ -126,6 +126,19 @@ for _t in TUNERS:
 def validate(xex_path):
     """Raise ValueError unless every sentinel word matches. Returns {va: file_offset}
     for all tuner VAs (resolved once, reused by read/write)."""
+    # TU #1 re-laid-out this tuning struct — 16 field inserts, 11 deletes — so the tuner VAs
+    # name different fields there and no address translation is meaningful. Refuse with the
+    # real reason rather than letting a sentinel mismatch imply a corrupt file. Nothing is lost:
+    # this tab exists to write 2K's v1.1 values into a v1.0 exe, and v1.1 already has them.
+    try:
+        from . import xex_version
+    except ImportError:
+        import xex_version
+    if xex_version.is_tu11(xex_path):
+        raise ValueError(
+            "Gameplay tuning is v1.0-only. Title Update #1 relinked the tuning struct "
+            "(fields inserted and removed), so these addresses no longer name the same values. "
+            "The TU already ships 2K's v1.1 tuning — which is exactly what this tab applies.")
     offs = {}
     with open(xex_path, "rb") as f:
         for va, want in SENTINELS:

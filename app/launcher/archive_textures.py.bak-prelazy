@@ -544,9 +544,7 @@ def _primary_vram_off(blobs, vlen, mip0):
     the +0x6c==1 placeholder and the loader places it), but a relocate-GROW replace APPENDS the new
     pixels and redirects the record's stored offset — so a repainted asset's texture is no longer at
     the head of the blob. Reading it as 0 shows a band of garbage over the old data."""
-    # dec_sz is the header's decompressed length, so this picks the 0xE0 record WITHOUT
-    # decompressing every other blob in the resource (see _LazyBlob).
-    dram = next((b["dec"] for b in blobs if b["dec_sz"] == 0xE0 and b["dec"]), None)
+    dram = next((b["dec"] for b in blobs if b["dec"] and len(b["dec"]) == 0xE0), None)
     if dram is None:
         return 0
     v = _BE(dram, 0x6C)
@@ -678,43 +676,6 @@ def resolve_clean(name: str, arc_dir: Path):
 
 
 # ── blob / fetch parsing ─────────────────────────────────────────────────────
-_PENDING = object()
-
-
-class _LazyBlob(dict):
-    """One 0x0E4837 blob. Every field but `dec` comes from the 20-byte header; `dec` decompresses
-    ON FIRST ACCESS.
-
-    The walk itself only needs `tot` to find the next blob, but a resource can hold hundreds of
-    blobs and a caller almost always wants one of them. Decompressing the rest eagerly cost 6.9 s
-    of an 11.6 s logo replace. Reads stay `b["dec"]`, so all fifty call sites are unchanged.
-
-    The compressed payload is COPIED at walk time rather than sliced on demand: callers such as
-    `_replace_impl` walk a bytearray and then splice into it, so a deferred read of the live
-    buffer would decode post-edit bytes. It is still far less memory than the old eager `dec`,
-    which held every blob decompressed.
-    """
-    __slots__ = ("_payload",)
-
-    def _dec(self):
-        v = dict.__getitem__(self, "dec")
-        if v is _PENDING:
-            try:
-                v = DF.decompress_codec(self._payload, dict.__getitem__(self, "dec_sz"),
-                                        (1 << dict.__getitem__(self, "wp")) - 1,
-                                        dict.__getitem__(self, "wp"))
-            except Exception:
-                v = None
-            dict.__setitem__(self, "dec", v)
-        return v
-
-    def __getitem__(self, k):
-        return self._dec() if k == "dec" else dict.__getitem__(self, k)
-
-    def get(self, k, default=None):
-        return self._dec() if k == "dec" else dict.get(self, k, default)
-
-
 def _walk_blobs(data: bytes, size: int):
     """Sequential 0x0E4837 blob walk (avoids false magic hits inside compressed data)."""
     blobs = []
@@ -728,9 +689,12 @@ def _walk_blobs(data: bytes, size: int):
         codec = _BE(data, o + 12); wp = _BE(data, o + 16)
         if tot < 20 or o + tot > len(data) + 4:
             break
-        b = _LazyBlob(off=o, tot=tot, dec=_PENDING, dec_sz=dec_sz, wp=wp, codec=codec)
-        b._payload = bytes(data[o + 20:o + tot])
-        blobs.append(b)
+        try:
+            dec = DF.decompress_codec(data[o + 20:o + tot], dec_sz, (1 << wp) - 1, wp)
+        except Exception:
+            dec = None
+        blobs.append({"off": o, "tot": tot, "dec": dec, "dec_sz": dec_sz,
+                      "wp": wp, "codec": codec})
         o += tot
     return blobs
 
@@ -769,30 +733,23 @@ def _find_fetch(dram, vlen):
 def _find_primary(blobs):
     """Return (vram_blob, fetch) for the primary texture, or (None, None).
     fetch = (fmt_name, bpu, block, w, h, tiled, mip0)."""
-    # Descriptor-vs-VRAM is decided on dec_sz (the header's decompressed length), so only the
-    # small descriptors and the ONE VRAM blob we actually return get decompressed. A blob whose
-    # decompression fails still has to be skipped exactly as before, so `dec` is materialised
-    # before any blob is accepted -- for the VRAM branch that is the blob we were going to
-    # decompress anyway.
     pend = None
     for i, b in enumerate(blobs):
-        if b["dec_sz"] <= 0x2000:                      # descriptor - small, cheap to decompress
-            dec = b["dec"]
-            if dec is None:
-                continue
-            nxt = next((bb["dec_sz"] for bb in blobs[i + 1:] if bb["dec_sz"] > 0x2000), None)
+        dec = b["dec"]
+        if dec is None:
+            continue
+        if len(dec) <= 0x2000:                         # descriptor
+            nxt = next((bb["dec"] for bb in blobs[i + 1:] if bb["dec"] and len(bb["dec"]) > 0x2000), None)
             if nxt is not None:
-                fc = _find_fetch(dec, nxt)
+                fc = _find_fetch(dec, len(nxt))
                 if fc:
                     pend = fc
         elif pend:                                     # VRAM following a good descriptor
-            if b["dec"] is None:
-                continue
             fmt, name, bpu, block, w, h, tiled, mip0 = pend
             return b, (name, bpu, block, w, h, tiled, mip0)
-    bigs = [b for b in blobs if b["dec_sz"] > 0x2000 and b["dec"]]
+    bigs = [b for b in blobs if b["dec"] and len(b["dec"]) > 0x2000]
     if len(bigs) >= 2:
-        fc = _find_fetch(bigs[0]["dec"], bigs[1]["dec_sz"])
+        fc = _find_fetch(bigs[0]["dec"], len(bigs[1]["dec"]))
         if fc:
             fmt, name, bpu, block, w, h, tiled, mip0 = fc
             return bigs[1], (name, bpu, block, w, h, tiled, mip0)
@@ -1720,7 +1677,7 @@ def replace_portraits(name, edits, game_dir, log=print) -> str:
     arc, off, size, idx, f3 = loc
     with open(game_dir / arc, "rb") as f:
         f.seek(off); data = bytearray(f.read(size))
-    port = [b for b in _walk_blobs(bytes(data), size) if b["dec_sz"] >= _PORTRAIT_MIP0]
+    port = [b for b in _walk_blobs(bytes(data), size) if b.get("dec") and len(b["dec"]) >= _PORTRAIT_MIP0]
     by_off = {}                                          # rebuild only the edited blobs
     n = 0
     for e in edits:
@@ -1790,9 +1747,8 @@ def _portrait_pairs(pack: bytes):
     pairs, i = [], 0
     while i + 1 < len(blobs):
         a, b = blobs[i], blobs[i + 1]
-        # dec_sz is the header's decompressed length -- pairing 600+ portraits by inflating each
-        # one cost seconds for information already on disk (see _bundle_pairs).
-        if (a["dec_sz"] == 0xE0 and b["dec_sz"] >= _PORTRAIT_MIP0 and a["dec"] is not None):
+        if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                and b["dec"] is not None and len(b["dec"]) >= _PORTRAIT_MIP0):
             pairs.append((a["off"], a["tot"], b["off"], b["tot"])); i += 2
         else:
             i += 1
@@ -1892,13 +1848,8 @@ def _bundle_pairs(name, root):
     i = 0
     while i + 1 < len(blobs):
         a, b = blobs[i], blobs[i + 1]
-        # Pair on the HEADER's decompressed length instead of decompressing to measure it. These
-        # packs hold hundreds of tiles and pairing inflated every one -- 1.17 s per walk of the
-        # logo bundle, three walks per logo replace. dec_sz is exact: across all 2,093 assets
-        # (8,548 blobs) it equals len(dec) every time and decompression never fails. The tiny 0xE0
-        # header is still really decompressed since the caller reads it either way; the big
-        # texture blob now inflates only when someone actually asks for its pixels.
-        if (a["dec_sz"] == 0xE0 and b["dec_sz"] == dec_sz and a["dec"] is not None):
+        if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                and b["dec"] is not None and len(b["dec"]) == dec_sz):
             pairs.append((a, b)); i += 2
         else:
             i += 1
@@ -1923,7 +1874,8 @@ def _bundle_pairs_any(name, clean_dir=None):
         live, i = [], 0
         while i + 1 < len(blobs):
             a, b = blobs[i], blobs[i + 1]
-            if (a["dec_sz"] == 0xE0 and b["dec_sz"] == dec_sz and a["dec"] is not None):
+            if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                    and b["dec"] is not None and len(b["dec"]) == dec_sz):
                 live.append((a, b)); i += 2
             else:
                 i += 1
@@ -1981,13 +1933,8 @@ def replace_bundles(name, edits, game_dir, log=print) -> str:
     i = 0
     while i + 1 < len(blobs):
         a, b = blobs[i], blobs[i + 1]
-        # Pair on the HEADER's decompressed length instead of decompressing to measure it. These
-        # packs hold hundreds of tiles and pairing inflated every one -- 1.17 s per walk of the
-        # logo bundle, three walks per logo replace. dec_sz is exact: across all 2,093 assets
-        # (8,548 blobs) it equals len(dec) every time and decompression never fails. The tiny 0xE0
-        # header is still really decompressed since the caller reads it either way; the big
-        # texture blob now inflates only when someone actually asks for its pixels.
-        if (a["dec_sz"] == 0xE0 and b["dec_sz"] == dec_sz and a["dec"] is not None):
+        if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                and b["dec"] is not None and len(b["dec"]) == dec_sz):
             pairs.append((a, b)); i += 2
         else:
             i += 1
@@ -2066,13 +2013,8 @@ def _sync_bundle_index(pack_name: str, new_pack: bytes, game_dir: Path, log=prin
     i = 0
     while i + 1 < len(blobs):
         a, b = blobs[i], blobs[i + 1]
-        # Pair on the HEADER's decompressed length instead of decompressing to measure it. These
-        # packs hold hundreds of tiles and pairing inflated every one -- 1.17 s per walk of the
-        # logo bundle, three walks per logo replace. dec_sz is exact: across all 2,093 assets
-        # (8,548 blobs) it equals len(dec) every time and decompression never fails. The tiny 0xE0
-        # header is still really decompressed since the caller reads it either way; the big
-        # texture blob now inflates only when someone actually asks for its pixels.
-        if (a["dec_sz"] == 0xE0 and b["dec_sz"] == dec_sz and a["dec"] is not None):
+        if (a["dec"] is not None and len(a["dec"]) == 0xE0
+                and b["dec"] is not None and len(b["dec"]) == dec_sz):
             entries.append((a["off"], a["tot"], b["off"], b["tot"])); i += 2
         else:
             i += 1

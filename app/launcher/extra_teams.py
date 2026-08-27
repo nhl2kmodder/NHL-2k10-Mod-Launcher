@@ -20,8 +20,8 @@ rink would edit Anaheim's rink**. `_relocate` only de-aliases as a side effect o
 is not the path a same-size edit takes.
 
 Rather than guard all thirteen `replace*` entry points — one missed path silently corrupts a
-shipping team — `dealias()` gives every shared member its own physical copy in the 1B tail up
-front, once. After that the asset is ordinary and every existing code path is already correct.
+shipping team — `dealias()` gives every shared member its own physical copy in the last archive's
+tail up front, once. After that the asset is ordinary and every existing code path is already correct.
 Seattle was built this way by hand and behaves exactly like a stock team, which is the proof.
 """
 from __future__ import annotations
@@ -261,42 +261,42 @@ def add_toc_alias(game_dir, new_name: str, donor_name: str, log=print) -> str:
     Entries are `(flags, size, crc32(NAME.UPPER), offset/0x800)` and the table is sorted ascending
     by crc, so the new entry is spliced into its sorted position and the count at `0x10` bumped.
     Entry INDEX is safe to shift: every lookup path keys on the name hash, never on position.
-    The table grows toward the first blob, so the free-slot check is against the lowest live
-    offset rather than a fixed bound.
+    Header-driven (archive count -> entry-table base), never a hardcoded 0x58: the live world is
+    five archives with the table at 0x68, and a stale base would misparse every entry. The insert
+    is paid for with 16 bytes of the zero slack behind the table, so 0A's total length — and
+    therefore every asset offset inside it — is unchanged.
     """
     game_dir = Path(game_dir)
     a0 = game_dir / "0A"
     AT._backup_once(a0, log)
-    d = bytearray(a0.read_bytes()[:0x10000])
-    cnt = struct.unpack_from(">I", d, 0x10)[0]
-    tbl = 0x58
-    end = tbl + cnt * 16
+    buf, names, sizes, ebase, cnt = AT._read_header(a0)
+    eend = ebase + cnt * 16
 
     crc = zlib.crc32(new_name.upper().encode("ascii")) & 0xFFFFFFFF
-    entries = [struct.unpack_from(">4I", d, tbl + i * 16) for i in range(cnt)]
-    if any(e[2] == crc for e in entries):
+    lo, hi = 0, cnt
+    while lo < hi:
+        mid = (lo + hi) // 2
+        if AT._BE(buf, ebase + mid * 16 + 8) < crc:
+            lo = mid + 1
+        else:
+            hi = mid
+    if lo < cnt and AT._BE(buf, ebase + lo * 16 + 8) == crc:
         return f"{new_name}: already in the TOC — nothing to do"
 
     dloc = AT.resolve(donor_name, game_dir)
     if not dloc:
         raise ValueError(f"donor asset {donor_name} does not resolve")
     _arc, _off, size, didx, f3 = dloc
-    flags = entries[didx][0]
+    flags = AT._BE(buf, ebase + didx * 16)
 
-    lowest = min(e[3] for e in entries) * 0x800
-    if end + 16 > lowest:
-        raise RuntimeError(f"this archive has no room left for new assets "
-                           f"({(lowest - end) // 16} slots free) — no more can be added")
+    if any(buf[eend:eend + 16]):
+        raise RuntimeError("no zero slack behind 0A's entry table — no room for another TOC entry")
 
-    pos = next((i for i, e in enumerate(entries) if e[2] > crc), cnt)
-    entries.insert(pos, (flags, size, crc, f3))
-    for i, e in enumerate(entries):
-        struct.pack_into(">4I", d, tbl + i * 16, *e)
-    struct.pack_into(">I", d, 0x10, cnt + 1)
-    with a0.open("r+b") as f:
-        f.seek(0)
-        f.write(d[:tbl + (cnt + 1) * 16])
-    return (f"{new_name}: TOC entry added at #{pos} (crc {crc:08X}) -> {donor_name}'s blob "
+    buf[ebase + lo * 16:ebase + lo * 16] = struct.pack(">4I", flags, size, crc, f3)
+    del buf[-16:]                          # the slack pays for the insert; 0A's length is unchanged
+    struct.pack_into(">I", buf, 0x10, cnt + 1)
+    AT._write_header(a0, buf)
+    return (f"{new_name}: TOC entry added at #{lo} (crc {crc:08X}) -> {donor_name}'s blob "
             f"(0x{size:X} bytes @ f3 0x{f3:X})")
 
 
@@ -552,6 +552,7 @@ def ensure_team_assets(game_dir, ros_path, akey: str | None = None, donor: str |
         out.append(_ensure_logo_tiles(game_dir, teams, donor, log))
     if dealias_after:
         out.append(dealias(game_dir, ros_path, log))
+    out.append(_fix_logo_internal_keys(game_dir, ros_path, teams, log))
     return "; ".join(p for p in out if p)
 
 
@@ -596,43 +597,125 @@ def _ensure_logo_tiles(game_dir, teams, donor, log) -> str:
     return f"added {done} logo atlas tile(s)" if done else "logo atlas already has every team"
 
 
+def _fix_logo_internal_keys(game_dir, ros_path, teams, log) -> str:
+    """Rename the stale identity hash INSIDE a cloned `logo_<key>.iff` to the team's own key.
+
+    The in-game (rink/HUD) logo is loaded by file name, but the scene then binds its texture
+    section by `crc32(lowercase asset key)` — the hash sits in the IFF's section directory at
+    +0x64 and again as literal bytes near +0x8d inside the 0x0E4837C3-compressed DRAM record.
+    A byte-clone still says the DONOR's key there, so gameplay resolves `logo_sea.iff` fine and
+    then finds no section named "sea": blank logo in gameplay while the front end (which reads
+    the separately-renamed atlas tile) looks perfect. Patch both occurrences in place.
+
+    Only runs on an UNSHARED blob (after `dealias`) — writing through an alias would rename the
+    donor's own logo.
+    """
+    game_dir = Path(game_dir)
+    still_shared = {iff for _team, iff in aliased_members(game_dir, ros_path)}
+    fixed, msgs, touched = 0, [], []
+    for t in teams:
+        k = t["akey"].lower()
+        name = f"logo_{k}.iff"
+        loc = AT.resolve(name, game_dir)
+        if not loc:
+            continue
+        want = struct.pack(">I", zlib.crc32(k.encode()) & 0xFFFFFFFF)
+        arc, off, size = loc[0], loc[1], loc[2]
+        with (game_dir / arc).open("r+b") as f:
+            f.seek(off)
+            blob = f.read(size)
+            have = blob[0x64:0x68]
+            if have == want:
+                continue
+            if name in still_shared:
+                msgs.append(f"{name}: internal key is stale but the blob is still shared — "
+                            "de-alias first, left alone")
+                continue
+            # the stale hash appears exactly twice: the section directory (+0x64) and a literal
+            # copy inside the compressed DRAM record (~+0x8d); anything else means a layout this
+            # code doesn't know, so refuse rather than guess.
+            hits = []
+            i = -1
+            while True:
+                i = blob.find(have, i + 1)
+                if i < 0:
+                    break
+                hits.append(i)
+            if hits != [0x64, 0x8D]:
+                msgs.append(f"{name}: stale key {have.hex()} at unexpected offsets "
+                            f"{[hex(h) for h in hits]} — left alone")
+                continue
+            for h in hits:
+                f.seek(off + h)
+                f.write(want)
+            fixed += 1
+            touched.append(name)
+            msgs.append(f"{name}: internal key {have.hex()} -> {k} ({want.hex()})")
+    if touched:
+        _tree_sync(game_dir, touched)
+    for m in msgs:
+        log("  " + m)
+    return (f"renamed {fixed} in-game logo internal key(s)" if fixed else
+            "every in-game logo already carries its own internal key")
+
+
 def _append_copy(game_dir, data: bytes, toc_idx: int, log) -> str:
-    """Append `data` to the 1B tail and repoint TOC entry `toc_idx` at it.
+    """Append `data` to the LAST archive's tail and repoint TOC entry `toc_idx` at it.
 
     Deliberately NOT `AT._relocate`: that function's auto-reuse shortcut overwrites the asset's
     CURRENT slot whenever the slot is already in the appended region and big enough — which for an
     aliased entry is the donor's slot, so it would write the donor's own bytes back over the donor
     and leave the alias intact. De-aliasing must always take a fresh slot.
+
+    Mirrors `AT._relocate_raw`'s append half: the archive set comes from 0A's header (never an
+    assumed four-archive/1B layout — growing a frozen non-last archive shifts every archive after
+    it), the append goes to the last archive, and a fresh archive is minted when that would cross
+    `AT.SPILL_CEILING`. Only the last archive's declared size ever changes.
     """
     ALIGN = 0x800
     game_dir = Path(game_dir)
-    a0, a1b = game_dir / "0A", game_dir / "1B"
-    AT._backup_once(a0, log); AT._backup_once(a1b, log)
-    cnt = struct.unpack_from(">I", a0.read_bytes()[:0x14], 0x10)[0]
-    d0a = bytearray(a0.open("rb").read(0x58 + cnt * 16))
-    sizes = [struct.unpack_from(">I", d0a, 0x18 + i * 16)[0] * ALIGN for i in range(4)]
-    base1b = sizes[0] + sizes[1] + sizes[2]
+    a0 = game_dir / "0A"
+    AT._backup_once(a0, log)
+    buf, names, sizes, ebase, cnt = AT._read_header(a0)
+    if not (0 <= toc_idx < cnt):
+        raise ValueError(f"TOC index {toc_idx} out of range (count {cnt})")
+    bases, acc = [], 0
+    for s in sizes:
+        bases.append(acc); acc += s
+    eo = ebase + toc_idx * 16
 
-    old = a1b.stat().st_size
-    new_local = (old + ALIGN - 1) & ~(ALIGN - 1)
-    with a1b.open("r+b") as f:
-        if new_local > old:
-            f.seek(old); f.write(b"\x00" * (new_local - old))
+    spill = names[-1]
+    spill_path = game_dir / spill
+    spill_size = spill_path.stat().st_size if spill_path.exists() else 0
+    new_local = (spill_size + ALIGN - 1) & ~(ALIGN - 1)
+    if spill_size and new_local + len(data) > AT.SPILL_CEILING:
+        log(f"  {spill} would pass the {AT.SPILL_CEILING:,} B ceiling — spilling to a new archive")
+        spill = AT._add_archive(game_dir, buf, names, log)
+        names.append(spill); sizes.append(0); bases.append(acc)
+        spill_path = game_dir / spill
+        spill_size = 0
+        new_local = 0
+        ebase += 16                                            # the entry table just moved
+        eo = ebase + toc_idx * 16
+
+    si = len(names) - 1
+    AT._backup_if_shipped(spill_path, log)
+    with open(spill_path, "r+b" if spill_path.exists() else "wb") as f:
+        if new_local > spill_size:
+            f.seek(spill_size); f.write(b"\x00" * (new_local - spill_size))
         f.seek(new_local); f.write(data)
     total = new_local + len(data)
-
-    eo = 0x58 + toc_idx * 16
-    struct.pack_into(">I", d0a, 0x18 + 3 * 16, (total + ALIGN - 1) // ALIGN)   # 1B size bound
-    struct.pack_into(">I", d0a, eo + 4, len(data))                            # size
-    struct.pack_into(">I", d0a, eo + 12, (base1b + new_local) // ALIGN)        # f3
-    with a0.open("r+b") as f:
-        f.seek(0); f.write(d0a)
-    return f"1B:0x{new_local:X} ({len(data)} bytes), TOC#{toc_idx} repointed"
+    struct.pack_into(">I", buf, 0x18 + si * 16, (total + ALIGN - 1) // ALIGN)  # last archive's size
+    struct.pack_into(">I", buf, eo + 4, len(data))                            # size
+    struct.pack_into(">I", buf, eo + 12, (bases[si] + new_local) // ALIGN)    # f3
+    AT._write_header(a0, buf)
+    _tree_sync(game_dir)                 # the entry moved: the tree re-pulls it by sector
+    return f"{spill}:0x{new_local:X} ({len(data)} bytes), TOC#{toc_idx} repointed"
 
 
 def dealias(game_dir, ros_path, log=print) -> str:
-    """Give every shared extra-team asset its own physical copy in the 1B tail, so an edit to an
-    expansion team can never write into the team it was cloned from.
+    """Give every shared extra-team asset its own physical copy in the last archive's tail, so an
+    edit to an expansion team can never write into the team it was cloned from.
 
     Copies the asset's exact bytes and repoints ONLY its own TOC entry — the donor entry is left
     pointing at the original blob, so the donor team is byte-for-byte unaffected. Idempotent: an
@@ -661,3 +744,18 @@ def dealias(game_dir, ros_path, log=print) -> str:
         log(f"  {iff}: own copy at " + _append_copy(game_dir, data, idx, log))
         done += 1
     return f"de-aliased {done} of {len(todo)} shared expansion-team asset(s)"
+
+
+# -- extracted-tree write-through ----------------------------------------------
+# archive_textures wraps its own replace_* entry points so every texture write lands in
+# ROOT/NHL2k10_Extracted as well as the archives. The writes in THIS module go straight to the
+# archive files, so they have to say so themselves or the tree quietly falls behind.
+def _tree_sync(game_dir, names=()):
+    try:
+        try:
+            from . import volume_store as _vs
+        except ImportError:
+            import volume_store as _vs
+        _vs.sync_after_op(game_dir, names)
+    except Exception:
+        pass          # the archives are already correct; a stale tree is not a failure

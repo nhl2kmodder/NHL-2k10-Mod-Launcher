@@ -6,8 +6,12 @@ module renders the kit the way the game assembles it, on the game's own mesh.
 
 Two things make that possible without a GPU:
 
-* **The mesh is the game's.** launcher/data/player_mesh.npz is baked (tools/build_player_mesh.py)
-  from a RenderDoc post-VS capture of a real player draw, so the UVs ARE the shipped UVs.
+* **The mesh is the game's.** player_model.py reads the skater, gloves, helmet and head straight
+  out of global.iff's model tables (the same records the Players tab lists: Skater = 43 parts,
+  23,077 v) in the configured game folder, so the UVs ARE the shipped UVs and the decal channel
+  IS the shipped per-vertex stream. launcher/data/player_mesh.npz -- the same parts, baked from a
+  RenderDoc post-VS capture by tools/build_player_mesh.py -- is only the fallback for when no
+  game folder is set.
 * **Stamps are placed by the game's own shader math, not by a destination rectangle.** See
   `stamp_shader.py`: the jersey pixel shader samples the stamps sheet twice, once by an affine
   function of the base UV (crest and the patch family) and once through a per-vertex decal channel
@@ -95,24 +99,95 @@ def _data_dir() -> Path:
         return Path(__file__).resolve().parent / "data"
 
 
+_mesh_key = None        # player_model.atlas_key() the cached mesh came from ("" = the npz)
+
+
 def available() -> bool:
+    """A figure can be drawn: the game's global.iff is reachable (player_model), or the shipped
+    player_mesh.npz fallback exists."""
+    try:
+        from . import player_model as PM
+        if PM.available():
+            return True
+    except Exception:
+        pass
     return (_data_dir() / MESH_NAME).exists()
 
 
+def _flip(m: dict) -> dict:
+    if FLIP_Z:
+        m["pos"] = m["pos"].copy()
+        m["nrm"] = m["nrm"].copy()
+        m["pos"][:, 2] *= -1.0
+        m["nrm"][:, 2] *= -1.0
+    return m
+
+
 def load_mesh() -> dict | None:
-    global _mesh
-    if _mesh is None:
-        p = _data_dir() / MESH_NAME
-        if not p.exists():
-            return None
-        with np.load(p, allow_pickle=False) as z:
-            _mesh = {k: z[k] for k in z.files}
-        if FLIP_Z:
-            _mesh["pos"] = _mesh["pos"].copy()
-            _mesh["nrm"] = _mesh["nrm"].copy()
-            _mesh["pos"][:, 2] *= -1.0
-            _mesh["nrm"][:, 2] *= -1.0
+    """The player: jersey, pants, socks, skates, gloves, helmet, head -- every part read from
+    the game's own model tables in global.iff (player_model), in one model space, re-read when
+    the archive changes. The shipped player_mesh.npz (a RenderDoc bake of the same parts) is the
+    fallback when no game folder is configured."""
+    global _mesh, _mesh_key
+    key = None
+    try:
+        from . import player_model as PM
+        key = PM.atlas_key()
+    except Exception:
+        key = None
+    if _mesh is not None and _mesh_key == (key or ""):
+        return _mesh
+    got = None
+    if key:
+        try:
+            got = PM.preview_mesh()
+        except Exception:
+            got = None
+    if got:
+        got["cam_dist"] = np.float32(PM.GAME_CAM_DIST)
+        _mesh, _mesh_key = _flip(got), key
+        return _mesh
+    p = _data_dir() / MESH_NAME
+    if not p.exists():
+        return None
+    with np.load(p, allow_pickle=False) as z:
+        _mesh = _flip({k: z[k] for k in z.files})
+    _mesh_key = ""
     return _mesh
+
+
+def _wear_collar(m: dict, style) -> dict:
+    """Keep one collar. The global.iff figure carries all five (parts "collar_r16".."collar_r20",
+    player_model.COLLAR_RECS); the triangles of the other four are dropped so the shirt shows
+    the collar the uniform's ROS style names. The npz fallback has a single "collar_<draw>"
+    part and is returned untouched. Also tells stamp_shader which collar's shield quad to use."""
+    names = [str(x) for x in m["names"]]
+    try:
+        from . import player_model as PM
+        recs = PM.COLLAR_RECS
+        default = PM.COLLAR_DEFAULT
+    except Exception:
+        recs, default = {2: 18}, 2
+    st = default if style is None else int(style)
+    if st not in recs:
+        st = default
+    want = f"collar_r{recs[st]}"
+    drop = [pid for pid, nm in enumerate(names)
+            if nm.startswith("collar_r") and nm != want and nm[8:].isdigit()]
+    SS.select_collar(st if any(nm.startswith("collar_r") for nm in names) else None)
+    if not drop:
+        return m
+    keep = ~np.isin(m["part"], np.array(drop, np.int32))
+    m = dict(m)
+    for k in ("tri", "sheet", "part"):
+        m[k] = m[k][keep]
+    return m
+
+
+def mesh_source() -> str:
+    """'game' when the figure came off global.iff, 'npz' for the shipped bake, '' for none."""
+    load_mesh()
+    return "game" if _mesh_key else ("npz" if _mesh else "")
 
 
 def placement() -> dict:
@@ -354,41 +429,112 @@ def program(stamps: Image.Image, letter: str | None = None,
             tinted[k] = _key_recolour(sheet, *trip)
         return tinted[k]
 
-    logo = [(site["piece"], src_for(nm, site), site)
-            for nm, site in cfg.get("logo_sites", {}).items()]
+    # The kit's own slot table (uniform DRAM 0x550) and its ROS stamp flags, when the caller has
+    # them. With a table every site samples the cell the GAME would -- the crest's affine is
+    # re-derived from entry 0, the patches read their entries, the digits their ink rects -- and
+    # the flags gate what the game gates: front style, the two sleeves, the patch pickers.
+    table = (metrics or {}).get("rects")
+    flags = (metrics or {}).get("flags") or {}
+    picks = flags.get("picks") or {}
 
-    # A slot holds exactly one glyph, so a two-digit number fills two slots. `single_digit`
-    # decides which slot a one-digit number takes -- it cannot be centred between them.
+    def entry_cell(site: dict, default_cell=None):
+        """The (x0,y0,x1,y1) this site samples: its picked/fixed table entry, else its static cell.
+        Returns False when the kit says nothing is drawn here (picker = none, empty entry)."""
+        if table is None:
+            return default_cell
+        ent = site.get("entry")
+        if site.get("pick"):
+            if site["pick"] in picks:
+                ent = picks[site["pick"]]
+                if ent is None:
+                    return False
+        if ent is None:
+            return default_cell
+        r = SS.entry_rect(metrics, ent)
+        return r if r is not None else False
+
+    # Logos: the crest and the two shoulder patches. With the kit's table AND its uniform_base
+    # material parameters (metrics["logo"]) each site is the game's own affine composed with the
+    # cell its entry/picker names; with a table but no parameters the crest keeps its measured
+    # site (re-celled) and the shoulders take the material defaults; with no table at all only
+    # the crest's static measured site can draw.
+    logo = []
+    lp = (metrics or {}).get("logo") or {}
+    for nm, site in cfg.get("logo_sites", {}).items():
+        drawn = site
+        kind = site.get("affine")
+        if table is not None:
+            r = entry_cell(site)
+            if not r:
+                continue
+            if kind in SS.LOGO_KINDS and (kind in lp or kind != "front"):
+                drawn = SS.logo_site(site, kind, lp.get(kind) or SS.LOGO_DEFAULTS[kind], r,
+                                     (sw, sh))
+            else:
+                drawn = SS.crest_site(r, site, (sw, sh))
+            if drawn is None:
+                continue
+        elif "ku" not in site:
+            continue
+        logo.append((site["piece"], src_for(nm, site), drawn))
+
+    # A slot holds exactly one glyph, so a two-digit number fills two slots. A ONE-digit number
+    # is what the game does with it: the same digit in both slots, shifted half an advance each
+    # way so it is centred on the seam (needs the kit table -- without one, `single_digit` picks
+    # which slot goes empty).
     digits = [int(c) for c in str(number or "") if c.isdigit()][:2]
     decal = []
     for nm, site in cfg.get("decal_sites", {}).items():
         if site.get("sheet", "stamps") != "stamps":     # the helmet has its own sheet and UV space
             continue
+        if site.get("gate") and flags.get(site["gate"]) is False:
+            continue                                     # the ROS flag says this site is off
         slots = list(site["slots"])
         role = site.get("role")
         glyphs: list[int] = []
+        f1s: list[float] = []
         if role in ("number", "sleeve_number"):
             if not digits:
                 continue
             if nm.startswith("front_number_") and nm != "front_number_" + (front_style or ""):
                 continue
-            cells = [_digit_cell(d) for d in digits]
-            glyphs = list(digits)
-            if len(cells) < len(slots):
-                slots = slots[-len(cells):] if cfg.get("single_digit") == "right" \
-                    else slots[:len(cells)]
+            if len(digits) == 1 and metrics and cfg.get("single_digit", "centre") == "centre":
+                glyphs = [digits[0], digits[0]]
+                f1s = [-0.5, 0.5]
+            else:
+                glyphs = list(digits)
+                f1s = [0.0] * len(glyphs)
+                if len(glyphs) < len(slots):
+                    slots = slots[-len(glyphs):] if cfg.get("single_digit") == "right" \
+                        else slots[:len(glyphs)]
+            cells = [_digit_cell(d) for d in glyphs]
         elif role == "letter":
-            d = pl["decals"].get("letter")
-            if not letter or not d or "src_cell" not in d:
+            if not letter:
                 continue
-            x0, y0, x1, y1 = d["src_cell"]
-            if letter.upper() == "C":      # the 'C' cell is the neighbouring 128px column
-                x0, x1 = x1, x1 + (x1 - x0)
-            cells = [(x0, y0, x1, y1)]
-        elif "cell" in site:
-            # A logo drawn through the decal path -- the NHL shield, the manufacturer wordmark.
-            # Every slot listed pulls the SAME cell; mirroring lives in the mesh's decal UVs.
-            cells = [tuple(site["cell"])] * len(slots)
+            ent = (site.get("entry") or {}).get(letter.upper()) if isinstance(
+                site.get("entry"), dict) else None
+            cell = None
+            if table is not None and ent is not None:
+                cell = SS.entry_rect(metrics, ent)
+                if cell is None:
+                    continue
+            if cell is None:
+                d = pl["decals"].get("letter")
+                if not d or "src_cell" not in d:
+                    continue
+                x0, y0, x1, y1 = d["src_cell"]
+                if letter.upper() == "C":      # the 'C' cell is the neighbouring 128px column
+                    x0, x1 = x1, x1 + (x1 - x0)
+                cell = (x0, y0, x1, y1)
+            cells = [cell]
+        elif "cell" in site or site.get("entry") is not None or site.get("pick"):
+            # A logo drawn through the decal path -- the NHL shield, the manufacturer wordmark,
+            # the pants patch. Every slot listed pulls the SAME cell; mirroring lives in the
+            # mesh's decal UVs. The kit table (and the ROS picker) decide the cell when present.
+            cell = entry_cell(site, tuple(site["cell"]) if "cell" in site else None)
+            if not cell:
+                continue
+            cells = [tuple(cell)] * len(slots)
         else:                              # a logo in a decal slot, with no known source cell
             continue
 
@@ -398,8 +544,12 @@ def program(stamps: Image.Image, letter: str | None = None,
         # The kit's own table wins over the site's captured advance whenever we could read it.
         use_kit = bool(metrics) and site.get("glyph") == "digit" and len(glyphs) == len(cells)
         for i, (slot_id, cell) in enumerate(zip(slots, cells)):
-            sm = (SS.digit_constants(metrics, glyphs[i], (sw, sh)) if use_kit
-                  else SS.glyph_constants(src, cell, adv, fit))
+            if use_kit:
+                sm = SS.digit_constants(metrics, glyphs[i], (sw, sh), f1s[i])
+            elif table is not None and site.get("glyph") != "digit":
+                sm = SS.cell_constants(cell, (sw, sh))       # exactly Stamp_SetCellParams
+            else:
+                sm = SS.glyph_constants(src, cell, adv, fit)
             if sm:
                 decal.append((site["piece"], src, slot_id, sm[0], sm[1]))
     return {"logo": logo, "decal": decal}
@@ -747,7 +897,8 @@ def fragment_stamps(colour: dict, normal: dict | None, material: int):
 def build_scene(sheets: dict, letter: str | None = None, colors=None,
                 name: str | None = None, number: str | None = None,
                 front_style: str = "small", palette=None,
-                normals: bool = True, metrics: dict | None = None) -> dict | None:
+                normals: bool = True, metrics: dict | None = None,
+                collar: int | None = None) -> dict | None:
     """Scene for arena_preview.raster/shade from the editor's sheets.
 
     `sheets` is the tab's working set: 'base', 'stamps', 'letters', 'helmet'. Anything missing
@@ -767,10 +918,18 @@ def build_scene(sheets: dict, letter: str | None = None, colors=None,
     `normals` lights the kit's normal maps into the body texture when the working set carries them
     ('base_normal', 'normal', 'letters_normal'). They go through the SAME placement machinery as
     the colour, so a crest's stitching lands on the crest -- see `relief`.
+
+    `collar` is the uniform's ROS collar style (uniform_colors.collar_style, 0..4): which of the
+    skater's five collar meshes the figure wears -- 1 is the laced one. None keeps the collar the
+    preview always showed (style 2). Falls back to `metrics["flags"]["collar"]` when the caller
+    passed the kit's flags through the metrics.
     """
     m = load_mesh()
     if m is None:
         return None
+    if collar is None:
+        collar = ((metrics or {}).get("flags") or {}).get("collar")
+    m = _wear_collar(m, collar)
     base, stamps = sheets.get("base"), sheets.get("stamps")
     tex = {}
     frag = None
@@ -865,9 +1024,10 @@ def build_scene(sheets: dict, letter: str | None = None, colors=None,
     # decals, so it has to win.
     #
     # Skin and mesh are the same unwrap by construction, not by resemblance: the `helmet` piece of
-    # decal_atlas.npz is baked from draw 1324 of jersey_model_capture, and player_mesh.npz's
-    # helmet_shell was exported from that same draw. Their UV coverage is the identical set --
-    # IoU 1.000 once the OBJ's V flip is undone -- so there is no fitting step here.
+    # the decal atlas is rasterised from the very record (global.iff helmet table, rec 57) the
+    # helmet_shell part is read from -- and the npz fallback pair were both exported from draw
+    # 1324 of the same capture. Either way the UV coverage is the identical set, so there is no
+    # fitting step here.
     #
     # It also lands where the game puts it. Logo slot 3 sits at x[+2.5,+7.0] and slot 4 at
     # x[-8.9,-1.9] on a shell spanning x[-10.5,+10.4]: a mirrored pair high on each side, each
@@ -900,7 +1060,8 @@ def build_scene(sheets: dict, letter: str | None = None, colors=None,
     return dict(pos=m["pos"].astype(np.float32), uv=uv, vcol=vcol,
                 tri=m["tri"].astype(np.int32), mat=mat, part=part,
                 tex=tex, pbox=pbox, ref=[], flat_mask=flat, names=names,
-                fragment_pass=frag)
+                fragment_pass=frag,
+                cam_dist=float(m["cam_dist"]) if "cam_dist" in m else None)
 
 
 def render(scene, W=520, H=680, yaw=0.0, pitch=0.0, zoom=1.0, pan=(0.0, 0.0), ss=2,
@@ -912,10 +1073,12 @@ def render(scene, W=520, H=680, yaw=0.0, pitch=0.0, zoom=1.0, pan=(0.0, 0.0), ss
     pos = scene["pos"]
     ctr = (pos.min(0) + pos.max(0)) / 2.0
     span = float(np.abs(pos - ctr).max()) * 2.25
-    # `player_mesh.npz` is in the capture's CAMERA space, so the eye sits at the origin and the
-    # distance to the figure is simply -ctr.z. Handing that to the rasterizer gives the preview
-    # the game's real perspective instead of an orthographic one -- the near arm and the near
-    # half of the torso diverge from the far side by the same amount they do on screen.
+    # Perspective at the game's own camera distance, so the near arm and the near half of the
+    # torso diverge from the far side by the same amount they do on screen. The global.iff
+    # figure is in MODEL space (feet-to-helmet about the origin) and carries the distance the
+    # game's uniform camera stands at (player_model.GAME_CAM_DIST); the npz fallback is in the
+    # capture's EYE space, where the eye is the origin and the distance is simply -ctr.z.
+    cam = scene.get("cam_dist") or abs(float(ctr[2])) or None
     g = AP.raster(scene, W, H, yaw=yaw, pitch=pitch, zoom=zoom, pan=pan, ss=ss,
-                  ctr=ctr, span=span, pixel_depth=True, cam_dist=abs(float(ctr[2])) or None)
+                  ctr=ctr, span=span, pixel_depth=True, cam_dist=cam)
     return AP.shade(scene, g, exposure=exposure)
