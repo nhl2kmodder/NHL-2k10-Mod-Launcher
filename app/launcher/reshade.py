@@ -226,6 +226,16 @@ def install(xenia_path: str | Path | None) -> tuple[bool, str]:
     except OSError as e:
         return False, f"Install failed: {e}"
 
+    # ReShade.ini was just rewritten from the template above, which knows nothing
+    # about add-ons. Anything installed into it has to be put back or it is silently
+    # lost on every refresh — currently that is the DLSS add-on's two settings.
+    try:
+        from . import dlss
+        if dlss.is_installed(d):
+            dlss.apply_ini(d)
+    except Exception:
+        pass
+
     _, msg = ensure_backend(d)
     return True, ("ReShade installed. " + msg +
                   "\n\nPress HOME in-game to open the overlay. The first launch "

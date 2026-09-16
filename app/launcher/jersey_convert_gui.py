@@ -1,11 +1,11 @@
-"""jersey_convert_gui.py — the Jersey Editor tab: edit a 2K10 kit, optionally from NHL 23 art.
+"""jersey_convert_gui.py — the Jersey Editor tab: edit a 2K10 kit, optionally from NHL 26 art.
 
 All of the image work is in `jersey_convert` (pure, no UI, CLI-testable). This module is the
 tab around it: pick a kit, look at the four sheets it currently wears, change what you want to
 change, and write it back.
 
 Picking a kit LOADS IT. That is the default mode and it is deliberate: the tab is a jersey
-editor first and an NHL 23 converter second, so "VAN home" means whatever VAN home is in the
+editor first and an NHL 26 converter second, so "VAN home" means whatever VAN home is in the
 game files right now, mods included. Conversion is an optional source of new art — until you
 press Convert, every sheet you see is the kit's own and every edit lands on top of it
 (`build_stamps(..., canvas=...)`, which edits a sheet instead of composing one).
@@ -140,7 +140,7 @@ class SheetView:
         if self.img is None:
             c.create_text(20, 20, anchor="nw", fill="#888",
                           text="No sheet loaded — pick a team and kit above to load what it wears "
-                               "in game right now. Convert is only needed for NHL 23 source art.")
+                               "in game right now. Convert is only needed for NHL 26 source art.")
             return
         cw, ch = max(c.winfo_width(), 1), max(c.winfo_height(), 1)
         iw, ih = self.img.size
@@ -343,6 +343,8 @@ class JerseyConvertTab:
         # merges them in itself when it composes a sheet from scratch.)
         self.art: dict = {}
         self.helmet_logo: dict = {}
+        # role -> Path for every mark the loaded kit folder shipped, placed or not.
+        self._decal_choices: dict = {}
         # True while the previews are the KIT's own sheets rather than a conversion's output.
         # Everything downstream keys off this: edits are composited onto the kit, and Apply only
         # writes the sheets that were actually touched.
@@ -356,7 +358,7 @@ class JerseyConvertTab:
         head = ttk.Frame(root, padding=(12, 10, 12, 4))
         head.pack(fill=X)
         ttk.Label(head, text="Uniform Editor", font=("Segoe UI", 13, "bold")).pack(side=LEFT)
-        ttk.Label(head, text="   edit a uniform — or convert one in from NHL 23",
+        ttk.Label(head, text="   edit a uniform — or convert one in from NHL 26",
                   foreground="#888").pack(side=LEFT)
         self.v_status = StringVar(value="")
         ttk.Label(head, textvariable=self.v_status, foreground="#4ec9b0").pack(side=RIGHT)
@@ -622,7 +624,7 @@ class JerseyConvertTab:
                 ("logo_scale", "patch width ×", "how wide a crest's or number's sewn edge runs"),
                 ("logo_h", "patch depth ×", "how far a crest or number stands off the cloth"),
                 ("stitch_h", "edge stitch ×", "the zig-zag sewn round a crest or number. 1 = as "
-                                              "measured off NHL 23's own font normal"),
+                                              "measured off the source kit's own font normal"),
                 ("strength", "overall relief ×", "scales everything at once. 1 = exactly as deep "
                                                  "as the reference art"),
                 ("pre_blur", "art smoothing px", "smooths the colour art before edges are found, "
@@ -698,7 +700,7 @@ class JerseyConvertTab:
         self.v_ns_status.set("stitching…")
         self.root.update_idletasks()
         try:
-            # NHL 23's own font normal, where the source folder shipped one, outranks the
+            # The source kit's own font normal, where the folder shipped one, outranks the
             # synthetic stitch for the glyph sheets -- see jersey_convert.build_font_normal.
             out = NS.stitch_kit(self.stock, self.res.sheets, self._ns_params(),
                                 base_mode=self._ns_base_mode(), sheets=have,
@@ -1696,13 +1698,30 @@ class JerseyConvertTab:
         self.cv_model.create_image(0, 0, anchor="nw", image=self._model_photo)
 
     # ── sources / target ─────────────────────────────────────────────────────────────────
+    # An NHL 26 decal role -> the 2K10 stamp slot it belongs in. Only the confident ones are
+    # placed: `crest` is slot 0 in the dump and the crest cell here, the two leftover team
+    # patches are the shoulders, the shield is the league patch, and the supplier mark (Fanatics
+    # on the ten/eleven kits, adidas on home/away) is the jersey sponsor. Everything else --
+    # `end_plastic_waste`, a third patch, an anniversary mark -- is real art with no obvious home,
+    # so it is OFFERED in every slot's dropdown instead of being guessed into one.
+    DECAL_SLOTS = (("crest", "crest"),
+                   ("patch0", "shoulder_patch"),
+                   ("patch1", "shoulder_right"),
+                   ("nhl_shield", "league_patch"),
+                   ("fanatics_mark", "jersey_sponsor"),
+                   ("adidas_mark", "jersey_sponsor"))
+
     def pick_folder(self):
-        d = filedialog.askdirectory(title="Folder holding the NHL 23 jersey textures")
+        d = filedialog.askdirectory(title="Folder holding the NHL 26 jersey textures")
         if not d:
             return
         self.v_folder.set(d)
-        found = J.find_sources(d)
-        # `helmet_logo` is a decal, not a garment sheet: an NHL 23 kit folder ships
+        try:
+            found, decals = J.find_all(d)
+        except Exception as e:
+            self.v_status.set(f"could not read {Path(d).name}: {e}")
+            return
+        # `helmet_logo` is a decal, not a garment sheet: a kit folder ships
         # helmetlogo_adidas_<team>_<kit>_0_color next to the garments, and it belongs in the
         # helmet-logo art slot rather than in the conversion's source set.
         helm = found.pop("helmet_logo", None)
@@ -1710,18 +1729,42 @@ class JerseyConvertTab:
         for k, _ in J.SOURCE_KINDS:
             self.v_src[k].set(found[k].name if k in found else "—")
         if helm is not None:
-            cb = self.cb_art.get("helmet_logo")
-            if cb is not None:
-                cb["values"] = list(cb["values"]) + [str(helm)]
-            self.v_art_file["helmet_logo"].set(str(helm))
+            decals = {**decals, "helmet_logo": helm}
+
+        # Every mark in the folder goes into every art slot's dropdown, so a patch this mapping
+        # did not place is still one click away. Filed under its role name rather than its path
+        # because the dump's filenames say nothing (`..._3_normal.dds` is the NHL shield).
+        self._decal_choices = {r: p for r, p in decals.items()}
+        for name, cb in self.cb_art.items():
+            keep = [v for v in cb["values"] if not str(v).startswith("[")]
+            cb["values"] = keep + [f"[{r}] {p}" for r, p in sorted(self._decal_choices.items())]
+
+        placed = []
+        for role, slot in self.DECAL_SLOTS:
+            p = decals.get(role)
+            if p is None or slot not in self.v_art_file:
+                continue
+            # First role wins the slot: Fanatics and adidas both target `jersey_sponsor`, and no
+            # kit carries both, but if one ever did the supplier listed first is the right one.
+            if slot in placed:
+                continue
+            self.v_art_file[slot].set(f"[{role}] {p}")
+            self._art_changed(slot)
+            placed.append(slot)
+        if helm is not None and "helmet_logo" in self.v_art_file:
+            self.v_art_file["helmet_logo"].set(f"[helmet_logo] {helm}")
             self._art_changed("helmet_logo")
+            placed.append("helmet_logo")
+
         miss = [KIND_LABEL[k] for k, _ in J.SOURCE_KINDS if k not in found]
-        self.v_status.set(f"{len(found)} source(s) found"
-                          + (f" + helmet logo {helm.name}" if helm is not None else "")
-                          + (f" — missing {', '.join(miss)}" if miss else ""))
+        extra = len(self._decal_choices) - len(placed)
+        self.v_status.set(
+            f"{len(found)} source(s), {len(placed)} mark(s) placed"
+            + (f", {extra} more offered" if extra > 0 else "")
+            + (f" — missing {', '.join(miss)}" if miss else ""))
 
     def pick_source(self, kind):
-        p = filedialog.askopenfilename(title=f"NHL 23 {KIND_LABEL[kind]}",
+        p = filedialog.askopenfilename(title=f"NHL 26 {KIND_LABEL[kind]}",
                                        filetypes=[("Textures", "*.dds *.png *.tga"),
                                                   ("All files", "*.*")])
         if not p:
@@ -1999,8 +2042,7 @@ class JerseyConvertTab:
         self.views["stamps"].set_boxes(self.rects, self.enabled, self._sel())
 
     def _art_changed(self, name):
-        f = self.v_art_file[name].get()
-        spec = {"file": "" if f.startswith("(") else f,
+        spec = {"file": _art_path(self.v_art_file[name].get()),
                 "tint": self.v_art_tint[name].get() or None}
         if name == "helmet_logo":
             self.helmet_logo = spec
@@ -2042,7 +2084,7 @@ class JerseyConvertTab:
         if self.busy:
             return
         if not self.sources:
-            messagebox.showwarning("Jersey Conversion", "Pick the NHL 23 source textures first.")
+            messagebox.showwarning("Jersey Conversion", "Pick the NHL 26 source textures first.")
             return
         self.busy = True
         self.v_status.set("converting…")
@@ -2129,7 +2171,7 @@ class JerseyConvertTab:
         self._stamps_job = self.root.after(delay, self._do_rebuild_stamps)
 
     def _refresh_font_normal(self, sheet, o):
-        """Re-place NHL 23's own font normal after a slot moved or resized.
+        """Re-place the source kit's own font normal after a slot moved or resized.
 
         The overlay is registered to the colour by construction, but only for the rects it was
         built with -- drag a number's box or pull its size slider and a stale overlay would leave
@@ -2411,6 +2453,22 @@ class JerseyConvertTab:
                 continue
             out.append({**recs[idx], "path": str(paths[key])})
         return out, len(recs)
+
+
+def _art_path(choice: str) -> str:
+    """The combobox entry for an art slot -> the file it means, or "" for "leave it alone".
+
+    Marks imported from a kit folder are listed as `[role] <path>`, because the dump's own
+    filenames identify nothing -- the NHL shield arrives as `..._3_normal.dds`. The label is
+    display only; strip it back off before anyone tries to open the file.
+    """
+    choice = (choice or "").strip()
+    if not choice or choice.startswith("("):
+        return ""
+    if choice.startswith("["):
+        _, _, rest = choice.partition("] ")
+        return rest.strip()
+    return choice
 
 
 def _pretty(name: str) -> str:

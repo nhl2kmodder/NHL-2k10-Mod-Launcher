@@ -1731,14 +1731,70 @@ def revert_heads(head_ids, game_dir, log=print):
     return n
 
 
-# ── custom collars (skater collar meshes r16 / r17 inside global.iff) ─────────────────────────
+# ── custom collars (collar meshes: six rigs x five styles, across two archives) ────────
 COLLARS_KEY = "collars"
-COLLARS_LABEL = "Custom collars — skater collar meshes (Collar strings ON = laced, OFF = plain V)"
+COLLARS_LABEL = "Custom collars — collar meshes (Collar strings ON = laced, OFF = plain V)"
 # The ROS uniform record's collar style (+0x18 bits 24-26, the editor's "Collar strings" box) picks
-# the collar submesh: style 0 -> rec 16, style 1 -> rec 17. Those two are what the custom collars
-# replace; recs 18-20 stay stock.
-COLLAR_RECS = (16, 17)
-COLLAR_STYLE = {16: "plain V (Collar strings off)", 17: "laced (Collar strings on)"}
+# the collar submesh out of the five each rig carries side by side: style n is rec REC0+n. All five
+# are replaced on every rig: style 1 gets the laced shape, the other four get the plain V. 0 and 1
+# are the styles the box exposes, but 2/3/4 are worn by 40 of the 407 roster uniform rows, so
+# leaving them stock left the old collar on those uniforms.
+#
+# The five rigs are not five characters. global.iff carries the SAME skater four times: the
+# gameplay body (0x1323AF4, head/helmet/gloves streamed separately) and three self-contained
+# copies that pack those inline at falling vertex budgets -- 0x11F8040 (12,522 v) and the
+# byte-identical low twins 0xF0AC60 / 0x12AC510 (7,081 v each). Those copies are what the bench,
+# distant and MENU players draw, which is why replacing the gameplay body alone left the old
+# collar on the front-end jersey-select screen. Every copy has its own five-collar set, and the
+# copies' slots are much smaller than the body's (103..268 v against 141..372), so the ring is
+# coarsened per slot on the way in -- replace_part can shrink a record but never grow it.
+# The jersey-select screen does NOT draw any of those copies -- that was a wrong guess that cost
+# two install rounds. Its jersey is a standalone garment mesh in frontend_sync.iff (0x171FC0), the
+# only 3D mesh in that archive, with its own five collar styles as parts 6-10. They map one-for-one
+# onto skater recs 16-20 (radial-profile chi-square 0.075/0.002/0.042/0.066/0.042, diagonal minimal
+# in every row) and sit in the same coordinate space, so the same build feeds them. Because it is a
+# different ARCHIVE, collar rigs are grouped by asset below and each archive is re-encoded once.
+COLLAR_RIGS = ("skater", "goalie", "skater2", "skater3", "skater4", "frontend")
+COLLAR_RECS = {"skater": (16, 17, 18, 19, 20), "goalie": (6, 7, 8, 9, 10),
+               "skater2": (7, 8, 9, 10, 11), "skater3": (19, 20, 21, 22, 23),
+               "skater4": (19, 20, 21, 22, 23), "frontend": (6, 7, 8, 9, 10)}
+
+
+def _collar_asset(rig):
+    """Which archive holds this rig. Old packs carry no per-rig asset and are all global.iff."""
+    return _collar_mods().rig_asset(rig)
+
+
+def _by_asset(entries):
+    """Pack entries grouped by the archive they touch, so each is read/re-encoded once."""
+    out = {}
+    for e in entries:
+        out.setdefault(e.get("asset") or _collar_asset(e.get("rig", "skater")), []).append(e)
+    return out
+COLLAR_STYLE = {"skater": {16: "skater plain V (Collar strings off)",
+                           17: "skater laced (Collar strings on)",
+                           18: "skater plain V (style 2)",
+                           19: "skater plain V (style 3)",
+                           20: "skater plain V (style 4)"},
+                "goalie": {6: "goalie plain V (Collar strings off)",
+                           7: "goalie laced (Collar strings on)",
+                           8: "goalie plain V (style 2)",
+                           9: "goalie plain V (style 3)",
+                           10: "goalie plain V (style 4)"},
+                "skater2": {r: "skater copy 1 " + ("laced (Collar strings on)" if r == 8
+                            else "plain V" + (" (Collar strings off)" if r == 7
+                                             else " (style %d)" % (r - 7))) for r in range(7, 12)},
+                "skater3": {r: "skater copy 2 " + ("laced (Collar strings on)" if r == 20
+                            else "plain V" + (" (Collar strings off)" if r == 19
+                                             else " (style %d)" % (r - 19))) for r in range(19, 24)},
+                "skater4": {r: "skater copy 3 " + ("laced (Collar strings on)" if r == 20
+                            else "plain V" + (" (Collar strings off)" if r == 19
+                                             else " (style %d)" % (r - 19))) for r in range(19, 24)},
+                "frontend": {6: "front-end jersey plain V (Collar strings off)",
+                             7: "front-end jersey laced (Collar strings on)",
+                             8: "front-end jersey plain V (style 2)",
+                             9: "front-end jersey plain V (style 3)",
+                             10: "front-end jersey plain V (style 4)"}}
 
 
 def _collar_mods():
@@ -1749,10 +1805,27 @@ def _collar_mods():
     return C
 
 
-def _skater(C, b):
-    m = C.rig_model(C.scan_models(b), "skater")
+def _collar_entries(c):
+    """The pack's per-rig collar bodies. Packs written before the goalie collar existed carry the
+    skater's fields flat at the top level with no "rigs" list, so they read as a single entry."""
+    if not c:
+        return []
+    if "rigs" in c:
+        return c["rigs"]
+    e = dict(c)
+    e.setdefault("rig", "skater")
+    return [e]
+
+
+def _collar_part_count(c):
+    return sum(len(e.get("parts", {})) for e in _collar_entries(c))
+
+
+def _rig_model(C, b, rig):
+    asset = C.rig_asset(rig)
+    m = C.rig_model(C.scan_models(b, asset=asset), rig)
     if m is None:
-        raise ValueError("global.iff: skater model not found in blob 0")
+        raise ValueError(f"{asset}: {rig} model not found in blob 0")
     return m
 
 
@@ -1761,7 +1834,9 @@ def _part_rows(b, m, part):
 
     Raw rather than decoded: the rows carry the skin weights / bone slots replace_part inherited
     by nearest, which an OBJ-shaped payload would have to re-derive on the other side. The model
-    is the same on every install (one global.iff), so the rows are portable as they are."""
+    is the same on every install (one global.iff), so the rows are portable as they are. On the
+    goalie the two streams are one interleaved stride-40 stream (pos_off == att_off), so pos and
+    att come back as the same bytes twice — harmless, and it keeps one code path for both rigs."""
     import numpy as np
     lo, n = part["first_vtx"], part["n_vtx"]
     pos = bytes(b[m["pos_off"] + lo * m["pos_stride"]:m["pos_off"] + (lo + n) * m["pos_stride"]])
@@ -1773,13 +1848,12 @@ def _part_rows(b, m, part):
     return pos, att, idx
 
 
-def _collar_state(game_dir, current=True):
+def _collar_state(b, rig):
     C = _collar_mods()
-    b = C.blob(current, game_dir)
-    m = _skater(C, b)
+    m = _rig_model(C, b, rig)
     parts = {p["rec"]: p for p in C.submeshes(b, m)}
-    st = {"b": b, "m": m, "parts": {}}
-    for rec in COLLAR_RECS:
+    st = {"b": b, "m": m, "rig": rig, "parts": {}}
+    for rec in COLLAR_RECS[rig]:
         p = parts.get(rec)
         if p is not None:
             st["parts"][rec] = (p, _part_rows(b, m, p))
@@ -1814,36 +1888,71 @@ def _extra_rows(live, prist):
 
 
 def load_collars(game_dir, log=print):
-    """The custom collar parts as they sit in the live global.iff, or {} when both are stock."""
-    live = _collar_state(game_dir, True)
-    try:
-        prist = _collar_state(game_dir, False)
-    except Exception as e:
-        prist = None
-        log(f"  collars: pristine global.iff not readable ({e}) — shipping both collar parts")
+    """The custom collar parts of every rig as they sit in the live game files, or {} when they
+    are all stock. Each archive's two blobs are read once and every rig in it captured out of them
+    (the front-end garment is in frontend_sync.iff, the player rigs in global.iff)."""
     import numpy as np
-    m = live["m"]
-    parts = {}
-    for rec, (p, (pos, att, idx)) in live["parts"].items():
-        if prist is not None and rec in prist["parts"]:
-            _p0, (pos0, att0, idx0) = prist["parts"][rec]
-            if pos == pos0 and att == att0 and np.array_equal(idx, idx0):
-                continue                                    # stock collar — nothing to ship
-        parts[str(rec)] = {"style": COLLAR_STYLE.get(rec, ""), "n_vtx": p["n_vtx"],
-                           "n_idx": p["n_idx"], "pos": pos.hex(), "att": att.hex(),
-                           "idx": [int(v) for v in idx]}
-    if not parts:
+    C = _collar_mods()
+    cache = {}
+
+    def blobs(asset):
+        if asset not in cache:
+            b = C.blob(True, game_dir, asset=asset)
+            try:
+                b0 = C.blob(False, game_dir, asset=asset)
+            except Exception as e:
+                b0 = None
+                log(f"  collars: pristine {asset} not readable ({e}) — shipping every collar part")
+            cache[asset] = (b, b0)
+        return cache[asset]
+
+    rigs = []
+    for rig in COLLAR_RIGS:
+        asset = _collar_asset(rig)
+        try:
+            b, b0 = blobs(asset)
+        except Exception as e:
+            log(f"  collars: {asset} not readable ({e}) — {rig} skipped")
+            continue
+        try:
+            live = _collar_state(b, rig)
+        except ValueError as e:
+            log(f"  collars: {e} — rig skipped")
+            continue
+        try:
+            prist = _collar_state(b0, rig) if b0 is not None else None
+        except ValueError:
+            prist = None
+        parts = {}
+        for rec, (p, (pos, att, idx)) in live["parts"].items():
+            if prist is not None and rec in prist["parts"]:
+                _p0, (pos0, att0, idx0) = prist["parts"][rec]
+                if pos == pos0 and att == att0 and np.array_equal(idx, idx0):
+                    continue                                # stock collar — nothing to ship
+            parts[str(rec)] = {"style": COLLAR_STYLE[rig].get(rec, ""), "n_vtx": p["n_vtx"],
+                               "n_idx": p["n_idx"], "pos": pos.hex(), "att": att.hex(),
+                               "idx": [int(v) for v in idx]}
+        if not parts:
+            continue
+        m = live["m"]
+        rigs.append({"rig": rig, "asset": asset, "nvtx": m["nvtx"],
+                     "pos_stride": m["pos_stride"],
+                     "att_stride": m["att_stride"], "parts": parts,
+                     "extra": _extra_rows(live, prist) if prist is not None else {}})
+    if not rigs:
         return {}
-    extra = _extra_rows(live, prist) if prist is not None else {}
-    body = {"asset": "global.iff", "rig": "skater", "nvtx": m["nvtx"],
-            "pos_stride": m["pos_stride"], "att_stride": m["att_stride"],
-            "parts": parts, "extra": extra}
-    body["sha"] = _sha(json.dumps({"parts": parts, "extra": extra}, sort_keys=True).encode())
+    body = {"asset": "global.iff", "rigs": rigs}      # top-level asset kept for older readers
+    body["sha"] = _sha(json.dumps([{"rig": e["rig"], "asset": e["asset"], "parts": e["parts"],
+                                    "extra": e["extra"]} for e in rigs], sort_keys=True).encode())
     return body
 
 
 def _collars_label(c):
-    styles = [COLLAR_STYLE.get(int(r), f"rec {r}") for r in sorted(c.get("parts", {}), key=int)]
+    styles = []
+    for e in _collar_entries(c):
+        rig = e.get("rig", "skater")
+        for r in sorted(e.get("parts", {}), key=int):
+            styles.append(COLLAR_STYLE.get(rig, {}).get(int(r), f"{rig} rec {r}"))
     return "Custom collars — " + ", ".join(styles) if styles else COLLARS_LABEL
 
 
@@ -1857,24 +1966,36 @@ def collars_export_item(game_dir, log=print):
 
 
 def _collars_same(in_c, game_dir):
-    """Does the recipient's global.iff already carry exactly these rows?"""
-    live = _collar_state(game_dir, True)
-    for rec_s, e in in_c.get("parts", {}).items():
-        got = live["parts"].get(int(rec_s))
-        if got is None:
+    """Does the recipient's game already carry exactly these rows, on every rig?"""
+    C = _collar_mods()
+    for asset, entries in _by_asset(_collar_entries(in_c)).items():
+        try:
+            b = C.blob(True, game_dir, asset=asset)
+        except Exception:
             return False
-        _p, (pos, att, idx) = got
-        if pos.hex() != e["pos"] or att.hex() != e["att"] or [int(v) for v in idx] != e["idx"]:
-            return False
-    m, b = live["m"], live["b"]
-    for i_s, e in in_c.get("extra", {}).items():
-        i = int(i_s)
-        if "att" in e and b[m["att_off"] + i * m["att_stride"]:
-                           m["att_off"] + (i + 1) * m["att_stride"]].hex() != e["att"]:
-            return False
-        if "pos" in e and b[m["pos_off"] + i * m["pos_stride"]:
-                           m["pos_off"] + (i + 1) * m["pos_stride"]].hex() != e["pos"]:
-            return False
+        for e in entries:
+            rig = e.get("rig", "skater")
+            try:
+                live = _collar_state(b, rig)
+            except ValueError:
+                return False
+            for rec_s, en in e.get("parts", {}).items():
+                got = live["parts"].get(int(rec_s))
+                if got is None:
+                    return False
+                _p, (pos, att, idx) = got
+                if pos.hex() != en["pos"] or att.hex() != en["att"] or \
+                        [int(v) for v in idx] != en["idx"]:
+                    return False
+            m = live["m"]
+            for i_s, en in e.get("extra", {}).items():
+                i = int(i_s)
+                if "att" in en and b[m["att_off"] + i * m["att_stride"]:
+                                   m["att_off"] + (i + 1) * m["att_stride"]].hex() != en["att"]:
+                    return False
+                if "pos" in en and b[m["pos_off"] + i * m["pos_stride"]:
+                                   m["pos_off"] + (i + 1) * m["pos_stride"]].hex() != en["pos"]:
+                    return False
     return True
 
 
@@ -1889,15 +2010,15 @@ def diff_collars_item(in_c, game_dir=None):
             "label": _collars_label(in_c)}
 
 
-def _write_collar_rows(b, m, parts_by_rec, in_parts, extra):
+def _write_collar_rows(b, m, rig, parts_by_rec, in_parts, extra):
     import numpy as np
     for rec_s, e in in_parts.items():
         p = parts_by_rec.get(int(rec_s))
         if p is None:
-            raise ValueError(f"skater model has no collar part {rec_s}")
+            raise ValueError(f"{rig} model has no collar part {rec_s}")
         if (p["n_vtx"], p["n_idx"]) != (e["n_vtx"], e["n_idx"]):
-            raise ValueError(f"collar part {rec_s}: slot is {p['n_vtx']} v / {p['n_idx']} idx, "
-                             f"the pack's is {e['n_vtx']} / {e['n_idx']}")
+            raise ValueError(f"{rig} collar part {rec_s}: slot is {p['n_vtx']} v / {p['n_idx']} "
+                             f"idx, the pack's is {e['n_vtx']} / {e['n_idx']}")
         lo = p["first_vtx"]
         b[m["pos_off"] + lo * m["pos_stride"]:m["pos_off"] + (lo + p["n_vtx"]) * m["pos_stride"]] = \
             bytes.fromhex(e["pos"])
@@ -1918,47 +2039,61 @@ def _write_collar_rows(b, m, parts_by_rec, in_parts, extra):
 
 
 def apply_collars(game_dir, in_c, log=print) -> str:
-    """Write the pack's collar rows into the recipient's live global.iff and re-encode blob 0
-    (slow: the encoder is pure Python over 23 MB — minutes). Grows the slot when it has to."""
+    """Write the pack's collar rows into the recipient's live game files and re-encode blob 0
+    (slow: the encoder is pure Python over 23 MB — minutes). Rigs are grouped by ARCHIVE and every
+    rig in one archive is written into a single buffer, so each archive's re-encode is paid once:
+    global.iff for the five player rigs, frontend_sync.iff for the jersey-select garment."""
     C = _collar_mods()
-    b = bytearray(C.blob(True, game_dir))
-    m = _skater(C, b)
-    if (m["nvtx"], m["pos_stride"], m["att_stride"]) != \
-            (in_c["nvtx"], in_c["pos_stride"], in_c["att_stride"]):
-        raise ValueError("the pack's skater model layout does not match this global.iff")
-    parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
-    _write_collar_rows(b, m, parts_by_rec, in_c["parts"], in_c.get("extra"))
-    st = C.write(bytes(b), game_dir, log)
-    return f"custom collars installed ({_collars_label(in_c)[len('Custom collars — '):]}) — {st}"
+    sts = []
+    for asset, entries in _by_asset(_collar_entries(in_c)).items():
+        b = bytearray(C.blob(True, game_dir, asset=asset))
+        for e in entries:
+            rig = e.get("rig", "skater")
+            m = _rig_model(C, b, rig)
+            if (m["nvtx"], m["pos_stride"], m["att_stride"]) != \
+                    (e["nvtx"], e["pos_stride"], e["att_stride"]):
+                raise ValueError(f"the pack's {rig} model layout does not match this {asset}")
+            parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
+            _write_collar_rows(b, m, rig, parts_by_rec, e["parts"], e.get("extra"))
+        sts.append(C.write(bytes(b), game_dir, log, asset=asset))
+    return (f"custom collars installed ({_collars_label(in_c)[len('Custom collars — '):]}) — "
+            + "; ".join(sts))
 
 
 def revert_collars(in_c, game_dir, log=print) -> str:
-    """Stock rows back for every part / vertex the pack touched (NOT a whole-blob restore — the
-    live blob is longer than the pristine one since the speech-DB growth)."""
+    """Stock rows back for every part / vertex the pack touched, on every rig it touched (NOT a
+    whole-blob restore — the live global.iff is longer than the pristine one since the speech-DB
+    growth). One re-encode per archive."""
     C = _collar_mods()
-    live = _collar_state(game_dir, True)
-    prist = _collar_state(game_dir, False)
-    b, m = bytearray(live["b"]), live["m"]
-    m0, b0 = prist["m"], prist["b"]
-    parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
-    stock = {}
-    for rec_s in in_c.get("parts", {}):
-        p0, (pos0, att0, idx0) = prist["parts"][int(rec_s)]
-        stock[rec_s] = {"n_vtx": p0["n_vtx"], "n_idx": p0["n_idx"], "pos": pos0.hex(),
-                        "att": att0.hex(), "idx": [int(v) for v in idx0]}
-    extra = {}
-    for i_s, e in in_c.get("extra", {}).items():
-        i = int(i_s)
-        r = {}
-        if "att" in e:
-            r["att"] = b0[m0["att_off"] + i * m0["att_stride"]:
-                          m0["att_off"] + (i + 1) * m0["att_stride"]].hex()
-        if "pos" in e:
-            r["pos"] = b0[m0["pos_off"] + i * m0["pos_stride"]:
-                          m0["pos_off"] + (i + 1) * m0["pos_stride"]].hex()
-        extra[i_s] = r
-    _write_collar_rows(b, m, parts_by_rec, stock, extra)
-    return C.write(bytes(b), game_dir, log)
+    sts = []
+    for asset, entries in _by_asset(_collar_entries(in_c)).items():
+        b = bytearray(C.blob(True, game_dir, asset=asset))
+        b0 = C.blob(False, game_dir, asset=asset)
+        for e in entries:
+            rig = e.get("rig", "skater")
+            prist = _collar_state(b0, rig)
+            m = _rig_model(C, b, rig)
+            m0 = prist["m"]
+            parts_by_rec = {p["rec"]: p for p in C.submeshes(b, m)}
+            stock = {}
+            for rec_s in e.get("parts", {}):
+                p0, (pos0, att0, idx0) = prist["parts"][int(rec_s)]
+                stock[rec_s] = {"n_vtx": p0["n_vtx"], "n_idx": p0["n_idx"], "pos": pos0.hex(),
+                                "att": att0.hex(), "idx": [int(v) for v in idx0]}
+            extra = {}
+            for i_s, en in e.get("extra", {}).items():
+                i = int(i_s)
+                r = {}
+                if "att" in en:
+                    r["att"] = b0[m0["att_off"] + i * m0["att_stride"]:
+                                  m0["att_off"] + (i + 1) * m0["att_stride"]].hex()
+                if "pos" in en:
+                    r["pos"] = b0[m0["pos_off"] + i * m0["pos_stride"]:
+                                  m0["pos_off"] + (i + 1) * m0["pos_stride"]].hex()
+                extra[i_s] = r
+            _write_collar_rows(b, m, rig, parts_by_rec, stock, extra)
+        sts.append(C.write(bytes(b), game_dir, log, asset=asset))
+    return "; ".join(sts)
 
 
 # ── revert (undo what a pack applied, from the .orig backups) ─────────────────
@@ -2077,7 +2212,7 @@ def revert_pack(root, game_dir, pack_path, log=print):
     sc = inv["scoreclock"]
 
     if inv.get("collars"):
-        log("  restoring the stock collar meshes (global.iff re-encode, a few minutes)…")
+        log("  restoring the stock collar meshes (blob-0 re-encode per archive, a few minutes)…")
         try:
             log(f"  {revert_collars(inv['collars'], game_dir, log)}")
             counts["collars"] = 1
@@ -2285,7 +2420,7 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
                 "portraits": AT.PORTRAIT_COUNT if portraits else 0,
                 "expansion": len(expansion),
                 "heads": len(heads),
-                "collars": len(collars.get("parts", {}))
+                "collars": _collar_part_count(collars)
             },
         }, indent=1))
         if meta:
@@ -2331,7 +2466,7 @@ def _write_pack(out_path, meta, wavs, texs, roster=None, scoreclock=None, author
     return {"audio_meta": len(meta), "audio_wav": len(wavs), "textures": len(texs),
             "roster": len(roster), "scoreclock": 1 if scoreclock else 0,
             "portraits": AT.PORTRAIT_COUNT if portraits else 0, "expansion": len(expansion),
-            "heads": len(heads), "collars": len(collars.get("parts", {}))}
+            "heads": len(heads), "collars": _collar_part_count(collars)}
 
 def export_pack(root, out_path, include=("meta", "audio", "tex"), ros_path=None,
                 game_dir=None, author="", log=print):
@@ -2444,7 +2579,7 @@ def export_selected(root, out_path, selected, ros_path=None, game_dir=None, auth
         log("  capturing the custom collar meshes…")
         col = load_collars(game_dir, log)
         if not col:
-            log("  collars: both collar parts are stock — section skipped")
+            log("  collars: every collar part is stock — section skipped")
     return _write_pack(out_path, meta, wavs, texs, roster, sc, author, por, exp, heads, col)
 
 
@@ -2507,7 +2642,7 @@ def diff_pack(zip_path, root, ros_path=None, game_dir=None):
             items.append(diff_scoreclock_item(in_sc))
         if PORTRAITS_ARC in names:
             items.append(diff_portraits_item(z, game_dir))
-        if in_col.get("parts"):
+        if _collar_part_count(in_col):
             items.append(diff_collars_item(in_col, game_dir))
 
         for n in sorted(names):
@@ -2634,7 +2769,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                 head_targets=None):
     """`head_targets` = {head key: row|None} — see `apply_heads`; it overrides the pack's binding.
 
-    game_dir enables the COLLARS section (slow: a global.iff blob-0 re-encode, minutes) and
+    game_dir enables the COLLARS section (slow: a blob-0 re-encode per touched archive, minutes) and
     the SCORECLOCK section (slow: ~2-4 min DRAM rebuild — run the whole call
     in a worker thread when items may include it) and the PORTRAITS section (~65MB read + one
     archive relocate, a few seconds). game_dir=None skips both with a log line, so a GUI can strip
@@ -2712,7 +2847,7 @@ def apply_items(root, items, decisions, zip_path=None, ros_path=None, game_dir=N
                     counts["skipped"] += 1
             elif it["section"] == COLLARS_KEY:
                 if game_dir and Path(game_dir).is_dir():
-                    log("  installing the custom collars (global.iff re-encode, a few minutes)…")
+                    log("  installing the custom collars (blob-0 re-encode per archive, a few minutes)…")
                     log("  " + apply_collars(game_dir, it["incoming"], log))
                     counts["collars"] += 1
                 else:

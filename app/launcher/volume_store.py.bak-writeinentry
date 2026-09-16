@@ -239,58 +239,6 @@ def note_write(game_dir, arc: str, local_off: int, data: bytes, log=None) -> boo
     return True
 
 
-def entry_named(game_dir, name: str):
-    """The manifest entry with this TOC name, or None. Name is the identity — never the index."""
-    man = manifest(game_dir)
-    if not man:
-        return None
-    return next((e for e in man["entries"] if e["name"] == name), None)
-
-
-def write_in_entry(game_dir, name: str, inner: int, data: bytes, log=None) -> bool:
-    """Write `data` at `inner` bytes INSIDE the TOC entry called `name` — tree and archives.
-
-    This is the write primitive every in-place edit should use, and the reason is the whole point of
-    the extracted tree: a caller says WHICH ASSET and where inside it, and this works out the
-    physical address. `note_write` is the other way round — the caller has already written at a raw
-    archive address and this module only mirrors it — so a caller holding a stale address silently
-    corrupts whatever now lives there. That is how a Patch Game run put XMA packets through
-    loading.iff and a dozen logos ([[project_patch_audio_stale_bank_offsets]]).
-
-    Here that cannot happen. The bounds are the ENTRY's, so an offset that has gone stale raises
-    instead of landing on a neighbour, and a relocation costs the caller nothing: the entry moved,
-    the offset inside it did not.
-
-    An entry may straddle an archive boundary (paplyrs.bin starts in 1A and ends in 1B), so the
-    archive-side write is split across whatever files the span covers.
-    """
-    man = manifest(game_dir)
-    e = entry_named(game_dir, name)
-    if man is None or e is None:
-        raise KeyError(f"no TOC entry named {name!r}")
-    if inner < 0 or inner + len(data) > e["size"]:
-        raise ValueError(f"write of {len(data)} at +0x{inner:X} runs outside {name} "
-                         f"(size {e['size']}) — the offset is stale, refusing")
-    p = tree_dir(game_dir) / e["file"]
-    with open(p, "r+b") as f:
-        f.seek(inner)
-        f.write(data)
-    voff = e["sector"] * man["align"] + inner
-    root = Path(game_dir)
-    for a in _bounds(man):
-        lo = max(voff, a["lo"])
-        hi = min(voff + len(data), a["hi"])
-        if lo >= hi:
-            continue
-        with open(root / a["name"], "r+b") as f:
-            f.seek(lo - a["lo"])
-            f.write(data[lo - voff:hi - voff])
-        if log:
-            log(f"    {name} +0x{inner:X}  {hi - lo} B -> {a['name']} @ 0x{lo - a['lo']:08X}")
-    e["stamp"] = volume._stamp(p)
-    return True
-
-
 def pull_entry(game_dir, crc: int, log=None) -> bool:
     """Refresh one tree file from the live archives (after a relocation or an over-long write)."""
     if not is_ready(game_dir):

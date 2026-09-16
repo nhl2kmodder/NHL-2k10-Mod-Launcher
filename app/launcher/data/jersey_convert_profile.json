@@ -552,8 +552,18 @@
     "exactly the colour stored, which is why the tab offers a colour picker for them. Left",
     "out, the art goes down as authored (the Stanley Cup patch is full-colour already).",
     "",
-    "`choices` are the alternatives offered in the tab for that slot."
+    "`choices` are the alternatives offered in the tab for that slot.",
+    "",
+    "`crest`, `shoulder_patch`, `shoulder_right` and `league_patch` carry no bundled default:",
+    "they exist so the tab has somewhere to put the art an NHL 26 kit folder ships. NHL 26 dumps",
+    "every mark as its own 512x512 cut-out, so the crest and the shoulder patches no longer have",
+    "to be cut back out of the jersey sheet. An entry with no `file` and no `tint` is a no-op in",
+    "build_stamps, so an unfilled slot still falls back to the kit's own mark."
    ],
+   "crest": {},
+   "shoulder_patch": {},
+   "shoulder_right": {},
+   "league_patch": {},
    "cup_patch": {
     "file": "stanley_cup_patch.png"
    },
@@ -844,20 +854,68 @@
   "_": "The CUSTOM collar meshes (see build_collar.py / project_custom_collar_4zone) read six flat-colour rects in the collar-bar area of the base: A back band, B side band, C V + placket, D inside face, E laces, F eyelets. NHL 23 draws the collar assembly at one fixed place on every kit, so each zone is the MEDIAN of a small window at a fixed source point (2048-space, scaled to the file), taken from the RAW base before patch_neck paints the assembly out. The points are the user's reference squares on nhl23-collar-ref-with-laces.png. rects are fractions of the 1024 base; they lie inside the collar region only (checked against every UV region mask).",
   "radius": 4,
   "samples": {
-   "A": [1024, 948],
-   "B": [946, 1129],
-   "C": [1025, 1149],
-   "D": [1023, 1045],
-   "E": [1010, 1256],
-   "F": [997, 1218]
+   "A": [
+    1024,
+    948
+   ],
+   "B": [
+    946,
+    1129
+   ],
+   "C": [
+    1025,
+    1149
+   ],
+   "D": [
+    1023,
+    1045
+   ],
+   "E": [
+    1010,
+    1256
+   ],
+   "F": [
+    997,
+    1218
+   ]
   },
   "rects": {
-   "A": [0.015, 0.665, 0.085, 0.815],
-   "B": [0.015, 0.830, 0.085, 0.980],
-   "C": [0.095, 0.665, 0.165, 0.815],
-   "D": [0.095, 0.830, 0.165, 0.980],
-   "E": [0.182, 0.740, 0.250, 0.860],
-   "F": [0.182, 0.875, 0.250, 0.985]
+   "A": [
+    0.015,
+    0.665,
+    0.085,
+    0.815
+   ],
+   "B": [
+    0.015,
+    0.83,
+    0.085,
+    0.98
+   ],
+   "C": [
+    0.095,
+    0.665,
+    0.165,
+    0.815
+   ],
+   "D": [
+    0.095,
+    0.83,
+    0.165,
+    0.98
+   ],
+   "E": [
+    0.182,
+    0.74,
+    0.25,
+    0.86
+   ],
+   "F": [
+    0.182,
+    0.875,
+    0.25,
+    0.985
+   ]
   }
  },
  "neck_patch": {

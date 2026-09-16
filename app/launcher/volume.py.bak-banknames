@@ -305,20 +305,10 @@ _UNIFORM_SLOTS = ("home", "away", "alt", "third", "winter")
 _EXTRA_TEAM_CODES = ("sea", "vgk", "wpg", "uta", "atl", "phx", "ari")
 # Audio banks the catalogues miss; these relocate on modding and would read as 200 MB of
 # unknown_<crc>.bin in the tree.
-# The full set is the 23 banks in launcher/data/audio_wave_banks.json -- keep the two in step.
-# They are spelled out here rather than loaded because this module has to work during a
-# first-launch extract, before anything else is importable. Leaving one out is not cosmetic: a
-# bank with no name is a nameless TOC entry, `entry_named` cannot find it, and every write to it
-# has to fall back to a raw archive address that nothing can bounds-check. That is precisely how
-# playercom/playercom2/femusic/jukeboxmusic ended up looking like "not TOC entries" at all.
 _KNOWN_BIN_NAMES = ("lines.bin", "lines_ts.bin", "lines_ps.bin", "palines.bin", "paplyrs.bin",
                     "pamusic.bin", "teams.bin", "players.bin", "crowd.bin", "chants.bin",
                     "chatter.bin", "sfx.bin", "music.bin", "loadingaudio.bin",
-                    "loadingaudio_teams.bin",
-                    "crowd-idle-loop.bin", "env_amb.bin", "femusic.bin", "horns.bin",
-                    "jukeboxmusic.bin", "loadingaudio_lines.bin", "loadingmusic.bin",
-                    "loadingsequence.bin", "playercom.bin", "playercom2.bin",
-                    "streamedchatter.bin")
+                    "loadingaudio_teams.bin")
 
 
 def _safe(nm: str) -> str:

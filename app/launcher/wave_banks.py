@@ -160,6 +160,35 @@ def bank_for(fid: str, offset) -> str:
     return ""
 
 
+def span_of(fid: str, offset):
+    """(lo, hi) of the bank owning this stream, in `fid`'s own PHYSICAL offsets, or None.
+
+    `bank_for` answers "which bank", which is enough to label a stream. A WRITE needs the other
+    half of the fact: a slot may start inside a bank and, at its declared packet count, run out
+    the far end of it. The bytes past the end belong to whatever the TOC puts there next, so a
+    caller that is about to `seek(off); write(n)` has to be able to check `off + n <= hi`.
+
+    Returns physical coordinates so the answer can be compared directly against the offset the
+    audio manifest stores; the logical fold used by the shipped layout is undone before returning.
+    """
+    if offset is None:
+        return None
+    up, off = (fid or "").upper(), int(offset)
+    for _name, (mfid, lo, hi) in _moved.items():
+        if up == mfid and lo <= off < hi:
+            return lo, hi
+    lay = _load().get(up)
+    if not lay:
+        return None
+    vol, spans, first = lay
+    logical = off if up == first else off + vol
+    shift = 0 if up == first else vol
+    for name, lo, hi in spans:
+        if lo <= logical < hi:
+            return (None if name in _moved else (lo - shift, hi - shift))
+    return None
+
+
 # ── sample rate ───────────────────────────────────────────────────────────────
 #
 # The rate is a property of the BANK, not of the stream: raw XMA2 packets carry no sample rate

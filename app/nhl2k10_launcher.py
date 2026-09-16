@@ -42,13 +42,17 @@ from launcher import transcript_refresh as tref
 from launcher import wave_banks as wbanks
 from launcher import speech_lines as splines
 from launcher import audio_store as astore
+from launcher import goal_songs as gsongs
+from launcher import live_cues as livecues
 from launcher import authored_sfx as asfx
 from launcher import modpack as mp
+from launcher import releasepack as rp
 from launcher import resources as lres
 from launcher import scorebug_anchors as sbanchor
 from launcher import default_matchup as dmatch
 from launcher import game_date as gdate
 from launcher import reshade
+from launcher import dlss
 from launcher import uniform_colors as ucol
 from launcher import arena_colors as acol
 from launcher import xex_baseline as xbase
@@ -227,6 +231,13 @@ SECS_PER_PACKET = 7.07 / 39
 # container that is not present simply reports "not found" and is disabled, exactly like today.
 FILE_IDS = ["0A", "0B", "1A", "1B", "1C"]
 
+# Banks the user has asked not to be written, by name. These four were nameless TOC entries until
+# their names were recovered, and while they were nameless nothing could bounds-check a write to
+# them -- so the instruction was "be very careful with those. Do NOT overwrite them then." They are
+# tracked entries now and a write to one would be as safe as any other, but lifting a hold the user
+# put on is theirs to do, not mine. Empty this set when they say so.
+HELD_BANKS = {"playercom.bin", "playercom2.bin", "femusic.bin", "jukeboxmusic.bin"}
+
 CATEGORY_FOLDER: dict = {
     "Goal_Horns":          "Goal_Horns",
     "Goal_Songs":          "Goal_Songs",
@@ -315,19 +326,6 @@ STEM_RE = re.compile(r"^([0-9A-Fa-f]{8})_(\d+)ch_(\d+)p$")
 # place at startup, is visible here without any further plumbing.
 TEAMS = team_tag.TEAMS
 
-ARENA_EVENTS = [
-    ("intro",       "Intro / Skate-Out"),
-    ("warmup",      "Warmup"),
-    ("pregame",     "Pre-Game"),
-    ("bip",         "Break in Play (BIP)"),
-    ("goal",        "Goal Celebration"),
-    ("pp",          "Power Play"),
-    ("penalty_end", "Penalty End"),
-    ("intermission","Intermission"),
-    ("overtime",    "Overtime"),
-    ("shootout",    "Shootout"),
-]
-
 # ═══════════════════════════════════════════════════════════════════════════════
 # Config
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -347,7 +345,6 @@ DEFAULT_CONFIG: dict = {
     "game_path":        "",
     "xma2encode":       bundled_tool("xma2encode.exe"),
     "ffmpeg":           bundled_tool("ffmpeg/ffmpeg.exe"),
-    "arena_music":      {},
     # Two front ends over the same engine. OFF is the shipping default: someone who just wants to
     # play a mod pack should never meet the sixteen-tab authoring UI. The flag is persisted so the
     # choice survives a restart -- see App._switch_mode.
@@ -939,7 +936,14 @@ def encode_wav_to_fit(wav: Path, channels: int, ffmpeg: str, xma2encode: str, sa
             raise RuntimeError(f"xma2encode failed (rc={r.returncode}): {err or 'no output'}")
 
         best = b""
-        for q in [60, 50, 40, 30, 20, 10]:
+        # The ladder runs BELOW 10. It used to stop there, and stopping there is what stranded five
+        # approved PA takes as "too long to install" -- PA_HYPE_0004 needed 23 packets into 21 at
+        # q10 and fits in 21 at q5; PA_HYPE_0891 needed 15 into 13 and fits at q3; PA_ROSTER_0006
+        # needed 38 into 32 and fits at q3. Measured 2026-09-09. The user, round 22: "Fit the v7
+        # takes. We already do that for audio replacement, no? We just downgrade the audio to fit
+        # the packets?" -- yes, and the knob simply was not being turned far enough.
+        # q0 is rejected by xma2encode.exe, so 1 is the real floor.
+        for q in [60, 50, 40, 30, 20, 10, 8, 5, 3, 1]:
             raw = _try(q)
             packets = len(raw) // 2048
             if max_packets <= 0 or packets <= max_packets:
@@ -1168,7 +1172,19 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
             arc    = archive_path(root, fid)
             status = "archive found" if arc.exists() else "ARCHIVE NOT FOUND"
             log(f"  [{fid}] {n} edited file(s) — {status}")
-    patched = skipped_trunc = 0
+    # ⛔ WHERE a slot is, not just how big it is. Every write below is a raw `seek(off); write()`
+    # into the archive, and `entry["offset"]` was recorded when the audio index was extracted. The
+    # wave banks have been RELOCATED since (grown past their neighbours, moved to 1C, spilled), so
+    # a stale offset no longer names audio -- it names whatever asset now occupies those bytes. On
+    # 2026-09-02 that wrote XMA packets over 48 entries: loading.iff, rink_van/vgk, half a dozen
+    # logos, ice and uniform sheets. The loading screen came up full of artefacts.
+    #
+    # `wave_banks` already knows the answer and always did: a bank owns [base, end) and OUTSIDE
+    # EVERY SPAN THERE IS NO BANK. So ask it, in live coordinates, and refuse anything it does not
+    # claim. A slot that fails this is not "an audio write that needs care" -- it is not an audio
+    # slot at all any more, and the fix is to re-extract the audio index, not to write it.
+    wbanks.set_live_layout(root.parent, log=log)
+    patched = skipped_trunc = skipped_stale = 0
     for fid, items in pending.items():
         if not items: continue
         arc = archive_path(root, fid)
@@ -1184,6 +1200,14 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 off = entry["offset"]; max_pkts = entry["packets"]
                 ch  = entry["channels"]; sr = entry.get("sample_rate") or SAMPLE_RATE
                 display = entry.get("name") or wp.stem
+                bank = wbanks.bank_for(fid, off)
+                end  = off + max_pkts * PACKET_SIZE
+                span = wbanks.span_of(fid, off)
+                if not bank or (span and end > span[1]):
+                    log(f"  {display}  @ 0x{off:08X}  STALE OFFSET — no wave bank owns "
+                        f"{'this slot' if not bank else 'the whole slot'} any more; NOT written. "
+                        f"Re-extract the audio index.")
+                    skipped_stale += 1; continue
                 log(f"  {display}  @ 0x{off:08X}  slot={max_pkts}p {ch}ch")
                 try:
                     raw_new, q_used = encode_wav_to_fit(
@@ -1205,12 +1229,31 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 elif excess < 0:
                     raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
                     log(f"    Padded {-excess} spare packets")
-                f.seek(off); f.write(raw_new)
-                # Audio goes straight into the archives at a byte offset, so it never passes
-                # through archive_textures' replace_* wrappers and the extracted tree would not
-                # hear about it. Mirror it here; a slot is fixed-size, so this is always the
-                # in-place case note_write handles.
-                voltree.note_write(root.parent, fid, off, raw_new)
+                # ⭐ Address the write by ASSET, not by archive byte. `write_in_entry` takes the
+                # bank's TOC name and the offset INSIDE it, works out where that entry physically
+                # lives right now, and bounds-checks against that one entry -- so a slot whose
+                # recorded address has gone stale raises here instead of landing on loading.iff or
+                # a logo, and a bank that gets relocated tomorrow needs no change at all. The tree
+                # is written first and the archives from it, which is the direction the extracted
+                # tree was built for ([[project_patch_audio_stale_bank_offsets]]).
+                #
+                # Four banks (playercom, playercom2, femusic, jukeboxmusic) are not TOC entries --
+                # they sit in archive space no entry covers -- so they still take the raw path,
+                # now behind the bank-span check above.
+                if bank in HELD_BANKS:
+                    log(f"    HELD BANK {bank} — the user asked that it not be written. NOT written.")
+                    skipped_stale += 1; continue
+                if voltree.entry_named(root.parent, bank) is not None:
+                    voltree.write_in_entry(root.parent, bank, off - span[0], raw_new)
+                else:
+                    # playercom, playercom2, femusic, jukeboxmusic are NOT TOC entries -- they sit
+                    # in archive space no entry covers, so the tree cannot describe them and
+                    # nothing here can bound-check the write. The user's instruction on finding
+                    # that out was "be very careful with those. Do NOT overwrite them then." So
+                    # this refuses rather than writing blind; making them real entries is the fix.
+                    log(f"    UNTRACKED BANK {bank} — no TOC entry covers it, so the write cannot "
+                        f"be bounds-checked. NOT written.")
+                    skipped_stale += 1; continue
                 # Stamped only after the write succeeded, so an encode that failed or a slot
                 # that was skipped for overrunning stays pending and gets picked up next time.
                 astore.mark_patched(entry, wp)
@@ -1218,7 +1261,10 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
     if patched:
         astore.save_manifest(root, man)
         voltree.save(root.parent)          # persist the tree stamps the writes above updated
-    return patched, skipped_trunc, 0
+    if skipped_stale:
+        log(f"{skipped_stale} slot(s) skipped: their recorded offset is no longer inside any wave "
+            f"bank. Nothing was written there — re-extract the audio index to refresh them.")
+    return patched, skipped_trunc, skipped_stale
 
 
 def op_reload_names(root: Path, log):
@@ -1383,10 +1429,21 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
     elif excess < 0:
         raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
         log(f"  Padded {-excess} pkts")
-    with open(arc, "r+b") as f:
-        f.seek(off); f.write(raw_new)
-    if voltree.note_write(root.parent, fid, off, raw_new):
-        voltree.save(root.parent)
+    # Same rule as the bulk path: name the asset, not the byte. See op_reimport.
+    wbanks.set_live_layout(root.parent, log=log)
+    bank = wbanks.bank_for(fid, off); span = wbanks.span_of(fid, off)
+    if not bank or (span and off + max_pkts * PACKET_SIZE > span[1]):
+        log(f"  STALE OFFSET — no wave bank owns this slot any more; NOT written.")
+        return False
+    if bank in HELD_BANKS:
+        log(f"  HELD BANK {bank} — the user asked that it not be written. NOT written.")
+        return False
+    if voltree.entry_named(root.parent, bank) is None:
+        # See op_reimport: an untracked bank cannot be bounds-checked, so it is not written.
+        log(f"  UNTRACKED BANK {bank} — no TOC entry covers it; NOT written.")
+        return False
+    voltree.write_in_entry(root.parent, bank, off - span[0], raw_new)
+    voltree.save(root.parent)
     # Record the install against the manifest's own copy of the entry, not the one passed in:
     # the caller hands us a row's entry, which may not be the dict `load_manifest` returns.
     man = astore.load_manifest(root)
@@ -1734,7 +1791,8 @@ class App(tk.Tk):
                "Starts NHL 2K10 in Xenia with your mods applied.", accent=True)
         action("Install Mod Pack…", self._import_modpack,
                "Pick a .n2kpack file. You choose what to bring in;\n"
-               "textures and audio are applied for you.")
+               "textures and audio are applied for you.\n"
+               "A .n2kreleasepack installs a whole release instead.")
         action("Revert Mod Pack…", self._revert_modpack,
                "Puts everything a pack touched back to stock.")
 
@@ -1835,9 +1893,9 @@ class App(tk.Tk):
         # never touched. Now a tab is an empty frame with a builder attached, and the builder runs
         # the first time the tab is actually selected. Built tabs stay built for the session.
         #
-        # WIP — Audio Banks & Arena Music are HIDDEN for the 1.0 release (not yet finished).
-        # Their frames + builders are still registered so nothing else breaks; uncomment their
-        # rows to bring the tabs back. TODO: finish Audio Banks + Arena Music.
+        # WIP — Audio Banks is HIDDEN for the 1.0 release (not yet finished). Its frame +
+        # builder are still registered so nothing else breaks; give the row a label to bring the
+        # tab back. TODO: finish Audio Banks.
         for frame, label, builder in (
             (self._tab_teams,    "  Roster Editor  ",           self._build_teams_tab),
             (self._tab_iff,      "  Textures  ",                self._build_iff_tab),
@@ -1847,7 +1905,7 @@ class App(tk.Tk):
             (self._tab_portrait, "  Portraits  ",               self._build_portrait_tab),
             (self._tab_scorebug, "  Scoreclock  ",              self._build_scorebug_tab),
             (self._tab_banks,    None,                          self._build_banks_tab),
-            (self._tab_arena,    None,                          self._build_arena_tab),
+            (self._tab_arena,    "  Arena Music  ",             self._build_arena_tab),
             (self._tab_arenaed,  "  Arena Models / Lighting  ", self._build_arena_editor_tab),
             (self._tab_players,  "  Models  ",                  self._build_players_tab),
             (self._tab_jersey,   "  Uniform Editor  ",          self._build_jersey_convert_tab),
@@ -2177,59 +2235,305 @@ class App(tk.Tk):
         pane["lbl_sel"].pack(side=LEFT, padx=10)
         return pane
     def _build_arena_tab(self):
+        """Goal songs, one row per club.
+
+        The tab is deliberately narrow in scope: it replaces game audio we have positively
+        identified, and goal songs are the clean case because each club owns its own cue. What
+        the shipped game does with playlists (a folder of tracks the arena picks from) is a much
+        larger job and is NOT what this tab does.
+        """
         t = self._tab_arena
         outer = ttk.Frame(t, padding=(12, 8))
         outer.pack(fill=BOTH, expand=True)
 
-        ttk.Label(outer, text="Custom Arena Music",
-                  font=("Segoe UI", 13, "bold")).grid(
-            row=0, column=0, columnspan=4, sticky=W, pady=(0, 4))
+        ttk.Label(outer, text="Arena Music — Goal Songs",
+                  font=("Segoe UI", 13, "bold")).pack(anchor=W, pady=(0, 4))
         ttk.Label(outer, text=(
-            "Point each in-game music event to a folder on your PC.\n"
-            "Xenia will pick tracks from the folder when that event fires.\n"
-            "This feature requires additional game-file patching (coming soon)."),
-                  foreground="#888888").grid(
-            row=1, column=0, columnspan=4, sticky=W, pady=(0, 14))
+            "Every club's goal song, straight from the pamusic cue table — no need to go "
+            "hunting through the audio database. Pick a team, press Play to hear what fires "
+            "today, and Replace to drop in any song you like.\n"
+            "Each cue is a fixed-size slot, so a song longer than the slot holds is trimmed to "
+            "fit (with a fade) rather than squeezed down in quality. Restore Stock puts the "
+            "disc's own song back."),
+                  foreground="#888888", justify=LEFT).pack(anchor=W, pady=(0, 10))
 
-        ttk.Label(outer, text="Team / Arena:").grid(row=2, column=0, sticky=W, pady=4)
-        self._v_arena_team = StringVar(value="All Arenas")
-        ttk.Combobox(outer, textvariable=self._v_arena_team,
-                     values=["All Arenas"] + TEAMS,
-                     state="readonly", width=24).grid(
-            row=2, column=1, sticky=W, padx=(6, 0), pady=4)
+        bar = ttk.Frame(outer)
+        bar.pack(fill=X, pady=(0, 6))
+        self._gs_btn_play = ttk.Button(bar, text="▶  Play", width=10, command=self._gs_play)
+        self._gs_btn_play.pack(side=LEFT)
+        ttk.Button(bar, text="■  Stop", width=10,
+                   command=self._gs_stop).pack(side=LEFT, padx=(4, 12))
+        self._gs_btn_repl = ttk.Button(bar, text="Replace…", style="Accent.TButton",
+                                       command=self._gs_replace)
+        self._gs_btn_repl.pack(side=LEFT)
+        self._gs_btn_rest = ttk.Button(bar, text="Restore Stock", command=self._gs_restore)
+        self._gs_btn_rest.pack(side=LEFT, padx=4)
+        ttk.Button(bar, text="Rescan",
+                   command=lambda: self._gs_scan(force=True)).pack(side=LEFT, padx=4)
+        self._gs_lbl = ttk.Label(bar, text="", foreground="#888888")
+        self._gs_lbl.pack(side=LEFT, padx=12)
 
-        ttk.Separator(outer).grid(row=3, column=0, columnspan=4, sticky=EW, pady=10)
+        lf = ttk.Frame(outer)
+        lf.pack(fill=BOTH, expand=True)
+        cols = ("team", "code", "cue", "song", "length", "slot", "mod")
+        tv = ttk.Treeview(lf, columns=cols, show="headings", selectmode="browse", height=17)
+        self._gs_tree = tv
+        for col, txt in (("team", "Team"), ("code", ""), ("cue", "Cue"),
+                         ("song", "Goal song"), ("length", "Length"),
+                         ("slot", "Stock length"), ("mod", "Modified")):
+            tv.heading(col, text=txt, command=lambda c=col: self._gs_sort(c))
+        tv.column("team",   width=190, minwidth=120)
+        tv.column("code",   width=46,  minwidth=40, anchor=CENTER)
+        tv.column("cue",    width=50,  minwidth=45, anchor=CENTER)
+        tv.column("song",   width=300, minwidth=140)
+        tv.column("length", width=80,  minwidth=60, anchor=E)
+        tv.column("slot",   width=90,  minwidth=70, anchor=E)
+        tv.column("mod",    width=80,  minwidth=60, anchor=CENTER)
 
-        self._arena_vars: dict = {}
-        for r_idx, (key, label) in enumerate(ARENA_EVENTS, start=4):
-            ttk.Label(outer, text=f"{label}:").grid(
-                row=r_idx, column=0, sticky=W, pady=3)
-            v = StringVar(
-                value=self.cfg.get("arena_music", {}).get(key, ""))
-            self._arena_vars[key] = v
-            entry = ttk.Entry(outer, textvariable=v, width=48)
-            entry.grid(row=r_idx, column=1, padx=(6, 4), sticky=EW, pady=3)
-            def _browse(var=v):
-                p = filedialog.askdirectory(title="Select music folder")
-                if p:
-                    var.set(p)
-            ttk.Button(outer, text="Browse…", command=_browse).grid(
-                row=r_idx, column=2, padx=(0, 4), pady=3)
+        vsb = ttk.Scrollbar(lf, orient=VERTICAL, command=tv.yview)
+        tv.configure(yscrollcommand=vsb.set)
+        tv.grid(row=0, column=0, sticky="nsew")
+        vsb.grid(row=0, column=1, sticky="ns")
+        lf.rowconfigure(0, weight=1); lf.columnconfigure(0, weight=1)
+        tv.tag_configure("modified", foreground="#4fc3f7")
+        tv.bind("<Double-1>", lambda _e: self._gs_play())
 
-        outer.columnconfigure(1, weight=1)
+        self._gs_rows = {}          # iid -> the scanned row dict
+        self._gs_sort_col = None
+        self.after(120, self._gs_scan)
 
-        ttk.Separator(outer).grid(
-            row=4 + len(ARENA_EVENTS), column=0, columnspan=4, sticky=EW, pady=12)
+    # -- the goal-song table ----------------------------------------------------
 
-        def _save_arena():
-            am = {k: v.get().strip() for k, v in self._arena_vars.items()}
-            self.cfg["arena_music"] = am
-            save_config(self.cfg)
-            messagebox.showinfo("Saved", "Arena music paths saved to config.")
+    def _gs_paths(self, quiet=False):
+        """(game dir, extracted-files root, Roster.ROS, xma2encode), or None with a reason shown.
 
-        ttk.Button(outer, text="Save Paths", style="Accent.TButton",
-                   command=_save_arena).grid(
-            row=5 + len(ARENA_EVENTS), column=1, sticky=W)
+        The roster is not optional here: which cue a club scores to is read from its own record,
+        so without the save there is no way to say whose song is whose.
+        """
+        game = self._get_game_root()
+        ros  = self._current_roster_path()
+        xma  = self.cfg.get("xma2encode", "")
+        missing = ("your game-files folder" if not game else
+                   "your Roster.ROS"        if not ros  else
+                   "xma2encode.exe"         if not (xma and Path(xma).exists()) else "")
+        if missing:
+            if not quiet:
+                self._gs_lbl.config(text=f"Set {missing} in Settings first.")
+            return None
+        root = self._get_root()
+        if not root:
+            return None
+        return game, root, ros, xma
+
+    def _gs_scan(self, force=False):
+        """Measure all 32 cues off the UI thread.
+
+        Decoding a cue takes about a second, so the first scan is slow and every one after it is
+        nearly free: `goal_songs` caches each verdict against the sha1 of the live bytes and only
+        re-decodes a cue whose bytes actually changed.
+        """
+        if self._op_busy():
+            return
+        p = self._gs_paths()
+        if not p:
+            return
+        game, root, ros, xma = p
+        self._gs_lbl.config(text="Reading the cue table…")
+        for b in (self._gs_btn_play, self._gs_btn_repl, self._gs_btn_rest):
+            b.state(["disabled"])
+
+        def work():
+            rows, err = [], None
+            try:
+                # The cue index maps (bank, cue) to a live offset, and it is per-install: the
+                # first run on a machine builds it (~10 s). Nobody should have to run a command
+                # to make the tab work, so build it here, with the wait explained.
+                self.after(0, lambda: self._gs_lbl.config(
+                    text="Preparing the audio index (about 10 seconds, one time)…"))
+                livecues.ensure(game, log=self._log)
+                led = gsongs.load_ledger(root)
+                if force:
+                    gsongs.forget_measurements(led)
+                teams = gsongs.teams(ros)
+                for n, tm in enumerate(sorted(teams, key=lambda x: x["code"])):
+                    self.after(0, lambda n=n, c=tm["code"]:
+                               self._gs_lbl.config(text=f"Scanning {c}…  ({n + 1}/32)"))
+                    rows.append({**tm, **gsongs.inspect(game, root, tm["cue"], xma, led)})
+                gsongs.save_ledger(root, led)
+            except Exception as e:
+                err = e
+            self.after(0, lambda: self._gs_fill(rows, err))
+
+        self._op_thread = threading.Thread(target=work, daemon=True)
+        self._op_thread.start()
+
+    def _gs_fill(self, rows, err=None):
+        tv = self._gs_tree
+        tv.delete(*tv.get_children())
+        self._gs_rows = {}
+        for b in (self._gs_btn_play, self._gs_btn_repl, self._gs_btn_rest):
+            b.state(["!disabled"])
+        if err is not None:
+            self._gs_lbl.config(text=f"Could not read the goal songs: {err}")
+            self._log(f"[arena] goal-song scan failed: {err}")
+            return
+        for r in rows:
+            iid = tv.insert("", END, values=self._gs_values(r),
+                            tags=("modified",) if r["modified"] else ())
+            self._gs_rows[iid] = r
+        n = sum(1 for r in rows if r["modified"])
+        self._gs_lbl.config(text=f"{len(rows)} clubs · {n} replaced, {len(rows) - n} stock")
+        if rows:
+            first = tv.get_children()[0]
+            tv.selection_set(first); tv.focus(first)
+
+    def _gs_values(self, r):
+        song = r.get("source") or ("custom song" if r["modified"] else "stock goal song")
+        return (r["team"], r["code"], r["cue"], song,
+                self._gs_mmss(r["seconds"]), self._gs_mmss(r["stock_seconds"]),
+                "yes" if r["modified"] else "")
+
+    @staticmethod
+    def _gs_mmss(sec):
+        sec = int(round(sec or 0))
+        return f"{sec // 60}:{sec % 60:02d}"
+
+    def _gs_sort(self, col):
+        if not self._gs_rows:
+            return
+        rev = (self._gs_sort_col == col)
+        self._gs_sort_col = None if rev else col
+        key = {"team": lambda r: r["team"].lower(), "code": lambda r: r["code"],
+               "cue": lambda r: r["cue"], "song": lambda r: (r.get("source") or "").lower(),
+               "length": lambda r: r["seconds"], "slot": lambda r: r["stock_seconds"],
+               "mod": lambda r: not r["modified"]}.get(col, lambda r: r["code"])
+        self._gs_fill(sorted(self._gs_rows.values(), key=key, reverse=rev))
+
+    def _gs_selected(self):
+        sel = self._gs_tree.selection()
+        if not sel:
+            self._gs_lbl.config(text="Pick a team first.")
+            return None
+        return self._gs_rows.get(sel[0])
+
+    def _gs_play(self):
+        r = self._gs_selected()
+        p = self._gs_paths()
+        if not r or not p:
+            return
+        game, root, _ros, xma = p
+        self._gs_lbl.config(text=f"Loading {r['code']}…")
+
+        def work():
+            try:
+                wav = gsongs.preview_wav(game, root, r["cue"], xma)
+            except Exception as e:
+                self.after(0, lambda: self._gs_lbl.config(text=f"Cannot preview: {e}"))
+                return
+            self.after(0, lambda: self._gs_start(r, wav))
+
+        threading.Thread(target=work, daemon=True).start()
+
+    def _gs_start(self, r, wav):
+        try:
+            winsound.PlaySound(str(wav), winsound.SND_FILENAME | winsound.SND_ASYNC)
+            self._gs_lbl.config(text=f"Playing {r['team']} — {self._gs_mmss(r['seconds'])}")
+        except Exception as e:
+            self._gs_lbl.config(text=f"Playback failed: {e}")
+
+    def _gs_stop(self):
+        try:
+            winsound.PlaySound(None, winsound.SND_PURGE)
+        except Exception:
+            pass
+        self._gs_lbl.config(text="Stopped.")
+
+    def _gs_replace(self):
+        r = self._gs_selected()
+        p = self._gs_paths()
+        if not r or not p:
+            return
+        game, root, _ros, xma = p
+        ffm = self.cfg.get("ffmpeg", "")
+        if not (ffm and Path(ffm).exists()):
+            messagebox.showerror("Missing Tool", "Set ffmpeg.exe in Settings to convert songs.")
+            return
+        src = filedialog.askopenfilename(
+            title=f"Goal song for the {r['team']}",
+            filetypes=[("Audio", "*.mp3 *.wav *.m4a *.flac *.ogg *.aac *.wma *.opus"),
+                       ("All files", "*.*")])
+        if not src:
+            return
+        if self._op_busy():
+            return
+        if not messagebox.askyesno(
+                "Replace goal song",
+                f"Give the {r['team']} a new goal song?\n\n"
+                f"{Path(src).name}\n\n"
+                f"The disc's own song here runs {self._gs_mmss(r['stock_seconds'])}. Yours gets "
+                f"as much of that slot as it fits into; anything past that is trimmed off "
+                f"and faded out.\n\n"
+                f"The game files are written straight away — Restore Stock puts the "
+                f"original back."):
+            return
+
+        self._gs_stop()
+        self._gs_lbl.config(text=f"Encoding {Path(src).name}…")
+        for b in (self._gs_btn_play, self._gs_btn_repl, self._gs_btn_rest):
+            b.state(["disabled"])
+
+        def work():
+            try:
+                raw, secs, trimmed = gsongs.fit(src, r["cue"], ffm, xma, log=self._log)
+                gsongs.install(game, root, r["cue"], raw, Path(src).name, secs, log=self._log)
+                note = (f"{r['team']}: {Path(src).name}"
+                        + (f" (trimmed to {self._gs_mmss(secs)})" if trimmed else ""))
+                self._log(f"[arena] goal song installed — {note}")
+                self.after(0, lambda: self._gs_after_write(note))
+            except Exception as e:
+                self._log(f"[arena] replace failed: {e}")
+                self.after(0, lambda: self._gs_after_write(None, e))
+
+        self._op_thread = threading.Thread(target=work, daemon=True)
+        self._op_thread.start()
+
+    def _gs_restore(self):
+        r = self._gs_selected()
+        p = self._gs_paths()
+        if not r or not p:
+            return
+        game, root, _ros, _xma = p
+        if not r["modified"]:
+            self._gs_lbl.config(text=f"{r['code']} already has the stock goal song.")
+            return
+        if not messagebox.askyesno("Restore stock goal song",
+                                   f"Put the disc's own goal song back for the {r['team']}?"):
+            return
+        if self._op_busy():
+            return
+        self._gs_stop()
+        self._gs_lbl.config(text=f"Restoring {r['code']}…")
+
+        def work():
+            try:
+                gsongs.restore(game, root, r["cue"], log=self._log)
+                self._log(f"[arena] {r['team']} restored to the stock goal song")
+                self.after(0, lambda: self._gs_after_write(f"{r['team']}: stock song restored"))
+            except Exception as e:
+                self.after(0, lambda: self._gs_after_write(None, e))
+
+        self._op_thread = threading.Thread(target=work, daemon=True)
+        self._op_thread.start()
+
+    def _gs_after_write(self, note, err=None):
+        for b in (self._gs_btn_play, self._gs_btn_repl, self._gs_btn_rest):
+            b.state(["!disabled"])
+        if err is not None:
+            self._gs_lbl.config(text=str(err))
+            messagebox.showerror("Goal song", str(err))
+            return
+        self._gs_lbl.config(text=f"{note} — done.")
+        self._gs_scan()
 
     # ── Audio Banks tab — parse IFF sound banks (sound -> wave-offset directory) ─
     def _build_banks_tab(self):
@@ -4286,7 +4590,7 @@ class App(tk.Tk):
         self._sbl_factory = False           # staged "reset to default" (preview only until Apply)
 
         head = ttk.Frame(t, padding=(12, 10, 12, 4)); head.pack(fill=X)
-        ttk.Label(head, text="Scoreclock Element Editor",
+        ttk.Label(head, text="Scoreclock Element Editor (GUI is WIP)",
                   font=("Segoe UI", 13, "bold")).pack(side=LEFT)
         ttk.Button(head, text="Live Tune in Xenia…",
                    command=self._sbl_live_tune).pack(side=RIGHT)
@@ -4307,7 +4611,9 @@ class App(tk.Tk):
                   text="Move, resize and recolour each part of the in-game scoreclock. Pick an "
                        "element in the list or preview, queue changes, then Apply — the change "
                        "shows on the NEXT game launch. Axes: +X right, +Y up. "
-                       "“1st” and clock digit 4 are re-anchored by the game and may ignore moves."
+                       "“1st” and clock digit 4 are re-anchored by the game and may ignore moves. "
+                       "NOTE: The GUI is a WIP and is currently not aligned properly. What you see "
+                       "in the editor is only a rough estimate of what appears in the game."
                   ).pack(fill=X, padx=12)
 
         # Preview canvas
@@ -6997,6 +7303,28 @@ class App(tk.Tk):
                   font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
         self._rs_refresh()
 
+        # ── DLSS neural rendering (a ReShade add-on, so it rides on the block above) ──
+        heading("DLSS Neural Rendering (experimental)")
+        blurb("Runs NVIDIA's neural-rendering model over the finished frame. The game has "
+              "no DLSS of its own — it is a 2009 console title — so the add-on is hooked at "
+              "Present and fed dummy temporal inputs instead of engine motion vectors.\n"
+              "Needs two things the launcher cannot provide. NVIDIA RTX hardware: RTX 50 "
+              "runs it as-is, RTX 20/30/40 need the patched runtime, and a GTX card cannot "
+              "run it at all. And nvngx_dlssnr.dll, which is NVIDIA's to license, not ours "
+              "to ship — copy it into the Xenia folder yourself.\n"
+              "Turning this on turns ReShade on as well: it is a ReShade add-on, and "
+              "ReShade is what loads it. PC only, like ReShade.")
+        dl = ttk.Frame(outer); dl.grid(row=nxt(), column=0, columnspan=3, sticky=W)
+        self._dl_status = StringVar(value="")
+        self._dl_on = BooleanVar(value=bool(self.cfg.get("dlss_enabled")))
+        ttk.Checkbutton(dl, text="Use DLSS", variable=self._dl_on,
+                        command=self._dl_toggle).pack(side=LEFT, padx=(0, 12))
+        ttk.Button(dl, text="Open Xenia folder", command=self._rs_open_folder).pack(side=LEFT, padx=4)
+        ttk.Button(dl, text="Remove files…", command=self._dl_remove).pack(side=LEFT, padx=4)
+        ttk.Label(outer, textvariable=self._dl_status, foreground="#888888",
+                  font=("Segoe UI", 8)).grid(row=nxt(), column=0, columnspan=3, sticky=W, pady=(6, 0))
+        self._dl_refresh()
+
         # -- Extracted game files (the container tree) ------------------------
         # Offered once on startup; this is the "later" the offer points at, and the only place
         # the tree can be rebuilt from. Shown in both shells: a release ships as the changed
@@ -7170,6 +7498,11 @@ class App(tk.Tk):
             self._rs_status.set(f"ReShade: {e}"); return
         self._rs_status.set(st["detail"])
         self._rs_on.set(bool(st.get("enabled")))
+        # The DLSS line reads ReShade's state ("on, but ReShade is off"), so it goes
+        # stale whenever this one changes. Guarded: _rs_refresh runs while the Settings
+        # tab is still being built, before the DLSS widgets exist.
+        if hasattr(self, "_dl_status"):
+            self._dl_refresh()
 
     def _rs_toggle(self):
         want = self._rs_on.get()
@@ -7216,6 +7549,60 @@ class App(tk.Tk):
             messagebox.showerror("ReShade", "Set the Xenia executable path in Settings first.")
             return
         os.startfile(str(d))
+
+    # ── DLSS neural rendering ─────────────────────────────────────────────────
+
+    def _dl_refresh(self):
+        """Make the checkbox match the Xenia folder, same contract as _rs_refresh:
+        the folder is the truth, not the config."""
+        try:
+            st = dlss.status(self._rs_xenia())
+        except Exception as e:
+            self._dl_status.set(f"DLSS: {e}"); return
+        self._dl_status.set(st["detail"])
+        self._dl_on.set(bool(st.get("enabled")))
+
+    def _dl_toggle(self):
+        want = self._dl_on.get()
+        try:
+            ok, msg = (dlss.enable if want else dlss.disable)(self._rs_xenia())
+        except Exception as e:
+            ok, msg = False, str(e)
+        if ok:
+            self.cfg["dlss_enabled"] = want
+            # enable() turns ReShade on as a side effect; record that or the ReShade
+            # checkbox comes back unticked on the next start.
+            if want:
+                self.cfg["reshade_enabled"] = True
+            save_config(self.cfg)
+            self._log("DLSS " + ("enabled" if want else "disabled"))
+            # Worth a dialog on the way on: it carries the hardware and
+            # nvngx_dlssnr.dll caveats, which the one-line status cannot.
+            if want:
+                messagebox.showinfo("DLSS", msg)
+        else:
+            messagebox.showerror("DLSS", msg)
+        self._rs_refresh()   # refreshes both lines; last, so they reflect reality
+
+    def _dl_remove(self):
+        if not messagebox.askyesno(
+                "Remove DLSS",
+                "Delete the DLSS add-on from the Xenia folder?\n\nTo simply turn it off, "
+                "untick \"Use DLSS\" instead — that keeps the file in place.\n\n"
+                "nvngx_dlssnr.dll is yours and is never touched either way."):
+            return
+        try:
+            ok, msg = dlss.remove(self._rs_xenia())
+        except Exception as e:
+            ok, msg = False, str(e)
+        if ok:
+            self.cfg["dlss_enabled"] = False
+            save_config(self.cfg)
+            self._log("DLSS add-on removed")
+            messagebox.showinfo("DLSS", msg)
+        else:
+            messagebox.showerror("DLSS", msg)
+        self._dl_refresh()
 
     # ── Default matchup (boot teams) ──────────────────────────────────────────
 
@@ -7608,7 +7995,7 @@ class App(tk.Tk):
             if kind == "heads":
                 return "Custom Player Heads"
             if kind == "collars":
-                return "Custom Collars (skater collar meshes in global.iff)"
+                return "Custom Collars (player + jersey-select collar meshes)"
             if kind == "tex":
                 return _labelmap.get(gid, gid)
             return f"Audio — {gid}" if gid != "Audio" else "Audio"
@@ -7924,9 +8311,16 @@ class App(tk.Tk):
         root = self._get_root()
         if not root: return
         p = filedialog.askopenfilename(
-            title="Import Mod Pack",
-            filetypes=[("Mod Pack", "*" + mp.PACK_EXT), ("Zip", "*.zip"), ("All", "*.*")])
+            title="Install Mod Pack",
+            filetypes=[("Mod Pack or Release", ("*" + mp.PACK_EXT, "*" + rp.EXT)),
+                       ("Mod Pack", "*" + mp.PACK_EXT),
+                       ("Release Pack", "*" + rp.EXT),
+                       ("Zip", "*.zip"), ("All", "*.*")])
         if not p: return
+        # A release pack is a whole-game rebuild against clean files, not a merge — different
+        # artefact, different flow, and it must not be fed to the merge picker.
+        if rp.is_releasepack(p):
+            return self._install_releasepack(p)
         self._log(f"─── Import Mod Pack: {Path(p).name} ───")
         ros_path = self._current_roster_path()
         def work():
@@ -7941,6 +8335,137 @@ class App(tk.Tk):
             if pend:
                 self._merge_with_selection(pend[0], pend[1], "Mod Pack")
         self._run_in_thread(work, op_label="Reading Mod Pack…", on_done=done)
+
+    # ── release packs ────────────────────────────────────────────────────────
+    # A .n2kreleasepack is not a merge. It describes ONE EXACT VOLUME and rebuilds it out of the
+    # recipient's own clean game files, so the flow is: warn (this replaces the game folder) ->
+    # point at a clean copy (which is also the ownership check) -> preflight -> write. See
+    # launcher/releasepack.py for why it cannot work any other way.
+    def _install_releasepack(self, pack):
+        if self._op_busy():
+            return
+        try:
+            man = rp.read_manifest(pack)
+        except Exception as e:
+            messagebox.showerror("Release Pack", f"That file could not be read: {e}")
+            return
+        game_dir = self._get_game_root()
+        if not game_dir:
+            messagebox.showerror("Release Pack",
+                "Set the game files folder (with 0A/0B/1A/1B) in Settings first.")
+            return
+
+        if not messagebox.askokcancel(
+                "Install Release — read this first",
+                f"{rp.describe(man)}\n\n"
+                "THIS IS NOT A MOD PACK.\n\n"
+                f"It rebuilds your whole game folder:\n    {game_dir}\n\n"
+                "Everything in there — every texture, audio and roster edit you have applied to "
+                "the game files — is REPLACED by the release. Back it up now if you want it "
+                "back later.\n\n"
+                "You will also need a CLEAN, unmodified copy of the game (0A, 0B, 1A, 1B, "
+                "default.xex, nxeart) in a separate folder. The release is built as a patch "
+                "against those files, so it cannot install without them.\n\n"
+                "Continue?", icon="warning"):
+            return
+
+        clean = filedialog.askdirectory(
+            title="Select your CLEAN, unmodified game files folder")
+        if not clean:
+            return
+        ok, missing, detail = rp.verify_clean(clean)
+        if not ok:
+            messagebox.showerror(
+                "Clean game files not found",
+                f"{Path(clean).name} is not a clean copy of the game.\n\n{detail}\n\n"
+                "It needs all six of: " + ", ".join(rp.CLEAN_FILES) + "\n\n"
+                "Copy them out of your own disc rip into a folder of their own, and do not let "
+                "the launcher mod that folder.")
+            return
+        self._log(f"[release] clean copy verified: {clean} — {detail}")
+
+        ok, msg = rp.preflight(pack, clean, game_dir)
+        if not ok:
+            messagebox.showerror("Cannot install this release", msg)
+            return
+        if not messagebox.askokcancel(
+                "Install Release",
+                f"{msg}\n\nClean files:  {clean}\nInstall into:  {game_dir}\n\n"
+                "This writes several GB and takes a few minutes. Do not close the launcher.\n\n"
+                "Install now?"):
+            return
+
+        self._log(f"─── Install Release: {Path(pack).name} ───")
+        self._release_result = None
+
+        def work():
+            try:
+                self._release_result = rp.install(
+                    pack, clean, game_dir, log=self._log_q.put,
+                    progress=lambda i, n: self._emit_progress(i, n, "rebuilding game files"))
+            except Exception as e:
+                self._release_result = {"error": str(e)}
+                self._log_q.put(f"[release] FAILED — {e}")
+
+        self._run_in_thread(work, op_label="Installing release…",
+                            on_done=self._install_releasepack_done)
+
+    def _install_releasepack_done(self):
+        res = getattr(self, "_release_result", None)
+        self._release_result = None
+        if not res:
+            return
+        if res.get("error"):
+            messagebox.showerror(
+                "Release install failed",
+                res["error"] + "\n\nYour game folder is now part-written — re-run the install "
+                "against your clean files to finish it.")
+            return
+        # The archives were rewritten wholesale underneath every cache the launcher keeps.
+        try:
+            voltree.forget()
+        except Exception:
+            pass
+        self._reload_all()
+
+        ros = res.get("roster") or ""
+        extra = ""
+        if ros:
+            extra = f"\n\nThe release's roster was written to:\n{ros}"
+            target = self.cfg.get("roster_path", "")
+            if target and messagebox.askyesno(
+                    "Use the release's roster?",
+                    f"This release ships a roster save.\n\nCopy it over your current one?\n\n"
+                    f"{target}\n\nYour existing save is backed up beside it as "
+                    ".ROS.bak first."):
+                try:
+                    t = Path(target)
+                    if t.exists():
+                        shutil.copy2(t, t.with_suffix(t.suffix + ".bak"))
+                    shutil.copy2(ros, t)
+                    self._log(f"[release] roster installed to {target}")
+                    extra = f"\n\nThe release's roster is now your Roster.ROS."
+                except Exception as e:
+                    messagebox.showerror("Roster", f"Could not copy the roster: {e}")
+
+        messagebox.showinfo(
+            "Release installed",
+            "The release is installed and your game files are ready to play." + extra)
+
+        # The recipient's OWN staging folder (NHL2k10_Extracted_Files) is untouched by the
+        # install, so their textures and audio can go back on top of the release — but that is
+        # their call, not ours, and it is the step most likely to conflict with the release's
+        # own art.
+        root = self._get_root(quiet=True)
+        has_local = bool(root and (root / "Textures").exists())
+        if has_local and messagebox.askyesno(
+                "Apply your own mods on top?",
+                "Do you want to re-apply YOUR OWN local mods on top of this release?\n\n"
+                "That is everything sitting in your NHL2k10_Extracted_Files folder — your "
+                "edited textures and replacement audio. Where your files cover the same assets "
+                "as the release, yours win.\n\n"
+                "You can always do this later with “Apply All Mods”."):
+            self._apply_all_mods()
 
     def _revert_modpack(self):
         """Undo a previously-imported mod pack: reset every asset it touched back to the pristine
@@ -8189,9 +8714,10 @@ class App(tk.Tk):
                 if sc:
                     sc_status = mp.apply_scoreclock(game_dir, sc, self._log_q.put)
                 if collars:
-                    # AFTER the texture pass: applying a uniform texture resets global.iff's
-                    # blobs from the clean base, which would drop a collar written before it.
-                    self._log_q.put("  installing the custom collars (global.iff re-encode, a few minutes)…")
+                    # AFTER the texture pass: applying a texture resets that archive's
+                    # blobs from the clean base, which would drop a collar written before it. Collars
+                    # span global.iff (players) and frontend_sync.iff (jersey select).
+                    self._log_q.put("  installing the custom collars (blob-0 re-encode per archive, a few minutes)…")
                     try:
                         col_status = mp.apply_collars(game_dir, collars, self._log_q.put)
                         self._log_q.put(f"  {col_status}")
@@ -8216,10 +8742,10 @@ class App(tk.Tk):
                              if "FAILED" not in por_status else
                              "⚠ Portrait pack FAILED — your portraits were left alone (check the log).")
             if col_status:
-                lines.append("Custom collars installed into global.iff — Collar strings ON wears "
+                lines.append("Custom collars installed (players and the jersey-select screen) — Collar strings ON wears "
                              "the laced one, OFF the plain V."
                              if "FAILED" not in col_status else
-                             "⚠ Custom collars FAILED — global.iff was left alone (check the log).")
+                             "⚠ Custom collars FAILED — your game files were left alone (check the log).")
             if sc_status:
                 self._log(f"[modpack] scoreclock: {sc_status}")
                 try:                              # save the imported look as a loadable preset
@@ -8490,6 +9016,7 @@ class App(tk.Tk):
         if r and Path(r).is_dir():
             archtex.set_game_dir(r)
             voltree.forget()                  # the manifest cache is keyed to the old folder
+            livecues.bind(r)                  # so a cached index from another install is dropped
             archtex.LIVE_CATALOG = Path(r) / "live_capture" / "live_offsets.json"
             archtex.reload_live_catalog()
             # A wave bank that has been GROWN cannot stay where the disc put it, so it gets

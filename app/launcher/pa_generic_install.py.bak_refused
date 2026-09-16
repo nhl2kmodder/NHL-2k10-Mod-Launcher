@@ -1,0 +1,275 @@
+"""pa_generic_install.py — install a generated generic-PA bucket into the live game, safely.
+
+This is the install side of the Al/PA-English work. A "bucket" is one phase of generated takes
+(numbers, counts, penalty, timeof, roster, hype) staged as WAVs in
+`PA Ear Test/Al Generic <phase>/`, with `_cues.json` naming each take's target cue by the PHYSICAL
+akey it had when the cue was probed.
+
+That akey is the problem this module exists to solve. It was recorded against the SHIPPED volume;
+23 wave banks have moved or been rewritten since, and acting on a stale akey is what wrote XMA
+packets over 48 art entries on 2026-09-02. So nothing here writes to an address:
+
+    akey  --(shipped bank layout)-->  (bank, bank-relative offset)
+          --(live_rekey, by PROOF)-->  (bank, LIVE cue index)
+          --(live_cues.write_cue)  -->  bounds-checked write, tree + archives
+
+Every step is checkable and every failure is a REFUSAL, never a fallback. A take whose cue cannot
+be proven is skipped and listed; it is not written "close enough".
+
+Three ceilings are enforced, in this order:
+
+  * the take must fit the cue's OWN block (`live_cues` takes that from the cue table, not from the
+    manifest's `packets`, which over-declares on ~27% of palines slots);
+  * the take must fit the bank's TOC entry (`volume_store.write_in_entry`);
+  * the bank must not be one the user asked to be left alone (HELD_BANKS).
+
+⚠ TWO-PART INSTALL. Writing the stream is only half. The cue record's second field is an f32 the
+game scrubs the playback cursor by, so a shorter take installed without updating it plays the new
+audio and then runs on into whatever is left of the old cue. Those records live in a COMPRESSED
+container (gamedata.iff / global.iff), so they are updated in one batched pass, not per take —
+this module emits `_durations.json` for that pass, exactly as pal_pack30 does.
+Nothing is final until that second pass has run.
+
+  python pa_generic_install.py numbers            # dry run — report only, writes nothing
+  python pa_generic_install.py numbers --apply    # write the streams, emit _durations.json
+
+Related: [[project_patch_audio_stale_bank_offsets]], [[project_palines_replace_path_30clubs]],
+[[project_bank_cue_fit_fidelity]].
+"""
+import contextlib
+import json
+import sys
+import tempfile
+import wave
+from pathlib import Path
+
+import numpy as np
+
+import live_cues as LC
+import wave_banks as WB
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from nhl2k10_launcher import bundled_tool, encode_wav_to_fit      # noqa: E402
+
+GAME = Path(__file__).resolve().parents[2]
+EAR = GAME / "PA Ear Test"
+REKEY = Path(__file__).resolve().parent / "data" / "live_rekey.json"
+LEDGER = Path(__file__).resolve().parent / "data" / "pa_installed_cues.json"
+PACKET = 2048
+
+# The user asked that these banks not be written. Only the user lifts this.
+HELD_BANKS = {"playercom.bin", "playercom2.bin", "femusic.bin", "jukeboxmusic.bin"}
+
+
+def shipped_bank_of(akey):
+    """(bank, bank-relative offset) for a SHIPPED physical akey, or (None, None)."""
+    if ":" not in akey:
+        return None, None
+    fid, hx = akey.split(":", 1)
+    lay = WB._load()
+    up = fid.upper()
+    if up not in lay:
+        return None, None
+    vol, _spans, first = lay[up]
+    lg = int(hx, 16) if up == first else int(hx, 16) + vol
+    for arc, (v, spans, f) in lay.items():
+        for n, lo, hi in spans:
+            if lo <= lg < hi:
+                return n, lg - lo
+    return None, None
+
+
+def _trim_silence(src, dst):
+    """Write `src` with its silent head and tail removed. Returns True if anything was cut.
+
+    A generated take carries silence the stock cue does not, and the cue's block is the hard
+    ceiling -- measured on the numbers bucket the budgets are 3 to 6 packets and the overflow is
+    only 1.2x, most of which is trailing silence. Cutting it costs no quality, unlike stepping the
+    encoder down, so it is tried before a take is given up as too long. Only samples below 2% of
+    the take's own peak are cut, and 30 ms of pad is kept at each end so nothing clips the speech.
+    """
+    with contextlib.closing(wave.open(str(src), "rb")) as w:
+        p = (w.getnchannels(), w.getsampwidth(), w.getframerate())
+        a = np.frombuffer(w.readframes(w.getnframes()), dtype="<i2")
+    if a.size == 0 or p[1] != 2:
+        return False
+    thr = max(80.0, np.abs(a).max() * 0.02)
+    nz = np.where(np.abs(a) > thr)[0]
+    if nz.size == 0:
+        return False
+    pad = int(0.030 * p[2])
+    lo, hi = max(0, nz[0] - pad), min(a.size, nz[-1] + pad)
+    if hi - lo >= a.size:
+        return False
+    with contextlib.closing(wave.open(str(dst), "wb")) as w:
+        w.setnchannels(p[0]); w.setsampwidth(p[1]); w.setframerate(p[2])
+        w.writeframes(a[lo:hi].tobytes())
+    return True
+
+
+def _wav_seconds(path):
+    """The take's real length. This is what the cue record's f32 has to be set to."""
+    with contextlib.closing(wave.open(str(path), "rb")) as w:
+        return round(w.getnframes() / float(w.getframerate()), 6)
+
+
+def _ledger():
+    """Which take already owns each live cue: {"bank.bin": {"<cue>": {"tag","phase"}}}.
+
+    The buckets are staged independently and they overlap: measured across the six generic phases,
+    six palines cues are claimed by BOTH roster and hype, so whichever bucket was installed second
+    would quietly take the first one's audio. A cue has one owner, and taking it from another take
+    has to be a decision someone made, not a side effect of the install order.
+    """
+    if not LEDGER.exists():
+        return {}
+    return json.loads(LEDGER.read_text(encoding="utf-8")).get("cues", {})
+
+
+def _rekey_map():
+    if not REKEY.exists():
+        return {}
+    return json.loads(REKEY.read_text(encoding="utf-8")).get("banks", {})
+
+
+def resolve(akey, rekey):
+    """(bank, live cue, proof) for a shipped akey, or (bank, None, reason).
+
+    live_rekey is asked FIRST and its answer is final. Reaching for the raw offset first was the
+    original design and it is unsafe: on a bank the mod has rewritten, a stale 2048-aligned offset
+    lands on some live cue start by coincidence, and content proved 132 of palines' 698 such hits
+    pointed at the wrong cue. The offset is used only for a bank live_rekey has no opinion on,
+    which is a bank it found intact.
+    """
+    bank, rel = shipped_bank_of(akey)
+    if bank is None:
+        return None, None, "no shipped bank owns this address"
+    known = rekey.get(bank)
+    if known:
+        ent = known.get("map", {}).get(akey)
+        if ent:
+            return bank, ent["cue"], ent["why"]
+        return bank, None, "unresolved - no proof ties this key to a live cue"
+    cue = LC.cue_at(bank, rel)
+    if cue is not None:
+        return bank, cue, "offset"
+    return bank, None, "unresolved - bank not re-keyed and the offset is not a cue start"
+
+
+def install(phase, apply=False, force=False, only=None, log=print):
+    """`only` = the take tags to install, and it is the USER-APPROVAL gate, not a convenience.
+
+    A phase's `_cues.json` holds every take the generator has ever landed, but the standing rule is
+    that nothing ships until the user has heard it: "if I didn't say the name or take, it is
+    approved". A review tree is one round of hearing, so the install scope is the tree, not the
+    stage. Without `only` this would install the ~1,200 takes nobody has been served yet alongside
+    the 43 that were approved. Pass the tags; a tag that is not staged is a REFUSAL, so a typo or a
+    renamed take cannot silently narrow the install.
+    """
+    stage = EAR / f"Al Generic {phase}"
+    cues = json.loads((stage / "_cues.json").read_text(encoding="utf-8"))
+    if only is not None:
+        only = set(only)
+        if (missing := sorted(only - set(cues))):
+            raise KeyError(f"{phase}: {len(missing)} requested tag(s) are not in _cues.json, "
+                           f"e.g. {missing[:3]} — refusing rather than installing a subset")
+        cues = {k: v for k, v in cues.items() if k in only}
+    rekey = _rekey_map()
+    xma, ffm = bundled_tool("xma2encode.exe"), bundled_tool("ffmpeg/ffmpeg.exe")
+    if not xma or not ffm:
+        raise RuntimeError("xma2encode.exe / ffmpeg.exe not found under the launcher's tools/")
+
+    done, durs, ntrim = [], {}, 0
+    skipped = {"unresolved": [], "held": [], "claimed": [], "too_long": [], "no_wav": [],
+               "encode": []}
+    owned = _ledger()
+    mine = {}
+    for tag, c in sorted(cues.items()):
+        wav = stage / f"{tag}.wav"
+        if not wav.exists():
+            skipped["no_wav"].append(tag)
+            continue
+        bank, cue, why = resolve(c["cue"], rekey)
+        if cue is None:
+            skipped["unresolved"].append((tag, c.get("name", ""), bank, why))
+            continue
+        if bank in HELD_BANKS:
+            skipped["held"].append((tag, bank))
+            continue
+        prev = owned.get(bank, {}).get(str(cue)) or mine.get((bank, cue))
+        if prev and prev.get("tag") != tag and not force:
+            skipped["claimed"].append((tag, bank, cue, prev.get("phase", "?"), prev.get("tag", "?")))
+            continue
+        s = LC.slot(bank, cue)
+        budget = s["size"] // PACKET
+        trimmed = False
+        with tempfile.TemporaryDirectory(prefix="pa_fit_") as td:
+            src = wav
+            try:
+                raw = encode_wav_to_fit(src, 1, ffm, xma, s["rate"], budget)[0]
+                if len(raw) > s["size"]:
+                    cut = Path(td) / f"{tag}.wav"
+                    if _trim_silence(wav, cut):
+                        alt = encode_wav_to_fit(cut, 1, ffm, xma, s["rate"], budget)[0]
+                        if len(alt) < len(raw):
+                            raw, src, trimmed = alt, cut, True
+                dur = _wav_seconds(src)
+            except Exception as exc:
+                skipped["encode"].append((tag, str(exc)[:80]))
+                continue
+        if len(raw) > s["size"]:
+            skipped["too_long"].append((tag, len(raw) // PACKET, budget))
+            continue
+        if trimmed:
+            ntrim += 1
+        mine[(bank, cue)] = {"tag": tag, "phase": phase}
+        if apply:
+            LC.write_cue(GAME, bank, cue, raw.ljust(s["size"], b"\0"))
+            durs.setdefault(bank, {})[str(cue)] = dur
+        done.append((tag, bank, cue, why, len(raw) // PACKET, budget))
+
+    log(f"\n{phase}: {len(cues)} staged takes")
+    log(f"  installable  {len(done)}"
+        f"   (offset proof {sum(1 for d in done if d[3] == 'offset')},"
+        f" content proof {sum(1 for d in done if d[3] == 'content')})")
+    if ntrim:
+        log(f"  fitted by trimming silence: {ntrim}")
+    for k, v in skipped.items():
+        if v:
+            log(f"  skipped/{k:<11} {len(v)}")
+    for t in skipped["unresolved"][:5]:
+        log(f"      {t[0]}  {t[1][:34]:<34} {t[2]}  {t[3]}")
+    for t in skipped["claimed"][:6]:
+        log(f"      {t[0]} would take {t[1]} cue {t[2]} from {t[3]}/{t[4]} — pass --force to allow")
+
+    if apply:
+        led = {}
+        if LEDGER.exists():
+            led = json.loads(LEDGER.read_text(encoding="utf-8"))
+        led.setdefault("_comment", "Which take owns each live cue. A second bucket that targets an "
+                                   "owned cue is refused unless --force, so installing in a "
+                                   "different order cannot silently change the result.")
+        cues = led.setdefault("cues", {})
+        for (bank, cue), who in mine.items():
+            cues.setdefault(bank, {})[str(cue)] = who
+        LEDGER.write_text(json.dumps(led, indent=1), encoding="utf-8")
+        p = stage / "_durations.json"
+        p.write_text(json.dumps(durs, indent=1), encoding="utf-8")
+        log(f"\n  wrote {len(done)} streams; durations for the container pass -> {p.name}")
+        log("  WARNING - NOT FINISHED: run the cue-record pass so each cue's f32 duration matches the "
+            "take, or the game plays past the new audio into the old cue's tail.")
+    else:
+        log("\n  DRY RUN — nothing written. Re-run with --apply.")
+    return done, skipped
+
+
+if __name__ == "__main__":
+    args = [a for a in sys.argv[1:] if not a.startswith("--")]
+    # --only=<file>: one take tag per line (blank lines and #comments ignored).
+    sel = next((a.split("=", 1)[1] for a in sys.argv[1:] if a.startswith("--only=")), None)
+    tags = None
+    if sel:
+        tags = [ln.strip() for ln in Path(sel).read_text(encoding="utf-8").splitlines()]
+        tags = [t for t in tags if t and not t.startswith("#")]
+    install(args[0] if args else "numbers", apply="--apply" in sys.argv,
+            force="--force" in sys.argv, only=tags)

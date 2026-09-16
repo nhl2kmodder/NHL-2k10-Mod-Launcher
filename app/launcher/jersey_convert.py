@@ -1,13 +1,13 @@
-"""jersey_convert.py -- turn an NHL 23 jersey texture set into an NHL 2K10 one.
+"""jersey_convert.py -- turn a modern EA jersey texture set into an NHL 2K10 one.
 
 The two games flatten a hockey shirt almost identically, which is what makes this tractable:
-NHL 23's jersey base and 2K10's `uniform_base` differ by a single anisotropic scale about the
+EA's jersey base and 2K10's `uniform_base` differ by a single anisotropic scale about the
 texture centre (fitted in data/jersey_convert_profile.json; sleeve stripes land within ~1px).
 Both scales are below 1, so the edges of the destination ask for source that does not exist;
 `body.relax` eases that shortfall out over a wide band instead of padding it (see body_transform).
 Everything else is repacking, because the two engines SPLIT the same art differently:
 
-    NHL 23                             NHL 2K10
+    EA (NHL 23/26)                     NHL 2K10
     base   jersey only, logos baked    uniform_base  jersey + pants + collar + socks, no logos
     pant   separate file               uniform       stamps / normal / helmet / letters / ...
     sock   separate file
@@ -18,20 +18,28 @@ So the conversion is three jobs:
   1. Repack the base. Which pixel of the 1024x1024 base belongs to which garment is a property
      of the MESH, so it is read from data/uniform_uv_regions.png (baked by
      tools/build_uv_regions.py from the captured player mesh) rather than eyeballed. The jersey
-     islands come from NHL 23's base through the fitted transform; pants and socks come from
-     their own files; the collar is borrowed from the base's top band because NHL 23 has no
+     islands come from the source base through the fitted transform; pants and socks come from
+     their own files; the collar is borrowed from the base's top band because EA ships no
      collar texture at all.
 
   2. Lift the logos. 2K10 wants the crest and shoulder patch OUT of the base and INTO the stamp
-     sheet, so each is detected, cut out, and the hole filled. Detection and fill are the same
+     sheet, so each is detected, cut out, and the hole filled. (NHL 26 also dumps every mark as
+     its own cut-out -- see find_decals -- so the tab prefers those and this pass is the
+     fallback for a folder that shipped none.) Detection and fill are the same
      operation: estimate the background by sampling far along each axis (stripes survive that,
      compact blobs do not), and the difference IS the logo while the estimate IS the fill.
 
-  3. Rebuild the glyphs. NHL 23 keeps letters, jersey numbers, helmet numbers and the C/A
+  3. Rebuild the glyphs. EA keeps letters, jersey numbers, helmet numbers and the C/A
      patches in one atlas with literal colours. 2K10 splits them across three sheets and expects
      them COLOUR-KEYED -- blue is the fill mask, red and green are the outline masks, and the
      shader substitutes team palette colours. Converted glyphs are fitted into the STOCK sheet's
      own ink boxes, so each team keeps its own metrics and no glyph-UV table has to be found.
+
+The source set is an NHL 26 dump; roles are decided from the PIXELS, not the filenames, because
+the NHL 26 exporter names every file after the shader sampler it landed on (see nhl26_sources).
+The UV calibration was fitted on NHL 23 art and carries over unchanged: NHL 26 ships the same
+layout at the same sizes (base and pants 2048x2048, socks 1024x1024, font atlas resampled to
+the profile's 1024x1024), which is why "nhl23_font" survives as a profile key.
 
 Nothing here touches the game files; `convert()` returns images and the caller writes them.
 Runs standalone for testing:
@@ -48,6 +56,8 @@ from pathlib import Path
 
 import numpy as np
 from PIL import Image
+
+from . import nhl26_sources as N26
 
 try:
     from . import resources as R
@@ -67,7 +77,8 @@ REGION_ORDER = ("jersey_back", "jersey_front", "jersey_arms", "pants", "collar",
 # the wrong crop.
 MIN_ISLAND = 256
 
-# The four NHL 23 inputs. `stem` is what a file must contain to be auto-detected.
+# The four garment inputs the conversion needs, in the order the tab lists them.
+# `find_sources` fills them from a kit folder; `pick_source` overrides one by hand.
 SOURCE_KINDS = (("base", "base"), ("pant", "pant"), ("sock", "sock"), ("font", "font"))
 
 # 2K10 texture index -> what it is, inside uniform_*.iff and uniform_base_*.iff.
@@ -133,97 +144,37 @@ def load_image(path) -> Image.Image:
     return Image.fromarray(body[:, :, [2, 1, 0, 3]], "RGBA")     # BGRA -> RGBA
 
 
-# NHL 23 ships several maps per garment under the same stem, distinguished only by the last
-# underscore token: `..._color` is the albedo we want, `..._coeff` is a packed PBR coefficient
-# map that LOOKS like plausible art in a thumbnail and silently ruins a conversion. Anything in
-# this list that isn't `color` is an instant reject; a name with no map suffix at all is still
-# accepted, because the hand-renamed proto files (`base_NHL23.DDS`) have none.
-_MAP_SUFFIXES = frozenset((
-    "color", "coeff", "normal", "nrm", "norm", "spec", "gloss", "rough", "metal",
-    "mask", "ao", "alpha", "opacity", "disp", "emis", "emissive", "cube", "tint"))
-
-# kind -> substrings that identify it, MOST SPECIFIC FIRST. Every name is tested against the
-# kinds in this order, so `jersey_adidas_tor_home_numbers_color` lands on `font` and not on
-# `base`, even though it also says "jersey", and `helmetlogo_adidas_toronto_home_0_color` lands
-# on the helmet decal instead of winning the base slot on the word "adidas" alone.
-_KIND_HINTS = (
-    ("helmet_logo", ("helmetlogo", "helmet_logo", "helmetdecal")),
-    ("font", ("font", "number", "digit")),
-    ("pant", ("pant",)),
-    ("sock", ("sock",)),
-    ("base", ("base", "jersey", "adidas")),
-)
-
-# A garment folder also holds crest/patch/badge art that shares the `_adidas_<team>_<kit>_color`
-# shape. Those are decals, never a garment sheet, so nothing carrying one of these words is
-# allowed to fill a garment slot no matter how well the rest of the name matches.
-_NOT_A_GARMENT = ("logo", "crest", "patch", "badge", "decal", "emblem", "capt", "helmet",
-                  "glove", "stick", "skate", "mask")
-
-
-def _source_rank(name: str, kind: str) -> int | None:
-    """Preference for `name` as source `kind`. None rejects it outright.
-
-    3 = the canonical `<kind-ish>_adidas_…_color` shape, 2 = some other explicit `_color` map,
-    1 = no map suffix at all (so probably already the albedo -- the hand-renamed proto files).
-    """
-    stem = name.rsplit(".", 1)[0]
-    tail = stem.rsplit("_", 1)[-1]
-    if tail in _MAP_SUFFIXES:
-        if tail != "color":
-            return None
-        rank = 2
-    else:
-        rank = 1
-    if kind != "helmet_logo" and any(w in stem for w in _NOT_A_GARMENT):
-        return None
-    # `jersey_…` / `pant_…` / `sock_…` as the FIRST token is the shipped naming; prefer it over a
-    # name that merely mentions the word somewhere in the middle.
-    head = stem.split("_", 1)[0]
-    if rank == 2 and head in ("jersey", "pant", "pants", "sock", "socks"):
-        rank = 3
-    return rank
-
+# ── source detection ─────────────────────────────────────────────────────────
 
 def find_sources(folder) -> dict[str, Path]:
-    """Auto-detect the NHL 23 inputs in a folder.
+    """Auto-detect the NHL 26 garment inputs in a kit folder.
 
-    Handles both the shipped naming (`jersey_adidas_{team}_{variation}_color.dds` and its
-    pants/socks/numbers siblings) and the hand-renamed proto files (`base_NHL23.DDS`). Besides
-    the four garment sheets this can return `helmet_logo`, which is a decal rather than a source
-    texture -- the tab routes it to the helmet-logo art slot.
+    Delegated to `nhl26_sources`, which decides a texture's role from its PIXELS. It has to:
+    the NHL 26 exporter names each file after whatever shader sampler it landed on, so in
+    anaheim/eleven `jersey_..._base_color.dds` is the normal map and `jersey_..._base_normal.dds`
+    is the albedo. Reading the role off the last underscore token -- which is what this used to
+    do, and what worked for NHL 23 -- picks the wrong file about as often as the right one.
+
+    -> `base`, `pant`, `sock`, `font`, `font_normal`, `helmet_logo` (the last is a decal, which
+    the tab routes to the helmet-logo art slot rather than into the conversion's source set).
     """
-    folder = Path(folder)
-    best: dict[str, tuple[int, Path]] = {}
-    for f in sorted(folder.iterdir()):
-        if not f.is_file() or f.suffix.lower() not in (".dds", ".png", ".tga"):
-            continue
-        low = f.name.lower()
-        if "2k10" in low:                              # a 2K10 sheet sitting alongside the sources
-            continue
-        for kind, hints in _KIND_HINTS:
-            if not any(h in low for h in hints):
-                continue
-            rank = _source_rank(low, kind)
-            if rank is not None and rank > best.get(kind, (0, None))[0]:
-                best[kind] = (rank, f)
-            break
-    out = {k: v[1] for k, v in best.items()}
+    return N26.find_sources(folder)
 
-    # The font atlas ships a NORMAL beside its colour (font_adidas_<team>_<kit>_normal.DDS), and
-    # it is EA's own embroidery for these exact glyphs -- the twill face, the bevel at the outline
-    # step, and the zig-zag chain stitch that runs the whole way round both edges. Nothing
-    # synthetic reproduces that, so when the file is there it is taken instead. `_source_rank`
-    # rejects every `_normal` map by design (they are not albedo), so it is found by name off the
-    # colour sheet that already won the slot rather than by another hint pass.
-    font = out.get("font")
-    if font is not None:
-        for cand in (font.with_name(font.name.replace("_color", "_normal")),
-                     font.with_name(font.stem + "_normal" + font.suffix)):
-            if cand != font and cand.exists():
-                out["font_normal"] = cand
-                break
-    return out
+
+def find_decals(folder) -> dict[str, Path]:
+    """The kit's crest and patch art, named by what it IS -> {role: Path}.
+
+    NHL 26 dumps each mark as its own 512x512 cut-out, so the crest, the shoulder patches, the
+    NHL shield and the supplier mark no longer have to be cut back out of the jersey sheet the
+    way the NHL 23 flow did. Roles: `crest`, `nhl_shield`, `fanatics_mark`, `adidas_mark`,
+    `end_plastic_waste`, `patch0`..`patchN`.
+    """
+    return N26.decal_roles(folder)
+
+
+def find_all(folder) -> tuple[dict[str, Path], dict[str, Path]]:
+    """(garments, decals) off a single scan of the folder. What the tab calls."""
+    return N26.resolve_folder(folder)
 
 
 # ── small image helpers ───────────────────────────────────────────────────────────────────────
@@ -1437,6 +1388,7 @@ def build_stamps(glyphs: dict, logos: list, profile: dict, stock: Image.Image | 
     # COMPOSING a kit from NHL 23 art. When editing an existing kit they are not: the sheet
     # already has marks, and swapping them because a different slot was touched is not an edit
     # anyone asked for. So in canvas mode only the caller's own art counts.
+    art_filled = set()                    # slots an uploaded file actually landed in
     for name, spec in ({**cfg.get("art", {}), **(art or {})} if canvas is None
                        else dict(art or {})).items():
         if name.startswith("_") or name not in slots or not on(name):
@@ -1458,6 +1410,7 @@ def build_stamps(glyphs: dict, logos: list, profile: dict, stock: Image.Image | 
         out.paste(Image.new("RGBA", (sw, sh), (0, 0, 0, 0)), (x, y))   # clear the stock mark
         fitted, xy = fit_into(cell, (x, y, sw, sh), pad=0.08)
         paste_rgba(out, fitted, xy)
+        art_filled.add(name)
 
     # Editing an existing sheet, "off" has to actively erase: there is no blank start to fall
     # back to, so a slot the user turned off would otherwise keep the kit's own mark.
@@ -1467,7 +1420,12 @@ def build_stamps(glyphs: dict, logos: list, profile: dict, stock: Image.Image | 
                 x, y, sw, sh = slots[name]["rect"]
                 out.paste(Image.new("RGBA", (sw, sh), (0, 0, 0, 0)), (x, y))
 
-    by_stamp = {lg.stamp: lg for lg in logos if lg.stamp}
+    # A logo LIFTED off the base is a fallback, not an override. An NHL 26 folder ships the crest
+    # and the shoulder patches as their own clean cut-outs, and the tab routes them here as art;
+    # pasting the copy scraped back off the jersey -- reconstructed background, fill seams and all
+    # -- on top of that would throw the better one away. Same precedence build_helmet already
+    # applies to its own logo slot.
+    by_stamp = {lg.stamp: lg for lg in logos if lg.stamp and lg.stamp not in art_filled}
     for name, logo in by_stamp.items():
         if name not in slots or not on(name):
             continue
@@ -1483,10 +1441,20 @@ def build_stamps(glyphs: dict, logos: list, profile: dict, stock: Image.Image | 
     # a real pair of pants wears. Composition only -- editing an existing kit must not grow a
     # patch it never had -- and skipped if anything already filled the cell.
     if canvas is None and "pants_patch" in slots and on("pants_patch") \
-            and "pants_patch" not in by_stamp and by_stamp.get("crest") is not None:
+            and "pants_patch" not in by_stamp and "pants_patch" not in art_filled:
+        # Whatever is IN the crest cell: the uploaded crest when there was one, the lifted crest
+        # otherwise. Read back off the sheet so the thigh always matches the chest.
+        crest_cell = None
+        if "crest" in art_filled and "crest" in slots:
+            cx, cy, cw, ch = rect_of("crest")
+            cell = out.crop((cx, cy, cx + cw, cy + ch))
+            crest_cell = cell if cell.getchannel("A").getbbox() else None
+        elif by_stamp.get("crest") is not None:
+            crest_cell = by_stamp["crest"].image
         x, y, sw, sh = rect_of("pants_patch")
-        if not out.crop((x, y, x + sw, y + sh)).getchannel("A").getbbox():
-            fitted, xy = fit_into(by_stamp["crest"].image, (x, y, sw, sh), pad=0.08)
+        if crest_cell is not None and not out.crop(
+                (x, y, x + sw, y + sh)).getchannel("A").getbbox():
+            fitted, xy = fit_into(crest_cell, (x, y, sw, sh), pad=0.08)
             paste_rgba(out, fitted, xy)
 
     # The shoulder patches are the game's own stamps (entries 2/3 of the slot table, placed by
@@ -1706,8 +1674,8 @@ def convert(sources: dict[str, Image.Image], stock: dict[str, Image.Image] | Non
 
 def _main(argv=None) -> int:
     import argparse
-    ap = argparse.ArgumentParser(description="Convert an NHL 23 jersey set to NHL 2K10 sheets.")
-    ap.add_argument("--src", required=True, help="folder holding the NHL 23 base/pant/sock/font")
+    ap = argparse.ArgumentParser(description="Convert an NHL 26 jersey set to NHL 2K10 sheets.")
+    ap.add_argument("--src", required=True, help="folder holding the NHL 26 base/pant/sock/font")
     ap.add_argument("--stock", help="extracted 2K10 kit folder (base.dds, stamps.dds, …) to use "
                                     "as the layout template")
     ap.add_argument("--out", required=True, help="folder to write the converted sheets into")
@@ -1718,7 +1686,7 @@ def _main(argv=None) -> int:
 
     src_paths = find_sources(a.src)
     if not src_paths:
-        print(f"no NHL 23 textures found in {a.src}")
+        print(f"no NHL 26 textures found in {a.src}")
         return 1
     print("sources:")
     for k, p in sorted(src_paths.items()):

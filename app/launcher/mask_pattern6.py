@@ -27,6 +27,23 @@ idempotent, whole module SHA-roundtrip revertible):
   5. GetMaskPatternMax @0x840A9030: li r3,0x1F -> 0x3F.
   6. Per-shell max-pattern table DAT_8493CAA8[0]: 31 -> 63 (validators/
      sanitizer accept patterns 32-63 on shell 0).
+  7. STREAMING-POOL SIZER GRID WIDTH 0x20 -> 0x40 at all ten
+     `Tex_PrecacheGrid2D(s_goalie_mask_fmt, 0x20, 7)` call sites.
+     `Tex_PrecacheGrid2D` is NOT a precache -- it is the helmet family's SIZE
+     CALLBACK: it builds every `helmet_gNN_pattern_NN.iff` name in an
+     (patterns x shells) grid, stats each through the TOC and keeps the
+     MAXIMUM, and that maximum becomes the capacity of every helmet slot in
+     the streaming pool.  At width 0x20 it only ever sees patterns 0-31, so an
+     added slot 32-63 is INVISIBLE to the sizer and cannot raise the ceiling.
+     `Asset_StreamLoadWorker` @0x83D32DF8 then does
+     `if (capacity < file_size) { req+0x20 = 1; return; }` -- it marks the
+     request finished but never signals completion, so entering gameplay with
+     a goalie wearing an oversized added slot sticks on a blinking
+     "Loading..." forever.  Widening the grid to 0x40 makes patterns 32-63
+     participate in the max exactly like 0-31, so added slots auto-raise the
+     ceiling the same way stock ones do.  Missing names are already the normal
+     case here (the stock grid stats 224 names for 84 real files), so the
+     extra 224 stats are harmless.  See [[project_streaming_pool_ceiling]].
 Known caveat: the CZ appearance-editor keeps its OWN packed copy of the mask
 fields (+0x0C accessor bank @0x83D481C0..) still capped at 31 — editing a
 6-bit goalie's mask in Create Zone clamps it back under 32.  Assign via the
@@ -80,6 +97,18 @@ WORD_SITES = (
     (0x840A88E8, 0x514BB950, 0x514BB990),  # browse write-back (prev)
     (0x840A9030, 0x3860001F, 0x3860003F),  # GetMaskPatternMax 31 -> 63
     (0x8493CAA8, 0x0000001F, 0x0000003F),  # max-pattern table, shell 0
+) + tuple(
+    # helmet streaming-pool sizer grid width: li r4,0x20 -> li r4,0x40, so the
+    # size pass stats patterns 0-63 and added slots can raise the pool ceiling.
+    # All ten sites load the same s_goalie_mask_fmt table base (0x84A25DC0,
+    # +0x20 / +0x24), i.e. every one of them is the goalie-helmet family.
+    (va, 0x38800020, 0x38800040) for va in (
+        0x83FDCB9C, 0x83FDCBBC,  # Tex_PrecacheGoalieHelmets_0/_0b (shared prologue)
+        0x83FDDAE0, 0x83FDDBF0,  # Tex_PrecacheGoalieHelmets   / _2
+        0x83FDE548, 0x83FDE658,  # Tex_PrecacheGoalieHelmets_3 / _4
+        0x83FDEFB0, 0x83FDF0C0,  # Tex_PrecacheGoalieHelmets_5 / _6
+        0x83FDFA18, 0x83FDFB28,  # Tex_PrecacheGoalieHelmets_7 / _8
+    )
 )
 
 

@@ -411,7 +411,21 @@ def read_model(b: bytes, m: dict) -> dict:
 # ───────────────────────────── skinning ─────────────────────────────
 # Which rig each mesh is bound to. Both sit immediately behind their skeleton in the blob
 # (doc 30), which is also why the palette below can be found by walking back from the table.
-RIG_TABLE = {"goalie": 0x6456F0, "skater": 0x1323AF4}
+# The skater ships four times over: the gameplay body plus three self-contained copies that
+# pack head, helmet and gloves inline at falling vertex budgets (the bench/distant/menu
+# players). Each copy carries its own five-collar set, so garment edits have to visit all four.
+# The front-end jersey-select garment is NOT one of those copies -- it lives in frontend_sync.iff
+# (0x171FC0), the only 3D mesh there, and carries its own five collar styles as parts 6-10. So a
+# rig name alone is not enough to find a model: RIG_ASSET says which archive to look in.
+RIG_TABLE = {"goalie": 0x6456F0, "skater": 0x1323AF4,
+             "skater2": 0x11F8040, "skater3": 0xF0AC60, "skater4": 0x12AC510,
+             "frontend": 0x171FC0}
+RIG_ASSET = {"frontend": "frontend_sync.iff"}          # anything unlisted lives in global.iff
+
+
+def rig_asset(rig: str) -> str:
+    """The archive holding the named rig's model."""
+    return RIG_ASSET.get(rig, ASSET)
 
 
 def rig_model(models: list[dict], rig: str) -> dict | None:

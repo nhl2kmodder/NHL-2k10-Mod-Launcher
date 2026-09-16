@@ -67,11 +67,29 @@ if _rs_gone:
         + "\nWithout these, Settings > Enable ReShade fails at click time."
     )
 
+# Same story for the DLSS add-on payload — a directory, so invisible to _required.
+# (nvngx_dlssnr.dll is deliberately NOT here: NVIDIA's runtime is not ours to ship.
+# The user supplies it; launcher/dlss.py detects it and says so when it is absent.)
+_dl = data_src / 'dlss'
+_dl_need = [_dl / 'renodx-dlss.addon64']
+_dl_gone = [p for p in _dl_need if not p.exists()]
+if _dl_gone:
+    raise SystemExit(
+        "BUILD ABORTED — the DLSS payload is incomplete in launcher/data/dlss/:\n"
+        + "".join(f"  - {p.relative_to(data_src)}\n" for p in _dl_gone)
+        + "\nWithout it, Settings > Use DLSS fails at click time."
+    )
+
 # Editing tools drop rescue copies next to the real file (speech_seed_names.json.prereferee.bak,
 # named_assets.csv.bak, …). A bare glob swept them into the ONEFILE exe — ~40 MB of snapshots the
 # app never opens, decompressed to _MEIPASS on every launch. Keep them on disk, out of the build.
+# live_cue_index.json is PER-INSTALL state, not data: it records where each audio bank sits in
+# THIS machine's volume. Bundling it ships the developer's offsets to every user, and stale bank
+# offsets are how Patch Game once wrote XMA over 48 art entries. live_cues.ensure() builds it into
+# %APPDATA% on first use (~8 s, once), so it must never enter the exe.
+_STATE_ONLY = {'live_cue_index.json'}
 for _p in sorted(data_src.glob('*')):
-    if _p.is_file() and not _p.name.endswith('.bak'):
+    if _p.is_file() and not _p.name.endswith('.bak') and _p.name not in _STATE_ONLY:
         datas.append((str(_p), 'data'))
 # SUBDIRECTORIES too (data/stamp_art/ — the Jersey Conversion tab's patch art). The glob above
 # is files-only, so a subfolder was silently dropped from the build and the shipped app fell
