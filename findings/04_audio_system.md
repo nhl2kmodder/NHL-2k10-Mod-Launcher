@@ -2,7 +2,7 @@
 
 **Summary:** All NHL 2K10 game audio is raw XMA2 packed back-to-back in the `1A`/`1B` archives; separate IFF "sound bank" directories map each cue to a `{sample_rate, byte-offset, flags}` record that points at a wave in `1A`/`1B`, and the sound *name* system is CRC32-hashed (no uppercasing) with authored strings stored UTF-16BE in the XEX.
 
-**Status:** Solved and verified. 100% of standard XMA2 streams are catalogued (80,347 parsed, 0 unparsed). Extract / replace / repitch works in the launcher **Audio** tab; banks parse + replace-linked in the **Audio Banks** tab. Name system fully reverse-engineered (162 authored names recovered) and shipped as a sortable **Bank / Team** column. Re-pointing a cue's offset (write-back of a bank record's `+0x18`) is NOT yet built.
+**Status:** Solved and verified. 100% of standard XMA2 streams are catalogued (80,347 parsed, 0 unparsed). Extract / replace / repitch works in the launcher **Audio** tab; banks parse + replace-linked in the **Audio Banks** tab. Name system fully reverse-engineered (162 authored names recovered) and shipped as a sortable **Bank / Team** column. Re-pointing a cue's offset is NOT yet built as a tool, but as of 2026-08-21 the **live cue tables are located and decoded** for the name banks (`players.bin`, `paplyrs.bin`, `lines_ps.bin`, `teams.bin`, `horns.bin`) — see **§21**, which is also where the "SKIPPED: N pkts too long" length ceiling is explained.
 
 ---
 
@@ -1849,3 +1849,239 @@ both report the same `want = 31317`, and their two descriptors are byte-identica
 descriptor, i.e. the join is wrong, not the channel count. That bank's `wave_base = 0x429A0CD` is
 also not 2048-aligned, where every working bank has `wave_off` values that are multiples of 0x800.
 Fixing it needs the section-table walk, and it is 2 unnamed sounds — deliberately left alone.
+
+---
+
+## §21 — The slot-length ceiling: the LIVE cue table is locatable and writable (2026-08-21)
+
+**Question that started it:** Patch Game reports `SKIPPED: N pkts too long` for some replacements.
+Can we make a slot longer, now that we understand the IFF/bank structure far better than when
+audio replacement was first built?
+
+**Answer:** yes in principle. The length limit is not a launcher constant — it is a real data
+structure, and this session located and decoded the live copy of it for every name bank.
+
+### 21.1 Where the cue tables actually are
+
+The scan rule is the one `expansion_audio.locate()` already uses for `teams.bin`, generalised: walk
+the decompressed container on a 4-byte stride looking for `u32 1`, a valid sample rate,
+`u32 0x800` (`ALIGN`), with the cue **count** at `o-8`, then confirm the candidate by checking that
+the **sentinel record's offset word equals the bank's size** taken from the live `0A` TOC. That
+sentinel check is what makes the location an exact fact rather than a guess.
+
+Run across `global.iff`, `gamedata.iff` and `Loading.iff` (status: **verified** — decode
+cross-checked, see 21.2):
+
+| bank | container | table header | cues | rate |
+|---|---|---|---|---|
+| `players.bin` (Hahn TV / PxP name calls) | `global.iff` | `0x14EA3D8` | 20,101 | 48000 |
+| `paplyrs.bin` (PA announcer name calls) | `gamedata.iff` | `0x237F58` | 14,227 | 44100 |
+| `lines_ps.bin` | `global.iff` | `0x1540948` | 10,303 | 48000 |
+| `teams.bin` | `global.iff` | `0x1574FF8` | 122 | 48000 |
+| `horns.bin` | `gamedata.iff` | `0x25AEC8` | 39 | 48000 |
+
+Bank sizes used as the anchors: `players.bin` `0xDBE2000`, `paplyrs.bin` `0xF13F800`,
+`lines_ps.bin` `0xD75B800`, `teams.bin` `0x19E000`, `horns.bin` `0x492800`.
+
+The scan also finds ~20 further tables whose sentinels are other banks' sizes (e.g. `0x3FB91800`
+with 19,321 cues, several ~7,000-cue tables around `0x1598C58`-`0x15D7268` in `global.iff`). Those
+are unidentified only because the bank name was not looked up, not because the table is doubtful.
+
+### 21.2 Record layout — records start at `hdr+0x14`, **not** `hdr+0x10`
+
+Each record is 8 bytes: `[u32 bank_relative_offset][f32 duration_seconds]`. Reading from
+`hdr+0x10` yields a plausible-looking but wrong result — the first word decodes as a float
+(~0.7) and the offsets come out non-monotonic and unaligned. That is the trap; `+0x14` is correct
+and is consistent with `expansion_audio`'s own sentinel arithmetic
+(`o + 0x10 + cnt*8 + 4 == o + 0x14 + cnt*8`).
+
+Verified properties of the decoded tables (both `players.bin` and `paplyrs.bin`):
+
+- offsets **strictly ascending**;
+- every offset **2048-aligned** (`PACKET_SIZE`);
+- `sum(block_sizes) == bank_size / 2048` **exactly** (players.bin: 112,580 packets);
+- the trailing sentinel record's offset **== the bank size**, duration `0.0`.
+
+So a cue's stream length is `off[i+1] - off[i]`, exactly as in `teams.bin`.
+
+### 21.3 Mapping a catalog offset to a cue index
+
+Catalog offsets (`1B_Audio_Catalog.json`) are **1B-local**; cue-table offsets are **bank-relative**:
+
+```
+bank_rel = catalog_off - (expansion_audio._span(bank)["base"] - 0x6B800000)
+```
+
+`players.bin` base is `0xA46C3800` in the 1A/1B logical space, so its 1B-local base is
+`0x38EC3800`. Cross-checked against the four PxP name lines that Patch Game skipped — every one
+resolved to an exact record:
+
+| store file | 1B offset | bank-relative | cue # | block | declared dur |
+|---|---|---|---|---|---|
+| `PxP_Name_Last_Hitchcock_By` | `0x3A42B800` | `0x1568000` | 2057 | 4 pk | 0.686 s |
+| `PxP_Name_Last_Witkowski_To` | `0x41128800` | `0x8265000` | 12362 | 6 pk | 0.848 s |
+| `PxP_Name_Last_Wlodarczyk_To` | `0x41174800` | `0x82B1000` | 12392 | 4 pk | 0.754 s |
+| `PxP_Name_Last_Wlodarczyk_By` | `0x4117C000` | `0x82B8800` | 12395 | 4 pk | 0.739 s |
+
+(`PxP_Kicksave_Var4` is not in `players.bin`, so it did not resolve — different bank.)
+
+### 21.4 There is no slack to grow into, but there is a large dead pool
+
+Packing is byte-tight: a stream's declared size equals the gap to the next stream, for every cue
+sampled. The **largest single block anywhere in `players.bin` is 12 packets (~2.4 s)**. So no cue
+can be extended in place. Per-bank block census (packets, min / max / mean):
+`players.bin` 2 / 12 / 5.60 over 20,101 cues; `paplyrs.bin` 2 / 21 / 8.68 over 14,227 cues;
+`horns.bin` 8 / 141 / 60.03 over 39 cues. The PA bank is the roomier of the two name banks,
+which matters because PA reads are slower than Hahn's.
+
+The free space is elsewhere. Of 3,198 TV surnames present in the store, only **605** are live in
+the roster; the other **2,593 dead surnames occupy 90,239 packets, about 176.2 MB, about 286
+minutes** of audio that nothing can ever play. Dead surnames sit in **contiguous runs** (their 6
+variants are adjacent, and adjacent dead surnames merge) — largest run **1,009 packets (~191 s)**,
+median dead block 33 packets (~6.3 s).
+
+**The mechanism (status: theory — decode verified, write path not yet built):** point a live cue's
+record at the **head of a dead run** and write a long stream over that run. The cue then owns the
+whole run's length. Unlike the goal-horn "absorb a neighbour" idea that was rejected earlier, the
+donor here is genuinely unused, so **no team and no player loses an asset** — which is the standing
+constraint that killed the horn version. The stale records of the donor cues still point into the
+middle of the new stream, but they are never resolved, because no roster player keys them.
+
+### 21.5 Why this needs a new write path
+
+**Patch Game never reads the cue table.** `scan_streams()` sniffs XMA2 packet headers in the raw
+archive (`b0&0xF0 == 0x00` / `0x10` / `0x20` with matching low nibbles and `0xFC` at `+6`) and sets
+`packets = gap to the next detected start`. The skip is then simply:
+
+```python
+off = entry["offset"]; max_pkts = entry["packets"]
+raw_new, q = encode_wav_to_fit(..., max_packets=max_pkts)
+excess = len(raw_new)//PACKET_SIZE - max_pkts
+if excess > 0: ... log(f"    SKIPPED: {excess} pkts too long")
+```
+
+`speech_lines.py`'s cue offsets come from the read-only `speech_line_tables.json`, so there is no
+existing write path either. A long-slot install therefore needs three coordinated steps:
+
+1. rewrite the cue record (`[u32 off][f32 dur]`) in the container, the way `expansion_audio` already
+   rewrites `teams.bin`'s;
+2. write the encoded stream over the dead run in `1B`;
+3. rebuild the affected catalog entry so the scanner-derived `packets` matches.
+
+The read half is already written and smoke-tested: `AI Voice Pipeline\cue_table_locate.py`
+scans every container, decodes a named bank's table, re-validates the sentinel against the
+live TOC (so it fails loudly rather than silently if a bank was grown or repacked), and
+exposes `local_1b_base(bank)` for the catalog-offset conversion in 21.3.
+
+Bank size and the TOC do **not** change, so this is far cheaper than the parked grow-and-relocate
+option.
+
+### 21.6 Practical read on the six skips in the 2026-08-21 log
+
+- **Four are harmless.** `Hitchcock_By`, `Witkowski_To`, `Wlodarczyk_To`, `Wlodarczyk_By` still
+  carry the size and mtime of the original 2026-07-30 bulk extraction — they were never edited.
+  They are stock audio being re-encoded into its own slot, and XMA2 round-tripping costs about one
+  packet of encoder overhead, which is exactly the reported excess. Skipping leaves the original
+  bytes intact, which is the correct outcome. The ~0.26-0.29 s/packet these WAVs imply against
+  their slots confirms they were extracted from exactly those slots.
+- **`GoalHorn_Atlanta` (22 pk over)** is the separate horn ceiling. The dead pool in 21.4 does not
+  help: `horns.bin` is `0x492800` with 39 cues and has no dead space, so horns stay capped.
+- **`PxP_Kicksave_Var4`** is a different bank and was not investigated here.
+
+### 21.7 Recommendation for the bulk name replacement
+
+Do **not** build the cue-repoint mechanism first. Add a *fit-to-slot* stage to the voice generator
+instead: a 10-15% tempo nudge on a one-word name callout is inaudible and clears a 1-packet
+overflow outright, and unlike the stock files we control the source audio. Hold 21.4 in reserve
+for the cases where no encoding will fit — **reporter full-name lines especially**, where a donor
+surname slot is far too short for a first-and-last-name read.
+
+### 21.8 Open questions
+
+- Identify the ~20 other cue tables found by the scan (match each sentinel against the full bank
+  size list) so the mechanism is available bank-wide, not just for the name banks.
+- Confirm the engine tolerates a cue whose block overlaps other cues' records (expected: yes, since
+  resolution is per-cue and the donors are never resolved) — needs an in-game test.
+- Decide whether the dead-run allocator should compact (rewrite every record) or only repoint
+  individual cues. Repointing is reversible; compaction is not.
+
+---
+
+## §22 — The phrase-tier identity roster: why most players are never named by the PxP (2026-08-21)
+
+**Question that started it:** the PA says "Elias Pettersson" and the TV/PxP surname call works, but
+the play-by-play never says one of the two Petterssons during live play, even after 10 minutes of
+feeding him the puck. The other Pettersson speaks fine.
+
+**Answer:** the phrase tier is gated by an explicit allow-list of player identities, and it is a
+located data structure, not an inference.
+
+### 22.1 The array
+
+`global.iff` decompressed offset **`0x155901E`** holds `[u16 count = 1011][u16 ids[1011]]`. The ids
+are strictly ascending, range 3..8142, and they are 2K player **identities** — the same value the
+roster carries at rec `+0x1C`.
+
+This is the definitive list of identities the PxP can name in a phrase line. Verified both
+directions against the live symptom: **2316 (Edler) is present at index 885** and that player is
+named in-game; **1939 (DiSalvatore) is absent** and that player is silent. Nothing else about the
+two rows differs in a way that could explain it.
+
+Located by scanning `0x1530000`–`0x1600000` for count-prefixed strictly-ascending u16 arrays. The
+scan finds 94 such arrays; only this one holds player identities. (Naive ascending-run searches
+return dozens of false "hits" that are all sliding sub-windows of the same array, each shifted 2
+bytes — requiring the u16 at `o` to equal the length of the maximal ascending run at `o+2`, then
+skipping past the match, is what makes the result exact.)
+
+### 22.2 Three independent name tiers, three different keys
+
+| tier | roster field | keys | pool |
+|---|---|---|---|
+| PA announcer surname + TV/PxP surname call | `+0x2C` u16 (`0xFFFF` = silent) | `paplyrs.bin` and `players.bin` name banks | 3,198 surnames |
+| PA given name | `+0x2E` u16 | `paplyrs.bin` lines 5000–6074 | 1,075 |
+| **phrase takes** ("Pettersson has it in the corner") | **`+0x1C` u16** | `lines_ps.bin` | **1,011 — this array** |
+
+`+0x1C` is also `OFF_PORTRAIT` in `player_assign.py`: **identity and on-screen portrait key are
+literally the same field.** That is the constraint that decides the whole conversion strategy.
+
+### 22.3 What that means for a full modern-roster conversion
+
+Census against the live roster (2,715 named rows, 1,410 distinct identities, 1,768 distinct
+surnames, 764 first names):
+
+- **Surname tier: no growth needed at all.** 3,198 lines for 1,768 needed surnames — 1.8× headroom.
+  Surnames are already shared for free by every player who spells the same, at no cost.
+- **Given-name tier: 1,075 lines for 764 needed.** Also fine.
+- **Phrase tier: 1,011 hard slots for 2,715 players.** 2,174 rows currently land inside the array;
+  **541 do not** and can never be named in a phrase line. 65 array identities are free (used by no
+  live row); 1,238 stock identities overall are unused. 327 identities are shared by 1,632 rows.
+
+**Merging identities to save slots is not an option** — because `+0x1C` is the portrait key, two
+players on one identity are two players wearing one face. The correct mechanism is the opposite,
+and it is already shipped: **split onto a free identity and duplicate the portrait blob to the new
+key.** Cost is one free array slot plus one portrait blob; nothing else on the roster loses an
+asset, which is the standing constraint that killed the goal-horn "absorb a neighbour" idea.
+
+Applied twice now: Edler `2316 → key 6031` (blob 487), and Cullimore `1939 → 162` (blob 284).
+
+### 22.4 `lines_ps.bin` shape
+
+39 lines, 10,303 takes. The big ones: line 7300 = 2,067 takes, 40999 = 1,011, 7320/7321 = 690 each,
+7310 = 689, 7190 = 427, 7195 = 423. **Line 40999's 1,011 takes is exactly the array length** — one
+take per identity. Line 7300's 2,067 = 3 × 689, i.e. three takes per featured player. The exact
+identity→variation index mapping for the 689/690-take lines was not solved and was not needed; the
+array is the authoritative membership test.
+
+### 22.5 Artifacts
+
+- `AI Voice Pipeline\_phrase_identity_roster.json` — `{"off": 0x1559020, "n": 1011, "ids": [...]}`.
+- `AI Voice Pipeline\_phrase_arrays.json` — all 94 candidate arrays, for auditing.
+- `AI Voice Pipeline\names_out\no_phrase_takes.csv` — the 541 live players with no phrase takes.
+- `AI Voice Pipeline\names_out\no_phrase_takes_NHL.csv` — the 237 of those on an NHL club.
+
+### 22.6 Open
+
+- The identity→variation index mapping inside the multi-take lines (see 22.4).
+- Whether the array can be **grown** in place (it sits inside a compressed container, so growth is a
+  span-relocation problem, not a byte edit). Not attempted — with 65 free slots and 1,238 unused
+  stock identities, splitting covers the near-term need without touching it.

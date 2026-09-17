@@ -33,7 +33,8 @@ disprove something, update the relevant doc and its Open-questions section.**
   rebuild, the Xenos 8-in-16 endian fix, alpha/premultiply handling, lossless 8888,
   multi-texture packs, and why live in-memory texture patching is a dead end.
 - **[04 — Audio system](04_audio_system.md)** — the IFF bank → raw-XMA (`1A`/`1B`) cue
-  system, ~80k stream coverage, and the authored-name cracking.
+  system, ~80k stream coverage, the authored-name cracking, and (§21) where the live cue
+  tables live so a replacement's length ceiling can be raised.
 - **[05 — Goalie masks & equipment](05_goalie_masks_and_equipment.md)** — mask/gear assets,
   repaint (in-place + grow), live mask assignment, quality (DXT1→8888) and the team-tint
   recolor bypass, and the custom-mask *add* investigation.
