@@ -121,6 +121,11 @@ def ensure_flat(xex_path, game_dir=None, log=print):
         raise ValueError(
             f"default.xex is compressed (comp_type={comp}) and xextool.exe was not found — "
             "place xextool.exe in the launcher's tools folder or the game folder")
+    # A stock default.xex copied off the disc is read-only, so `shutil.move` onto it below
+    # raises PermissionError -- after the .compressed.orig backup was already made, which
+    # made it look like the flatten had half-happened. Clear the flag first.
+    import fs_util
+    fs_util.ensure_writable(xex_path)
     bak = xex_path.with_suffix(xex_path.suffix + ".compressed.orig")
     if not bak.exists():
         shutil.copyfile(xex_path, bak)

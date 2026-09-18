@@ -231,6 +231,10 @@ def note_write(game_dir, arc: str, local_off: int, data: bytes, log=None) -> boo
         # already authoritative for it, so pull the entry back out of them rather than guess.
         return False
     p = tree_dir(game_dir) / e["file"]
+    # Game files copied off a disc keep the read-only attribute and every write here is
+    # "r+b". Cleared at each write site, so no path can forget (see fs_util).
+    import fs_util
+    fs_util.ensure_writable(p)
     with open(p, "r+b") as f:
         f.seek(inner)
         f.write(data)
@@ -272,6 +276,8 @@ def write_in_entry(game_dir, name: str, inner: int, data: bytes, log=None) -> bo
         raise ValueError(f"write of {len(data)} at +0x{inner:X} runs outside {name} "
                          f"(size {e['size']}) — the offset is stale, refusing")
     p = tree_dir(game_dir) / e["file"]
+    import fs_util
+    fs_util.ensure_writable(p)
     with open(p, "r+b") as f:
         f.seek(inner)
         f.write(data)
@@ -282,6 +288,8 @@ def write_in_entry(game_dir, name: str, inner: int, data: bytes, log=None) -> bo
         hi = min(voff + len(data), a["hi"])
         if lo >= hi:
             continue
+        import fs_util
+        fs_util.ensure_writable(root / a["name"])
         with open(root / a["name"], "r+b") as f:
             f.seek(lo - a["lo"])
             f.write(data[lo - voff:hi - voff])

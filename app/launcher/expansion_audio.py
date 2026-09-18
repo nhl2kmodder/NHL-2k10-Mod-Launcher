@@ -214,7 +214,18 @@ def plan(game_dir=None, clean_dir=None, new_ids=None, donors=None, log=print, ba
     takes each (32 B) does not fit and `takes=1` (16 B) does. One take means the club is announced
     with the same clip wherever the second ("And <team>") form would have been used.
     """
-    clean_dir = Path(clean_dir or AT.CLEAN_DIR)
+    # AT.CLEAN_DIR NO LONGER EXISTS. archive_textures was refactored CLEAN_DIR -> GAME_DIR
+    # (findings: ".orig = pristine bytes; there is no separate clean-files folder anymore").
+    # The name survives only because arena_trace monkey-patches `at.CLEAN_DIR = at._PROJ` at
+    # import time -- so inside the GUI this line resolved to the AUTHOR'S game folder and
+    # looked fine, while any caller that does not import arena_trace (the speech pack's
+    # installer) died on AttributeError and silently skipped adding the expansion cue slots.
+    # Prefer what the caller actually told us: the game folder being edited.
+    clean_dir = clean_dir or game_dir or getattr(AT, "GAME_DIR", None) or getattr(AT, "CLEAN_DIR", None)
+    if not clean_dir:
+        raise ValueError("expansion_audio.plan: no game folder given "
+                         "(pass game_dir= or clean_dir=, or call AT.set_game_dir first)")
+    clean_dir = Path(clean_dir)
     tgt = TARGETS[bank]
     container = tgt["container"]
     new_ids = list(NEW_AUDIO_IDS if new_ids is None else new_ids)

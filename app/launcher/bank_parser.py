@@ -53,7 +53,13 @@ def bank_menu():
 
 def decompress_bank(name, clean_dir=None):
     """Resolve a bank IFF in the TOC and return (decompressed_bytes, meta) or (None, None)."""
-    clean_dir = Path(clean_dir or AT.CLEAN_DIR)
+    # AT.CLEAN_DIR is gone (refactored to GAME_DIR); it exists at runtime only when
+    # arena_trace has been imported. Fall back through what is actually set.
+    clean_dir = clean_dir or getattr(AT, "GAME_DIR", None) or getattr(AT, "CLEAN_DIR", None)
+    if not clean_dir:
+        raise ValueError("decompress_bank: no game folder given "
+                         "(pass clean_dir=, or call AT.set_game_dir first)")
+    clean_dir = Path(clean_dir)
     loc = AT.resolve(name, clean_dir)
     if not loc:
         return None, None
