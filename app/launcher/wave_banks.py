@@ -160,6 +160,56 @@ def bank_for(fid: str, offset) -> str:
     return ""
 
 
+def shipped_bank_for(fid: str, offset) -> str:
+    """Which bank owns `offset` in the SHIPPED layout, ignoring relocations.
+
+    ~~ Why this exists ~~ Every offset in the audio manifest was recorded when the archives were
+    still pristine, so it is a coordinate in the SHIPPED space and nowhere else. `bank_for` is
+    the right answer for "what is living at this address in the game right now", but it is the
+    wrong question to ask of a manifest key: once a bank has been relocated `bank_for` returns ""
+    for every one of that bank's recorded offsets, and Patch Game read that "" as "stale offset,
+    refuse to write". 23 of the 23 banks are relocated on this install, so every speech slot was
+    refused and 5,241 finished takes sat in the store for weeks while the game played stock audio
+    (Saros' 29 goalie lines among them, which is how it was finally noticed).
+
+    The manifest offset still names its bank correctly and the offset INSIDE that bank is durable
+    -- measured: the live cue table's starts match the shipped-derived ones exactly on 19 of 22
+    banks. Only lines_ts.bin, palines.bin and teams.bin re-flowed internally, and for those
+    live_cues.cue_at() returns None and the caller must refuse rather than guess.
+
+    So: identify the bank and the in-bank offset from the SHIPPED layout, and let
+    volume_store.write_in_entry resolve the bank NAME to a physical address at write time.
+    """
+    if offset is None:
+        return ""
+    up, off = (fid or "").upper(), int(offset)
+    lay = _load().get(up)
+    if not lay:
+        return ""
+    vol, spans, first = lay
+    logical = off if up == first else off + vol
+    for name, lo, hi in spans:
+        if lo <= logical < hi:
+            return name
+    return ""
+
+
+def shipped_rel(fid: str, offset):
+    """Offset INSIDE the owning bank, from the shipped layout, or None. See shipped_bank_for."""
+    if offset is None:
+        return None
+    up, off = (fid or "").upper(), int(offset)
+    lay = _load().get(up)
+    if not lay:
+        return None
+    vol, spans, first = lay
+    logical = off if up == first else off + vol
+    for _name, lo, hi in spans:
+        if lo <= logical < hi:
+            return logical - lo
+    return None
+
+
 def span_of(fid: str, offset):
     """(lo, hi) of the bank owning this stream, in `fid`'s own PHYSICAL offsets, or None.
 

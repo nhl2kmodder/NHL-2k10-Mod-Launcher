@@ -31,6 +31,8 @@ from tkinter import ttk, messagebox, filedialog
 
 from .player_assign import PlayerTable, EYE_COLORS, OFF_HEAD, OFF_EYES, EYE_SHIFT, EYE_MASK
 from .ros_live_editor import KNOWN_FIELDS
+from . import equipment_colors as EQ
+from .colorpick import ask_color
 try:
     from launcher import archive_textures as AT
 except ImportError:                                   # standalone run
@@ -49,7 +51,12 @@ APPEARANCE = [
     {"name": "Eye colour", "off": OFF_EYES, "type": "enum", "lo": EYE_SHIFT, "w": 2,
      "map": {i: c for i, c in enumerate(EYE_COLORS)}, "group": "Appearance"},
 ]
-FIELDS = APPEARANCE + list(KNOWN_FIELDS)
+# The equipment-colour grid goes last: 43 slots would otherwise push the ratings off screen,
+# and the three mask recolours KNOWN_FIELDS already carries are dropped here so they are not
+# offered twice under two different names (equipment_colors is the one that labels them).
+_EQ_OFFS = set(EQ.ALL_OFFSETS)
+FIELDS = ([f for f in APPEARANCE + list(KNOWN_FIELDS)
+           if not (f["type"] == "color" and f["off"] in _EQ_OFFS)] + EQ.fields())
 
 
 class DiskRoster:
@@ -339,8 +346,14 @@ class PlayerEditorFrame(ttk.Frame):
         if self.sel is None or not self.roster:
             return
         self._vars = {}
+        self._swatches = {}
+        # A skater's copy of the goalie slots is 0xFFFFFFFF or leftover name text, and writing it
+        # changes nothing on the ice, so those rows are simply not offered for a skater.
+        goalie = EQ.is_goalie(self.roster.t, self.sel)
         groups = OrderedDict()
         for f in self.fields:
+            if f.get("goalie_only") and not goalie:
+                continue
             groups.setdefault(f.get("group", "Custom"), []).append(f)
         row = 0
         for gname, gfields in groups.items():
@@ -359,6 +372,12 @@ class PlayerEditorFrame(ttk.Frame):
                     e = ttk.Combobox(self._form, textvariable=v, values=labels, width=15,
                                      state="readonly")
                     e.bind("<<ComboboxSelected>>", lambda _e, ff=f, vv=v: self._commit(ff, vv))
+                elif f["type"] == "color":
+                    # 43 hex boxes would be unreadable and unusable: the swatch IS the control.
+                    e = tk.Button(self._form, width=8, relief=tk.GROOVE, bd=1, cursor="hand2",
+                                  command=lambda ff=f: self._pick_color(ff))
+                    self._swatches[f["off"]] = e
+                    self._paint_swatch(f, v.get())
                 else:
                     ro = f["type"] == "name" or f.get("readonly")
                     e = ttk.Entry(self._form, textvariable=v, width=13,
@@ -369,11 +388,53 @@ class PlayerEditorFrame(ttk.Frame):
                 self._vars[f["name"]] = v
             row += (len(gfields) + 1) // 2
 
+    # ── equipment colours ──
+    def _paint_swatch(self, f, hexval):
+        """Show the slot's colour on its button. Residue (alpha != FF) is called out, not painted
+        as if it were a colour -- see equipment_colors on why a non-FF alpha is leftover name text."""
+        b = self._swatches.get(f["off"])
+        if b is None:
+            return
+        try:
+            v = int(hexval, 16)
+        except (TypeError, ValueError):
+            v = EQ.BLANK
+        rgb = "#%06X" % (v & 0xFFFFFF)
+        if not EQ.is_colour(v):
+            b.config(bg="SystemButtonFace", fg="#a33", text="residue")
+            return
+        r, g, bl = (v >> 16) & 0xFF, (v >> 8) & 0xFF, v & 0xFF
+        fg = "#000" if (r * 299 + g * 587 + bl * 114) / 1000 > 140 else "#FFF"
+        b.config(bg=rgb, fg=fg, activebackground=rgb, text=rgb[1:])
+
+    def _pick_color(self, f):
+        """Open the picker seeded with what is there, offering this player's other slots as sources
+        so a set can be matched without eyedropping anything."""
+        var = self._vars[f["name"]]
+        cur = "#%06X" % (int(var.get(), 16) & 0xFFFFFF)
+        grid = EQ.read(self.roster.t, self.sel)
+        seen, sw = set(), []
+        for off, val in sorted(grid.items()):
+            if not EQ.is_colour(val):
+                continue
+            hx = "#%06X" % (val & 0xFFFFFF)
+            if hx in seen:
+                continue
+            seen.add(hx)
+            sw.append((hx, EQ.label_for(off)))
+        got = ask_color(self, initial=cur, title=f["name"], swatches=sw)
+        if not got:
+            return
+        var.set("FF" + got[1:])
+        self._commit(f, var)
+
     def _commit(self, f, var):
         err = self.roster.set(self.sel, f, var.get().strip())
         if err:
             messagebox.showerror("Edit", err, parent=self)
         var.set(str(self.roster.get(self.sel, f)))
+        if f["type"] == "color":
+            self._paint_swatch(f, var.get())
         self._render_hex()
         self._refresh_dirty()
         if f["name"] == "Portrait ID":

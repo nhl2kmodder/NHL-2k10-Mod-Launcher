@@ -232,6 +232,17 @@ def write_cue(game_dir, bank, cue, data, log=None):
     if len(data) % PACKET:
         raise ValueError(f"take is {len(data)} B, not a whole number of {PACKET}-B packets")
     if volume_store.entry_named(game_dir, bank) is None:
+        # ⛔ Say WHICH of the two causes it is. They look identical from here and they are not the
+        # same problem at all. A Patch Game run aimed at NHL_2k10_Staging reported "UNTRACKED BANK"
+        # for all 117 slots -- lines.bin, players.bin, palines.bin, the lot -- which reads as "this
+        # install has weird banks" when the truth was simply that staging has no extracted volume
+        # tree, so there is no TOC to look anything up in. Naming the game_dir makes it obvious in
+        # one line that the run was pointed at the wrong folder.
+        if not volume_store.is_ready(game_dir):
+            raise KeyError(
+                f"{Path(game_dir).name} has no extracted volume tree, so no bank can be located "
+                f"or bounds-checked there ({bank!r} included). Nothing was written. Build the "
+                f"tree for this folder first, or aim the patch at the game directory that has one.")
         raise KeyError(f"no TOC entry named {bank!r} — the bank is untracked, so a write to it "
                        "cannot be bounds-checked. Refusing.")
     volume_store.write_in_entry(game_dir, bank, s["rel"], data, log=log)

@@ -334,11 +334,32 @@ def _layout(b: bytes, m: dict) -> dict:
     fpos = xf[1] == 1.0 and pos_st % 4 == 0 and pos_st >= 12
     if fpos:
         base = 0 if len(S) > 1 else 12                     # xyz floats come first, then the rest
+    # WHERE the attribute block starts is a guess (0 or 8/12 past the position), and it is not
+    # the same on every rig: the two low twins (stride 44) put four more bytes in front, so the
+    # guess lands 4 bytes early and every field with it -- u, tangent, v, and the decal channel
+    # two past v. Writing through that map does not fail loudly; it quietly overwrites the
+    # tangent's z, the base V and the decal's u on whatever vertices it touches, which is how
+    # five back-panel vertices of the LOD skater lost their V and smeared the nameplate into a
+    # solid wedge. So the base is MEASURED: the block opens with a unit normal and carries the
+    # base UV at +6 / +14, and the offset that satisfies both wins (the original guess breaks a
+    # tie, so a rig that was already right is unchanged byte for byte).
+    def _score(k):
+        if not fits(k, 16):
+            return None
+        v = np.maximum(raw[:, k:k + 6].copy().view(">i2").astype(np.float64) / 32767.0, -1.0)
+        nl = np.linalg.norm(np.pad(v, ((0, 0), (0, 1))), axis=1).mean()
+        if abs(nl - 1) > 0.25:
+            return None
+        uv = np.concatenate([raw[:, k + 6:k + 8].copy().view(">i2"),
+                            raw[:, k + 14:k + 16].copy().view(">i2")]).astype(np.float64) / 32767.0 * 2
+        return float(((uv >= -0.02) & (uv <= 1.02)).mean())
+
+    cands = [(sc, k != base, k) for k in range(0, att_st - 15, 4) if (sc := _score(k)) is not None]
+    if cands:
+        base = max(cands, key=lambda t: (round(t[0], 3), not t[1]))[2]
     nrm = base if fits(base, 6) else None
-    if nrm is not None:                                   # only claim it if it IS a unit vector
-        v = np.maximum(raw[:, nrm:nrm + 6].copy().view(">i2").astype(np.float64) / 32767.0, -1.0)
-        if abs(np.linalg.norm(np.pad(v, ((0, 0), (0, 1))), axis=1).mean() - 1) > 0.25:
-            nrm = None
+    if nrm is not None and _score(base) is None:          # only claim it if it IS a unit vector
+        nrm = None
     return dict(pos_off=pos_off, pos_stride=pos_st, att_off=att_off, att_stride=att_st,
                 f_nrm=nrm, f_u=base + 6 if fits(base + 6, 2) else None,
                 f_tan=base + 8 if fits(base + 8, 6) else None,

@@ -924,9 +924,9 @@ def encode_wav_to_fit(wav: Path, channels: int, ffmpeg: str, xma2encode: str, sa
 
         _run([ffmpeg, "-y", "-i", str(wav), "-acodec", "pcm_s16le", "-ar", str(sample_rate), "-ac", str(channels), str(pcm_wav)], capture_output=True, check=True)
 
-        def _try(q: int) -> bytes:
-            base = [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q), "/Speaker", speaker]
-            for cmd in [base + ["/UseLoopPoints"], base, [xma2encode, str(pcm_wav), "/TargetFile", str(xma_out), "/Quality", str(q)]]:
+        def _try(src: Path, q: int) -> bytes:
+            base = [xma2encode, str(src), "/TargetFile", str(xma_out), "/Quality", str(q), "/Speaker", speaker]
+            for cmd in [base + ["/UseLoopPoints"], base, [xma2encode, str(src), "/TargetFile", str(xma_out), "/Quality", str(q)]]:
                 if xma_out.exists():
                     xma_out.unlink()
                 r = _run(cmd, capture_output=True)
@@ -935,22 +935,86 @@ def encode_wav_to_fit(wav: Path, channels: int, ffmpeg: str, xma2encode: str, sa
             err = (r.stderr or r.stdout or b"").decode(errors="replace").strip()
             raise RuntimeError(f"xma2encode failed (rc={r.returncode}): {err or 'no output'}")
 
-        best = b""
-        # The ladder runs BELOW 10. It used to stop there, and stopping there is what stranded five
-        # approved PA takes as "too long to install" -- PA_HYPE_0004 needed 23 packets into 21 at
-        # q10 and fits in 21 at q5; PA_HYPE_0891 needed 15 into 13 and fits at q3; PA_ROSTER_0006
-        # needed 38 into 32 and fits at q3. Measured 2026-09-09. The user, round 22: "Fit the v7
-        # takes. We already do that for audio replacement, no? We just downgrade the audio to fit
-        # the packets?" -- yes, and the knob simply was not being turned far enough.
-        # q0 is rejected by xma2encode.exe, so 1 is the real floor.
-        for q in [60, 50, 40, 30, 20, 10, 8, 5, 3, 1]:
-            raw = _try(q)
-            packets = len(raw) // 2048
-            if max_packets <= 0 or packets <= max_packets:
-                return raw, q
-            best = raw
+        def _variant(tag: str, filt: str) -> Path:
+            """Re-render the source through one ffmpeg filter chain, cached per tag."""
+            if not filt:
+                return pcm_wav
+            out = work / f"pcm_{tag}.wav"
+            if not out.exists():
+                _run([ffmpeg, "-y", "-i", str(wav), "-af", filt,
+                      "-acodec", "pcm_s16le", "-ar", str(sample_rate), "-ac", str(channels), str(out)],
+                     capture_output=True, check=True)
+            return out
 
-        return best, 10
+        def _ladder(src: Path):
+            """Quality sweep, cheapest loss first. Returns (raw, q) if it fits, else (best, None).
+
+            The ladder runs BELOW 10. It used to stop there, and stopping there is what stranded
+            five approved PA takes as "too long to install" -- PA_HYPE_0004 needed 23 packets into
+            21 at q10 and fits in 21 at q5; PA_HYPE_0891 needed 15 into 13 and fits at q3;
+            PA_ROSTER_0006 needed 38 into 32 and fits at q3. Measured 2026-09-09. The user,
+            round 22: "Fit the v7 takes. We already do that for audio replacement, no? We just
+            downgrade the audio to fit the packets?" -- yes, and the knob simply was not being
+            turned far enough. q0 is rejected by xma2encode.exe, so 1 is the real floor.
+            """
+            best = b""
+            for q in (60, 50, 40, 30, 20, 10, 8, 5, 3, 1):
+                raw = _try(src, q)
+                if max_packets <= 0 or len(raw) // PACKET_SIZE <= max_packets:
+                    return raw, q
+                best = raw
+            return best, None
+
+        # ⛔⭐⭐ THERE IS NO SUCH OUTCOME AS "TOO LONG TO INSTALL". Leaving a slot unwritten leaves
+        # the STOCK line in it, and the stock line says a DIFFERENT PLAYER'S NAME out loud. The
+        # user, 2026-09-18, when 12 takes came back reported as skipped: "Never skip, that means we
+        # are using bad / old data. Why would we do that? Brutal call. Reduce the quality so it
+        # fits. Do NOT skip, I never want to hear the old player name, that makes absolutely no
+        # sense. If they are over, and at bad quality, you can speed up the clip slightly so that
+        # it fits."  So the ladder continues past q1, in order of how much it costs the ear:
+        raw, q = _ladder(pcm_wav)
+        if q is not None:
+            return raw, q
+
+        # 2. Trim leading/trailing silence. Free -- nothing audible is lost, and a take that is one
+        #    or two packets over is usually over because of its own head/tail room.
+        trim = ("silenceremove=start_periods=1:start_duration=0:start_threshold=-45dB:detection=peak"
+                ",areverse,"
+                "silenceremove=start_periods=1:start_duration=0:start_threshold=-45dB:detection=peak"
+                ",areverse")
+        try:
+            src = _variant("trim", trim)
+            raw, q = _ladder(src)
+            if q is not None:
+                if log: log(f"    Trimmed head/tail silence to fit slot")
+                return raw, q
+        except Exception:
+            src = pcm_wav
+
+        # 3. Speed the read up. atempo preserves pitch, so the voice is unchanged -- it just talks
+        #    a little faster. Steps are small on purpose: 1.04 is inaudible, and almost every take
+        #    that reaches here is 1-7 packets over and lands in the first two or three steps.
+        #    atempo caps at 2.0 per instance, so anything faster is chained.
+        for t in (1.04, 1.08, 1.12, 1.18, 1.25, 1.35, 1.50, 1.75, 2.00, 2.50, 3.00, 4.00):
+            if t <= 2.0:
+                chain = f"atempo={t:.2f}"
+            else:
+                half = t ** 0.5
+                chain = f"atempo={half:.4f},atempo={half:.4f}"
+            try:
+                v = _variant(f"t{int(t*100)}", trim + "," + chain)
+            except Exception:
+                v = _variant(f"s{int(t*100)}", chain)
+            raw, q = _ladder(v)
+            if q is not None:
+                if log: log(f"    Sped up {(t - 1) * 100:.0f}% (pitch preserved) to fit slot")
+                return raw, q
+
+        # 4. Unreachable for speech -- 4x is far past any line that has ever come through here. It
+        #    exists only so this function cannot return something that does not fit; the caller
+        #    would otherwise be back to skipping, which is the thing being forbidden.
+        if log: log(f"    LAST RESORT: cut to slot after 4x speed-up")
+        return raw[:max_packets * PACKET_SIZE], 1
 
 # ═══════════════════════════════════════════════════════════════════════════════
 # XMA2 stream scanner
@@ -1200,15 +1264,31 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 off = entry["offset"]; max_pkts = entry["packets"]
                 ch  = entry["channels"]; sr = entry.get("sample_rate") or SAMPLE_RATE
                 display = entry.get("name") or wp.stem
-                bank = wbanks.bank_for(fid, off)
-                end  = off + max_pkts * PACKET_SIZE
-                span = wbanks.span_of(fid, off)
-                if not bank or (span and end > span[1]):
-                    log(f"  {display}  @ 0x{off:08X}  STALE OFFSET — no wave bank owns "
-                        f"{'this slot' if not bank else 'the whole slot'} any more; NOT written. "
-                        f"Re-extract the audio index.")
+                # ⛔⭐⭐ ADDRESS BY (BANK, CUE), NEVER BY ARCHIVE BYTE. `entry["offset"]` is a
+                # coordinate in the SHIPPED archive layout -- that is the only space it was ever
+                # recorded in. Asking `bank_for` (which knows about relocations) what lives at a
+                # shipped offset returns "" for every bank that has since moved, and this loop
+                # read that "" as "stale, refuse". All 23 banks are relocated on this install, so
+                # every speech slot was refused: 5,241 finished takes sat in the store while the
+                # game played stock audio. Saros' 29 goalie lines were among them, and the user
+                # found it by ear -- "REVIEW_Identity109_LIVE is all Burke."
+                #
+                # The bank NAME and the offset INSIDE it are durable; only the physical base moves,
+                # and volume_store resolves that at write time. So identify from the shipped layout
+                # and hand the rest to live_cues, which bounds-checks against the cue's own block
+                # and REFUSES an unresolved cue instead of guessing.
+                bank = wbanks.shipped_bank_for(fid, off)
+                rel  = wbanks.shipped_rel(fid, off)
+                cue  = livecues.cue_at(bank, rel) if bank and rel is not None else None
+                if cue is None:
+                    log(f"  {display}  @ 0x{off:08X}  UNRESOLVED — "
+                        f"{'no bank owns this offset' if not bank else f'{bank} has no live cue starting at +0x{rel:X}'}"
+                        f"; NOT written. The bank re-flowed internally — re-extract the audio index.")
                     skipped_stale += 1; continue
-                log(f"  {display}  @ 0x{off:08X}  slot={max_pkts}p {ch}ch")
+                # Capacity comes from the LIVE cue table, not from the manifest's `packets`: that
+                # field is the gap the stream scanner saw and over-declares on ~27% of palines.
+                max_pkts = livecues.slot(bank, cue)["size"] // PACKET_SIZE
+                log(f"  {display}  {bank} cue {cue}  slot={max_pkts}p {ch}ch")
                 try:
                     raw_new, q_used = encode_wav_to_fit(
                         wp, ch, ffmpeg, xma2encode,
@@ -1224,7 +1304,11 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                         raw_new = raw_new[:max_pkts * PACKET_SIZE]; n_new = max_pkts
                         log(f"    TRUNCATED {excess} excess packets")
                     else:
-                        log(f"    SKIPPED: {excess} pkts too long")
+                        # encode_wav_to_fit is not allowed to return an oversize buffer any more --
+                        # it drops quality, trims silence, then speeds the read up until it fits.
+                        # Reaching here means the fitter itself is broken, not that the take is
+                        # unusable, so say so instead of quietly leaving the stock name in place.
+                        log(f"    BUG: fitter returned {excess} pkts over the slot — NOT written")
                         skipped_trunc += 1; continue
                 elif excess < 0:
                     raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
@@ -1243,9 +1327,9 @@ def op_reimport(root: Path, ffmpeg: str, xma2encode: str,
                 if bank in HELD_BANKS:
                     log(f"    HELD BANK {bank} — the user asked that it not be written. NOT written.")
                     skipped_stale += 1; continue
-                if voltree.entry_named(root.parent, bank) is not None:
-                    voltree.write_in_entry(root.parent, bank, off - span[0], raw_new)
-                else:
+                try:
+                    livecues.write_cue(root.parent, bank, cue, raw_new)
+                except KeyError:
                     # playercom, playercom2, femusic, jukeboxmusic are NOT TOC entries -- they sit
                     # in archive space no entry covers, so the tree cannot describe them and
                     # nothing here can bound-check the write. The user's instruction on finding
@@ -1410,10 +1494,24 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
     bak = arc.with_suffix(".bak")
     if not bak.exists():
         log(f"[{fid}] Creating backup…"); shutil.copy2(arc, bak)
-    off = entry["offset"]; max_pkts = entry["packets"]
+    off = entry["offset"]
     ch  = entry["channels"]; sr = entry.get("sample_rate") or SAMPLE_RATE
     display = entry.get("name") or wav_path.stem
-    log(f"{display}  @ 0x{off:08X}  slot={max_pkts}p {ch}ch")
+    # Resolve the slot BEFORE encoding: the write ceiling is the live cue's own block, and the
+    # manifest's `packets` over-declares it. Same addressing rule as op_reimport -- identify the
+    # bank from the SHIPPED layout (the space the manifest offset lives in), then work in cues.
+    bank = wbanks.shipped_bank_for(fid, off)
+    rel  = wbanks.shipped_rel(fid, off)
+    cue  = livecues.cue_at(bank, rel) if bank and rel is not None else None
+    if cue is None:
+        log(f"  UNRESOLVED @ 0x{off:08X} — "
+            f"{'no bank owns this offset' if not bank else f'{bank} has no live cue at +0x{rel:X}'}"
+            f"; NOT written."); return False
+    if bank in HELD_BANKS:
+        log(f"  HELD BANK {bank} — the user asked that it not be written. NOT written.")
+        return False
+    max_pkts = livecues.slot(bank, cue)["size"] // PACKET_SIZE
+    log(f"{display}  {bank} cue {cue}  slot={max_pkts}p {ch}ch")
     try:
         raw_new, q_used = encode_wav_to_fit(
             wav_path, ch, ffmpeg, xma2encode,
@@ -1429,20 +1527,12 @@ def op_patch_single(root: Path, ffmpeg: str, xma2encode: str,
     elif excess < 0:
         raw_new = raw_new + bytes((-excess) * PACKET_SIZE)
         log(f"  Padded {-excess} pkts")
-    # Same rule as the bulk path: name the asset, not the byte. See op_reimport.
-    wbanks.set_live_layout(root.parent, log=log)
-    bank = wbanks.bank_for(fid, off); span = wbanks.span_of(fid, off)
-    if not bank or (span and off + max_pkts * PACKET_SIZE > span[1]):
-        log(f"  STALE OFFSET — no wave bank owns this slot any more; NOT written.")
-        return False
-    if bank in HELD_BANKS:
-        log(f"  HELD BANK {bank} — the user asked that it not be written. NOT written.")
-        return False
-    if voltree.entry_named(root.parent, bank) is None:
+    try:
+        livecues.write_cue(root.parent, bank, cue, raw_new)
+    except KeyError:
         # See op_reimport: an untracked bank cannot be bounds-checked, so it is not written.
         log(f"  UNTRACKED BANK {bank} — no TOC entry covers it; NOT written.")
         return False
-    voltree.write_in_entry(root.parent, bank, off - span[0], raw_new)
     voltree.save(root.parent)
     # Record the install against the manifest's own copy of the entry, not the one passed in:
     # the caller hands us a row's entry, which may not be the dict `load_manifest` returns.
